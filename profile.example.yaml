@@ -1,0 +1,17 @@
+name: Your Name
+titles: [Backend Engineer, Full Stack Developer]
+seniority: mid            # junior | mid | senior
+years_experience: 4
+relevant_years: 3
+skills:
+  - { name: Python, level: advanced }
+  - { name: PostgreSQL, level: intermediate }
+constraints:
+  locations: [Remote, Toronto]
+  needs_sponsorship: false
+  salary_floor: 90000
+  currency: CAD
+preferences:
+  industries: [SaaS, Fintech]
+resume_text: |
+  Paste your base resume content here as plain text.

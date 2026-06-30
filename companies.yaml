@@ -1,0 +1,30 @@
+# Registry of companies to ingest from.
+# `ats` routes each company to an adapter; `identifier` is the one value
+# that adapter needs (board token / handle). Only `custom` entries scrape HTML.
+companies:
+  - name: Acme Corp
+    ats: greenhouse
+    identifier: acmecorp        # the board token
+    careers_url: https://careers.acmecorp.com
+    active: true
+
+  - name: Beta Labs
+    ats: lever
+    identifier: betalabs        # the handle in the lever URL
+    careers_url: https://jobs.lever.co/betalabs
+    active: true
+
+  - name: Gamma Inc
+    ats: ashby
+    identifier: gamma
+    careers_url: https://jobs.ashbyhq.com/gamma
+    active: true
+
+  - name: Delta Systems
+    ats: custom                 # no known ATS — the fragile path
+    careers_url: https://delta.com/careers
+    scrape:
+      list_selector: ".job-listing"
+      title_selector: ".job-title"
+      link_selector: "a.apply"
+    active: false               # leave off until the others work

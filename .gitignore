@@ -1,9 +1,19 @@
+# secrets & personal data
 .env
 profile.yaml
+
+# database
+*.db
+jobpilot.db
+
+# python
 .venv/
 venv/
 __pycache__/
 *.pyc
-.DS_Store
 .pytest_cache/
 *.egg-info/
+
+# os
+.DS_Store
+Thumbs.db

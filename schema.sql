@@ -1,0 +1,34 @@
+-- schema.sql  (SQLite — zero cost, local file)
+
+CREATE TABLE IF NOT EXISTS seen (
+    dedupe_hash TEXT PRIMARY KEY,
+    decision    TEXT NOT NULL,            -- 'dropped' | 'trashed' | 'kept'
+    score       REAL,
+    first_seen  TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS jobs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    dedupe_hash     TEXT UNIQUE NOT NULL,
+    source          TEXT,
+    source_url      TEXT,                 -- the listing/details page
+    apply_url       TEXT,                 -- the apply button link
+    title           TEXT,
+    company         TEXT,
+    location        TEXT,
+    remote          INTEGER,              -- 0 / 1
+    salary_min      INTEGER,
+    salary_max      INTEGER,
+    description     TEXT,
+    posted_date     TEXT,
+    fetched_at      TEXT DEFAULT (datetime('now')),
+    score           REAL,
+    skills_score    REAL,
+    seniority_score REAL,
+    domain_score    REAL,
+    rationale       TEXT,
+    flags           TEXT,                 -- JSON string
+    status          TEXT DEFAULT 'surfaced'
+);
+
+CREATE INDEX IF NOT EXISTS idx_jobs_score ON jobs(score DESC);

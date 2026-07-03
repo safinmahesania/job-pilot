@@ -6,14 +6,23 @@ Naya rule = profile.yaml me field + yahan ek check function. Bas.
 
 
 def _check_locations(job, allowed, profile):
-    if job.get("remote") == 1:
-        return True
-    allowed = [a.lower() for a in (allowed or []) if a.lower() != "remote"]
+    allowed = [a.lower() for a in (allowed or [])]
+    loc = (job.get("location") or "").lower()
     if not allowed:
         return True
-    loc = (job.get("location") or "").lower()
-    return any(a in loc or loc in a for a in allowed)
-
+    # allowed jagah ka seedha match?
+    if any(a in loc for a in allowed if a != "remote"):
+        return True
+    # remote hai to sirf tab pass jab koi specific foreign place na ho
+    if job.get("remote") == 1 or "remote" in loc:
+        cleaned = loc.replace("flexible", "").replace("/", " ").replace(",", " ")
+        for w in ("remote", "anywhere", "worldwide", "global"):
+            cleaned = cleaned.replace(w, "")
+        for a in allowed:
+            cleaned = cleaned.replace(a, "")
+        leftover = [t for t in cleaned.split() if len(t) > 2]
+        return len(leftover) == 0      # koi bacha foreign token = drop
+    return False
 
 def _check_salary_floor(job, floor, profile):
     if not floor:

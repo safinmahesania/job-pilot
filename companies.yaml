@@ -2,16 +2,16 @@
 # `ats` routes each company to an adapter; `identifier` is the one value
 # that adapter needs (board token / handle). Only `custom` entries scrape HTML.
 companies:
-  - name: Acme Corp
+  - name: DoorDash Canada
     ats: greenhouse
-    identifier: acmecorp        # the board token
-    careers_url: https://careers.acmecorp.com
+    identifier: doordashcanada        # the board token
+    careers_url: https://careersatdoordash.com/job-search/
     active: true
 
   - name: Beta Labs
     ats: lever
     identifier: betalabs        # the handle in the lever URL
-    careers_url: https://jobs.lever.co/betalabs
+    careers_url: https://www.shopify.com/careers
     active: true
 
   - name: Gamma Inc

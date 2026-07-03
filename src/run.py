@@ -1,10 +1,77 @@
-"""Entry point: fetch -> normalize -> store -> score -> print ranked shortlist."""
+"""Phase 1 pipeline: fetch -> prefilter -> AI score -> threshold -> store."""
+from src.config import load_companies, load_profile
+from src.adapters.base import get_adapter
+from src.normalize import normalize
+from src.scoring.prefilter import passes
+from src.scoring.rerank import score_job
+from src import store
+
+SCORE_THRESHOLD = 70          # is se upar overall -> kept, neeche -> trashed
 
 
-def main() -> None:
-    # TODO: load config, run adapters, normalize, store, score, print top N.
-    print("Job Matcher scaffold is wired up. Implement the adapters next.")
+def run():
+    profile = load_profile()
+    companies = load_companies()
+    conn = store.connect()
+
+    stats = {"fetched": 0, "seen": 0, "dropped": 0, "trashed": 0, "kept": 0, "errors": 0}
+
+    for c in companies:
+        if not c.get("active"):
+            continue
+        try:
+            raw_jobs = get_adapter(c).fetch()
+        except Exception as e:
+            print(f"[{c['name']}] fetch failed: {e}")
+            stats["errors"] += 1
+            continue
+
+        for raw in raw_jobs:
+            stats["fetched"] += 1
+            job = normalize(raw)
+            h = job["dedupe_hash"]
+
+            # 1. dedup — pehle dekhi hui job dobara process mat karo
+            if store.already_seen(conn, h):
+                stats["seen"] += 1
+                continue
+
+            # 2. hard filter (free)
+            if not passes(job, profile):
+                store.mark_seen(conn, h, "dropped")
+                stats["dropped"] += 1
+                continue
+
+            # 3. AI scoring (mehnga) — sirf survivors pe
+            result = score_job(job, profile)
+            if result is None:
+                stats["errors"] += 1
+                continue      # score fail -> seen mark mat karo, next run retry karega
+
+            # 4. threshold
+            if result.overall >= SCORE_THRESHOLD:
+                job.update(
+                    score=result.overall,
+                    skills_score=result.skills_score,
+                    seniority_score=result.seniority_score,
+                    domain_score=result.domain_score,
+                    rationale=result.rationale,
+                    flags=None,
+                )
+                store.save_job(conn, job)
+                store.mark_seen(conn, h, "kept", result.overall)
+                stats["kept"] += 1
+            else:
+                store.mark_seen(conn, h, "trashed", result.overall)
+                stats["trashed"] += 1
+
+    conn.commit()
+    conn.close()
+
+    print("\n=== Run summary ===")
+    for k, v in stats.items():
+        print(f"  {k:10} {v}")
 
 
 if __name__ == "__main__":
-    main()
+    run()

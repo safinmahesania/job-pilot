@@ -43,7 +43,7 @@ def score_job(job: dict, profile: dict) -> ScoreResult | None:
             model=MODEL,
             messages=[{"role": "user", "content": _prompt(job, profile)}],
             format=ScoreResult.model_json_schema(),   # constrained decoding
-            options={"temperature": 0},
+            options={"temperature": 0, "num_ctx": 4096},
         )
         return ScoreResult.model_validate_json(resp["message"]["content"])
     except (ValidationError, KeyError, Exception) as e:
@@ -75,5 +75,11 @@ def _candidate_summary(profile: dict) -> str:
             lines.append(f"- {p.get('name')} [{', '.join(p.get('tech', []))}]: {p.get('description','')}")
             lines += [f"    • {h}" for h in p.get("highlights", [])]
         parts.append("PROJECTS:\n" + "\n".join(lines))
+
+    if profile.get("education"):
+        edu = []
+        for e in profile["education"]:
+            edu.append(f"- {e.get('degree')} in {e.get('field')} , {e.get('institution')} ({e.get('end', '?')})")
+        parts.append("EDUCATION:\n" + "\n".join(edu))
 
     return "\n\n".join(parts)

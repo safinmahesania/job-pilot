@@ -39,19 +39,40 @@ class WorkdayAdapter(SourceAdapter):
             for p in postings:
                 path = p.get("externalPath", "")
                 job_url = f"{base}/{site}{path}" if path else base
-                out.append({
+                rec = {
                     "source": f"workday:{tenant}",
                     "company": self.name,
                     "title": p.get("title"),
                     "location": p.get("locationsText"),
                     "source_url": job_url,
                     "apply_url": job_url,
-                    "description": p.get("title"),   # list view me full JD nahi hoti
+                    "description": p.get("title"),
                     "posted_date": p.get("postedOn"),
-                })
+                    "job_type": None,
+                    "deadline": None,
+                }
+                if c.get("details", True) and path:
+                    rec.update({k: v for k, v in self._detail(base, tenant, site, path).items() if v})
+                    time.sleep(0.3)  # politeness
+                out.append(rec)
 
             offset += per_page
             if offset >= data.get("total", 0):
                 break
             time.sleep(0.5)
         return out
+
+    def _detail(self, base, tenant, site, path):
+        url = f"{base}/wday/cxs/{tenant}/{site}/job{path}"
+        try:
+            r = httpx.get(url, headers={"Accept": "application/json"}, timeout=25)
+            r.raise_for_status()
+            info = r.json().get("jobPostingInfo", {})
+            return {
+                "description": info.get("jobDescription"),
+                "job_type": info.get("timeType"),
+                "deadline": info.get("endDate"),
+                "posted_date": info.get("startDate"),
+            }
+        except Exception:
+            return {}

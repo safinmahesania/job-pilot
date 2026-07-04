@@ -33,4 +33,18 @@ def normalize(raw: dict) -> dict:
         "remote": 1 if location and "remote" in location.lower() else 0,
         "description": strip_html(raw.get("description")),
         "posted_date": raw.get("posted_date"),
+        "job_type": raw.get("job_type") or "Unknown",
+        "deadline": raw.get("deadline"),
     }
+
+MANDATORY = ("source", "apply_url", "title", "company",
+             "location", "description")
+
+
+def is_valid(job: dict) -> bool:
+    """Mandatory fields present aur non-empty hain?"""
+    for f in MANDATORY:
+        v = job.get(f)
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return False
+    return True

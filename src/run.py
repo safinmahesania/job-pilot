@@ -5,6 +5,7 @@ from src.normalize import normalize
 from src.scoring.prefilter import passes
 from src.scoring.rerank import score_job
 from src import store
+from src.normalize import normalize, is_valid
 
 SCORE_THRESHOLD = 70          # is se upar overall -> kept, neeche -> trashed
 
@@ -36,7 +37,13 @@ def run():
                 stats["seen"] += 1
                 continue
 
-            # 2. hard filter (free)
+            # 2. mandatory fields check
+            if not is_valid(job):
+                store.mark_seen(conn, h, "dropped")
+                stats["dropped"] += 1
+                continue
+
+            # 3. hard filter (free)
             if not passes(job, profile):
                 store.mark_seen(conn, h, "dropped")
                 stats["dropped"] += 1

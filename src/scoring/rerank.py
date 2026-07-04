@@ -17,21 +17,23 @@ class ScoreResult(BaseModel):
 def _prompt(job: dict, profile: dict) -> str:
     return f"""You are scoring how well a job fits a candidate.
 
-CANDIDATE PROFILE:
-{json.dumps(profile, ensure_ascii=False, indent=2)}
+CANDIDATE:
+{_candidate_summary(profile)}
 
 JOB:
 Title: {job.get('title')}
 Company: {job.get('company')}
 Location: {job.get('location')}
-Description: {job.get('description', '')[:3000]}
+Type: {job.get('job_type') or 'n/a'}
+Description: {(job.get('description') or '')[:3500]}
 
-Score each 0-100 (100 = perfect fit). Be strict and consistent.
-- skills_score: overlap between candidate skills and job requirements
-- seniority_score: how well the candidate's level matches
-- domain_score: industry / role-type fit
-- overall: your holistic fit score
-- rationale: one concise sentence explaining the overall score.
+Score each 0-100 (100 = perfect fit). Be strict and consistent. Weigh the
+candidate's real experience and projects against the job's requirements.
+- skills_score: overlap of candidate skills/tech with job requirements
+- seniority_score: fit between candidate level and role level
+- domain_score: relevance of candidate's experience/projects to the role
+- overall: holistic fit
+- rationale: one concise sentence citing specific skills/experience.
 Return only JSON matching the schema."""
 
 
@@ -47,3 +49,31 @@ def score_job(job: dict, profile: dict) -> ScoreResult | None:
     except (ValidationError, KeyError, Exception) as e:
         print(f"  score failed for '{job.get('title')}': {e}")
         return None
+
+
+def _candidate_summary(profile: dict) -> str:
+    parts = []
+    if profile.get("summary"):
+        parts.append("SUMMARY:\n" + profile["summary"].strip())
+    parts.append("SENIORITY: " + str(profile.get("seniority", "n/a")))
+
+    skills = profile.get("skills", {})
+    tiers = [f"{t}: {', '.join(skills[t])}" for t in ("expert","proficient","familiar") if skills.get(t)]
+    if tiers:
+        parts.append("SKILLS:\n" + "\n".join(tiers))
+
+    if profile.get("experience"):
+        lines = []
+        for e in profile["experience"]:
+            lines.append(f"- {e.get('role')} @ {e.get('company')} ({e.get('start','?')}–{e.get('end','?')})")
+            lines += [f"    • {h}" for h in e.get("highlights", [])]
+        parts.append("EXPERIENCE:\n" + "\n".join(lines))
+
+    if profile.get("projects"):
+        lines = []
+        for p in profile["projects"]:
+            lines.append(f"- {p.get('name')} [{', '.join(p.get('tech', []))}]: {p.get('description','')}")
+            lines += [f"    • {h}" for h in p.get("highlights", [])]
+        parts.append("PROJECTS:\n" + "\n".join(lines))
+
+    return "\n\n".join(parts)

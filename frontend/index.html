@@ -18,12 +18,21 @@
 <div x-data="jobpilot()" x-init="load()" x-cloak class="max-w-3xl mx-auto px-4 py-6">
 
   <!-- Header -->
-  <div class="flex items-center justify-between pb-3 border-b border-gray-200">
-    <div class="flex items-center gap-2">
-      <span class="w-8 h-8 rounded-lg bg-brand flex items-center justify-center text-white font-bold">JP</span>
-      <span class="text-lg font-semibold">JobPilot</span>
+  <div class="pb-3 border-b border-gray-200">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="w-8 h-8 rounded-lg bg-brand flex items-center justify-center text-white font-bold">JP</span>
+        <span class="text-lg font-semibold">JobPilot</span>
+      </div>
+      <button @click="runNow()" :disabled="running"
+        class="text-[13px] h-8 px-3 rounded-md bg-brand text-white flex items-center gap-1 disabled:opacity-50">
+        <span x-show="!running">▶ Run now</span>
+        <span x-show="running">⏳ Running…</span>
+      </button>
     </div>
-    <div class="flex gap-1 text-sm">
+
+    <!-- Tabs -->
+    <div class="flex gap-1 text-sm mt-3">
       <template x-for="t in ['feed','saved','applied']" :key="t">
         <button @click="tab=t; load()"
           class="px-3 py-1.5 capitalize border-b-2 transition"
@@ -33,9 +42,11 @@
         </button>
       </template>
     </div>
+
+    <div x-show="lastRun" class="text-xs text-gray-400 mt-2">Last run: <span x-text="lastRun"></span></div>
   </div>
 
-  <!-- Search / sort -->
+  <!-- Search -->
   <div class="flex gap-2 items-center my-4">
     <div class="flex-1 flex items-center gap-2 h-9 px-3 border border-gray-200 rounded-lg bg-white">
       <span class="text-gray-400">🔍</span>
@@ -105,6 +116,7 @@
 function jobpilot() {
   return {
     tab: 'feed', jobs: [], counts: {}, loading: true, q: '',
+    running: false, lastRun: null,
     statuses: ['surfaced','saved','applied','interview','offer','rejected','dismissed'],
 
     async load() {
@@ -130,7 +142,23 @@ function jobpilot() {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({status}),
       });
-      this.load();   // refresh (job current tab se hat jaayegi agar status badla)
+      this.load();
+    },
+
+    async runNow() {
+      const r = await fetch('/api/run', { method: 'POST' });
+      if (r.status === 409) { alert('Already running'); return; }
+      this.running = true;
+      this.poll();
+    },
+
+    poll() {
+      const iv = setInterval(async () => {
+        const s = await fetch('/api/run/status').then(r => r.json());
+        this.running = s.running;
+        this.lastRun = s.last_run;
+        if (!s.running) { clearInterval(iv); this.load(); }
+      }, 2000);
     },
 
     tier(score) {

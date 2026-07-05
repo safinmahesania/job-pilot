@@ -17,60 +17,61 @@ def run():
 
     stats = {"fetched": 0, "seen": 0, "dropped": 0, "trashed": 0, "kept": 0, "errors": 0}
 
+    from datetime import datetime
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+
     for c in companies:
         if not c.get("active"):
             continue
+
+        src_stat = {"fetched": 0, "kept": 0, "status": "ok", "error": None}
         try:
             raw_jobs = get_adapter(c).fetch()
         except Exception as e:
             print(f"[{c['name']}] fetch failed: {e}")
             stats["errors"] += 1
+            src_stat["status"] = "error"
+            src_stat["error"] = str(e)[:200]
+            store.save_source_health(conn, c["name"], c.get("ats"), src_stat, now)
             continue
 
         for raw in raw_jobs:
             stats["fetched"] += 1
+            src_stat["fetched"] += 1
             job = normalize(raw)
             h = job["dedupe_hash"]
 
-            # 1. dedup — pehle dekhi hui job dobara process mat karo
             if store.already_seen(conn, h):
                 stats["seen"] += 1
                 continue
-
-            # 2. mandatory fields check
             if not is_valid(job):
-                store.mark_seen(conn, h, "dropped")
-                stats["dropped"] += 1
+                store.mark_seen(conn, h, "dropped");
+                stats["dropped"] += 1;
                 continue
-
-            # 3. hard filter (free)
             if not passes(job, profile):
-                store.mark_seen(conn, h, "dropped")
-                stats["dropped"] += 1
+                store.mark_seen(conn, h, "dropped");
+                stats["dropped"] += 1;
                 continue
 
-            # 3. AI scoring (mehnga) — sirf survivors pe
             result = score_job(job, profile)
             if result is None:
-                stats["errors"] += 1
-                continue      # score fail -> seen mark mat karo, next run retry karega
+                stats["errors"] += 1;
+                continue
 
-            # 4. threshold
             if result.overall >= SCORE_THRESHOLD:
-                job.update(
-                    score=result.overall,
-                    skills_score=result.skills_score,
-                    seniority_score=result.seniority_score,
-                    domain_score=result.domain_score,
-                    rationale=result.rationale,
-                    flags=None,
-                )
+                job.update(score=result.overall, skills_score=result.skills_score,
+                           seniority_score=result.seniority_score,
+                           domain_score=result.domain_score,
+                           rationale=result.rationale, flags=None)
                 store.save_job(conn, job)
                 store.mark_seen(conn, h, "kept", result.overall)
                 stats["kept"] += 1
+                src_stat["kept"] += 1
             else:
                 store.mark_seen(conn, h, "trashed", result.overall)
                 stats["trashed"] += 1
+
+        store.save_source_health(conn, c["name"], c.get("ats"), src_stat, now)
 
     conn.commit()
     conn.close()

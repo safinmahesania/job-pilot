@@ -34,3 +34,13 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_score ON jobs(score DESC);
+
+CREATE TABLE IF NOT EXISTS source_health (
+    name        TEXT PRIMARY KEY,
+    ats         TEXT,
+    fetched     INTEGER DEFAULT 0,
+    kept        INTEGER DEFAULT 0,
+    status      TEXT,              -- 'ok' | 'error'
+    error       TEXT,              -- error message agar fail hua
+    last_run    TEXT
+);

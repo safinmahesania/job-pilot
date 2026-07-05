@@ -108,3 +108,13 @@ def trigger_run():
 @app.get("/api/run/status")
 def run_status():
     return _run_state
+
+@app.get("/api/health")
+def source_health():
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT name, ats, fetched, kept, status, error, last_run "
+        "FROM source_health ORDER BY status DESC, fetched DESC"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

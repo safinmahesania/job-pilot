@@ -34,3 +34,14 @@ def save_job(conn, job: dict):
                    :rationale, :flags)""",
         job,
     )
+
+def save_source_health(conn, name, ats, stat, when):
+    conn.execute(
+        """INSERT INTO source_health (name, ats, fetched, kept, status, error, last_run)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(name) DO UPDATE SET
+             ats=excluded.ats, fetched=excluded.fetched, kept=excluded.kept,
+             status=excluded.status, error=excluded.error, last_run=excluded.last_run""",
+        (name, ats, stat["fetched"], stat["kept"], stat["status"], stat["error"], when),
+    )
+    conn.commit()

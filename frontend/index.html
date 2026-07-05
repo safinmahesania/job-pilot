@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JobPilot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { brand: '#534AB7', brandbg: '#EEEDFE' } } } };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #F7F7F8; }
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+<body class="text-gray-800">
+<div x-data="jobpilot()" x-init="load()" x-cloak class="max-w-3xl mx-auto px-4 py-6">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between pb-3 border-b border-gray-200">
+    <div class="flex items-center gap-2">
+      <span class="w-8 h-8 rounded-lg bg-brand flex items-center justify-center text-white font-bold">JP</span>
+      <span class="text-lg font-semibold">JobPilot</span>
+    </div>
+    <div class="flex gap-1 text-sm">
+      <template x-for="t in ['feed','saved','applied']" :key="t">
+        <button @click="tab=t; load()"
+          class="px-3 py-1.5 capitalize border-b-2 transition"
+          :class="tab===t ? 'border-brand text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'">
+          <span x-text="t"></span>
+          <span class="text-gray-400" x-text="counts[t] ?? ''"></span>
+        </button>
+      </template>
+    </div>
+  </div>
+
+  <!-- Search / sort -->
+  <div class="flex gap-2 items-center my-4">
+    <div class="flex-1 flex items-center gap-2 h-9 px-3 border border-gray-200 rounded-lg bg-white">
+      <span class="text-gray-400">🔍</span>
+      <input x-model="q" placeholder="Search title, company, skill…"
+        class="flex-1 text-sm outline-none bg-transparent">
+    </div>
+  </div>
+
+  <!-- States -->
+  <div x-show="loading" class="text-center text-gray-400 py-16 text-sm">Loading…</div>
+  <div x-show="!loading && filtered().length===0" class="text-center text-gray-400 py-16 text-sm">
+    No jobs in <span x-text="tab"></span>.
+  </div>
+
+  <!-- Job cards -->
+  <div class="flex flex-col gap-3">
+    <template x-for="job in filtered()" :key="job.id">
+      <div class="flex gap-3.5 bg-white border border-gray-200 rounded-xl p-4"
+        :style="`border-left:3px solid ${tier(job.score).stripe}`">
+
+        <!-- score -->
+        <div class="shrink-0 w-14 h-14 rounded-full flex flex-col items-center justify-center"
+          :style="`background:${tier(job.score).bg}`">
+          <span class="text-xl font-semibold leading-none" :style="`color:${tier(job.score).fg}`" x-text="Math.round(job.score)"></span>
+          <span class="text-[10px]" :style="`color:${tier(job.score).fg}`">match</span>
+        </div>
+
+        <!-- body -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-baseline justify-between gap-2">
+            <span class="font-medium" x-text="job.title"></span>
+            <span class="text-xs text-gray-400 whitespace-nowrap" x-text="job.posted_date ? timeAgo(job.posted_date) : ''"></span>
+          </div>
+          <div class="text-[13px] text-gray-500 mt-0.5">
+            <span x-text="job.company"></span> · <span x-text="job.location"></span>
+            <span class="text-gray-400" x-show="job.job_type && job.job_type!=='Unknown'"> · <span x-text="job.job_type"></span></span>
+            <span class="text-amber-700" x-show="job.deadline"> · 📅 <span x-text="job.deadline"></span></span>
+          </div>
+
+          <div class="text-[13px] rounded-md px-2.5 py-2 my-2.5 leading-relaxed"
+            style="background:#EEEDFE; color:#26215C;" x-show="job.rationale">
+            ✨ <span x-text="job.rationale"></span>
+          </div>
+
+          <!-- actions -->
+          <div class="flex items-center gap-2">
+            <a :href="job.apply_url" target="_blank"
+              class="text-[13px] h-8 px-4 rounded-md bg-brand text-white flex items-center">Apply ↗</a>
+            <button @click="setStatus(job, 'saved')"
+              class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">Save</button>
+            <button @click="setStatus(job, 'dismissed')"
+              class="text-[13px] h-8 px-3 rounded-md text-gray-400 hover:bg-gray-50">Dismiss</button>
+            <select @change="setStatus(job, $event.target.value)"
+              class="ml-auto text-[13px] h-8 px-2 rounded-md border border-gray-200 text-gray-600 bg-white">
+              <template x-for="s in statuses" :key="s">
+                <option :value="s" :selected="job.status===s" x-text="cap(s)"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>
+
+<script>
+function jobpilot() {
+  return {
+    tab: 'feed', jobs: [], counts: {}, loading: true, q: '',
+    statuses: ['surfaced','saved','applied','interview','offer','rejected','dismissed'],
+
+    async load() {
+      this.loading = true;
+      const [jobs, counts] = await Promise.all([
+        fetch(`/api/jobs?tab=${this.tab}`).then(r => r.json()),
+        fetch('/api/counts').then(r => r.json()),
+      ]);
+      this.jobs = jobs; this.counts = counts; this.loading = false;
+    },
+
+    filtered() {
+      if (!this.q.trim()) return this.jobs;
+      const s = this.q.toLowerCase();
+      return this.jobs.filter(j =>
+        (j.title||'').toLowerCase().includes(s) ||
+        (j.company||'').toLowerCase().includes(s) ||
+        (j.rationale||'').toLowerCase().includes(s));
+    },
+
+    async setStatus(job, status) {
+      await fetch(`/api/jobs/${job.id}/status`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({status}),
+      });
+      this.load();   // refresh (job current tab se hat jaayegi agar status badla)
+    },
+
+    tier(score) {
+      if (score >= 80) return { bg:'#1D9E75', fg:'#fff', stripe:'#1D9E75' };
+      if (score >= 70) return { bg:'#EF9F27', fg:'#412402', stripe:'#EF9F27' };
+      return { bg:'#E5E7EB', fg:'#374151', stripe:'#E5E7EB' };
+    },
+    cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); },
+    timeAgo(d){ try { const days=Math.floor((Date.now()-new Date(d))/8.64e7); return days<=0?'today':days+'d ago'; } catch { return ''; } },
+  };
+}
+</script>
+</body>
+</html>

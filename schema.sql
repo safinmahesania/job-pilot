@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     domain_score    REAL,
     rationale       TEXT,
     flags           TEXT,                 -- JSON string
-    status          TEXT DEFAULT 'surfaced'
+    status          TEXT DEFAULT 'surfaced',
+    job_type        TEXT,
+    deadline        TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_score ON jobs(score DESC);

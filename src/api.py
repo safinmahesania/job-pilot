@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import threading
 from datetime import datetime
+from fastapi.staticfiles import StaticFiles
 
 DB = "jobpilot.db"
 app = FastAPI(title="JobPilot")
@@ -49,17 +50,6 @@ def update_status(job_id: int, body: StatusUpdate):
     if not changed:
         raise HTTPException(404, "job not found")
     return {"id": job_id, "status": body.status}
-
-
-# ---- frontend (agle step me banega) ----
-FRONTEND = Path(__file__).parent.parent / "frontend" / "index.html"
-
-
-@app.get("/")
-def index():
-    if FRONTEND.exists():
-        return FileResponse(FRONTEND)
-    return {"msg": "JobPilot API running. Frontend abhi banana baaki hai."}
 
 
 # ---- pipeline run state (in-memory) ----
@@ -212,3 +202,9 @@ def stats():
         "feed_size": feed_size, "distribution": dist, "sources": sources,
         "deadlines": deadlines, "rates": rates,
     }
+
+
+app.mount("/", StaticFiles(
+    directory=str(Path(__file__).parent.parent / "frontend"),
+    html=True,
+), name="frontend")

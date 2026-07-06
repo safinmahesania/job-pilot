@@ -12,25 +12,9 @@
     } } } };
   </script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <style>
-    body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #FAF9F7; }
-    [x-cloak] { display: none !important; }
-    .nav { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; font-size:13px; color:#6b7280; cursor:pointer; }
-    .nav:hover { background:#F3F1EC; }
-    .nav.active { background:#F7EDD8; color:#7A4E0C; font-weight:500; }
-    .nav .ti { font-size:17px; }
-    .jd { word-break: break-word; }
-    .jd > *:first-child { margin-top: 0; }
-    .jd h3, .jd h4 { font-weight: 600; font-size: 0.9rem; margin: 1.1rem 0 0.4rem; color: #111827; }
-    .jd p { margin: 0 0 0.7rem; }
-    .jd ul, .jd ol { margin: 0 0 0.7rem 1.4rem; }
-    .jd ul { list-style: disc; } .jd ol { list-style: decimal; }
-    .jd li { margin: 0.2rem 0; }
-    .jd strong, .jd b { font-weight: 600; }
-    .jd a { color: #B4791A; text-decoration: underline; word-break: break-all; }
-    .jd img { display: none !important; }
-  </style>
 </head>
 <body class="text-gray-800">
 <div x-data="jobpilot()" x-init="load()" x-cloak class="flex min-h-screen max-w-6xl mx-auto">
@@ -47,8 +31,7 @@
       <div class="nav" :class="tab===n.k && 'active'" @click="tab=n.k; load()">
         <i class="ti" :class="n.icon"></i>
         <span class="flex-1" x-text="n.label"></span>
-        <span class="text-xs" :class="tab===n.k ? 'text-branddark' : 'text-gray-400'"
-          x-text="counts[n.k] != null ? counts[n.k] : ''"></span>
+        <span class="text-xs" :class="tab===n.k ? 'text-branddark' : 'text-gray-400'" x-text="counts[n.k] != null ? counts[n.k] : ''"></span>
       </div>
     </template>
 
@@ -62,8 +45,7 @@
     </template>
 
     <div class="mt-auto px-1">
-      <button @click="runNow()" :disabled="running"
-        class="w-full h-9 rounded-lg bg-brand text-white text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
+      <button @click="runNow()" :disabled="running" class="w-full h-9 rounded-lg bg-brand text-white text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
         <i class="ti" :class="running ? 'ti-loader-2 animate-spin' : 'ti-player-play'"></i>
         <span x-text="running ? 'Running…' : 'Run now'"></span>
       </button>
@@ -92,10 +74,8 @@
 
       <div class="flex flex-col gap-3">
         <template x-for="job in filtered()" :key="job.id">
-          <div class="flex gap-3.5 bg-white border border-gray-200 rounded-xl p-4"
-            :style="`border-left:3px solid ${tier(job.score).stripe}`">
-            <div class="shrink-0 w-14 h-14 rounded-full flex flex-col items-center justify-center"
-              :style="`background:${tier(job.score).bg}`">
+          <div class="flex gap-3.5 bg-white border border-gray-200 rounded-xl p-4" :style="`border-left:3px solid ${tier(job.score).stripe}`">
+            <div class="shrink-0 w-14 h-14 rounded-full flex flex-col items-center justify-center" :style="`background:${tier(job.score).bg}`">
               <span class="text-xl font-semibold leading-none" :style="`color:${tier(job.score).fg}`" x-text="Math.round(job.score)"></span>
               <span class="text-[10px]" :style="`color:${tier(job.score).fg}`">match</span>
             </div>
@@ -109,13 +89,11 @@
                 <span class="text-gray-400" x-show="job.job_type && job.job_type!=='Unknown'"> · <span x-text="job.job_type"></span></span>
                 <span class="text-amber-700" x-show="job.deadline"> · <i class="ti ti-calendar text-xs"></i> <span x-text="job.deadline"></span></span>
               </div>
-              <div class="text-[13px] rounded-md px-2.5 py-2 my-2.5 leading-relaxed flex gap-1.5"
-                style="background:#F7EDD8; color:#7A4E0C;" x-show="job.rationale">
+              <div class="text-[13px] rounded-md px-2.5 py-2 my-2.5 leading-relaxed flex gap-1.5" style="background:#F7EDD8; color:#7A4E0C;" x-show="job.rationale">
                 <i class="ti ti-bulb mt-0.5"></i><span x-text="job.rationale"></span>
               </div>
               <div class="flex items-center gap-2">
-                <a :href="job.apply_url" target="_blank"
-                  class="text-[13px] h-8 px-4 rounded-md bg-brand text-white flex items-center gap-1"><i class="ti ti-external-link"></i> Apply</a>
+                <a :href="job.apply_url" target="_blank" class="text-[13px] h-8 px-4 rounded-md bg-brand text-white flex items-center gap-1"><i class="ti ti-external-link"></i> Apply</a>
                 <template x-if="tab!=='dismissed'">
                   <div class="flex items-center gap-2">
                     <button @click="setStatus(job,'saved')" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">Save</button>
@@ -125,8 +103,7 @@
                 <template x-if="tab==='dismissed'">
                   <button @click="setStatus(job,'surfaced')" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50"><i class="ti ti-arrow-back-up"></i> Restore</button>
                 </template>
-                <select @change="setStatus(job, $event.target.value)"
-                  class="ml-auto text-[13px] h-8 px-2 rounded-md border border-gray-200 text-gray-600 bg-white">
+                <select @change="setStatus(job, $event.target.value)" class="ml-auto text-[13px] h-8 px-2 rounded-md border border-gray-200 text-gray-600 bg-white">
                   <template x-for="s in statuses" :key="s"><option :value="s" :selected="job.status===s" x-text="cap(s)"></option></template>
                 </select>
               </div>
@@ -193,7 +170,7 @@
       <div x-show="!stats" class="text-center text-gray-400 py-16 text-sm">Loading stats…</div>
     </div>
 
-    <!-- Admin (source health) -->
+    <!-- Admin -->
     <div x-show="tab==='admin'">
       <h2 class="text-lg font-semibold mb-4">Admin</h2>
       <div class="text-sm text-gray-500 mb-3">Source health — last run per source</div>
@@ -215,14 +192,13 @@
       </div>
     </div>
 
-    <!-- Settings (threshold) -->
+    <!-- Settings -->
     <div x-show="tab==='settings'">
       <h2 class="text-lg font-semibold mb-4">Settings</h2>
       <div class="bg-white border border-gray-200 rounded-xl p-4 max-w-md">
         <div class="flex items-center justify-between mb-1">
           <span class="text-sm font-medium">Score threshold</span>
-          <input type="number" min="0" max="100" x-model.number="threshold" @change="clampThreshold(); saveThreshold()"
-            class="w-16 text-sm font-semibold text-brand text-right border border-gray-200 rounded-md px-2 py-1 outline-none">
+          <input type="number" min="0" max="100" x-model.number="threshold" @change="clampThreshold(); saveThreshold()" class="w-16 text-sm font-semibold text-brand text-right border border-gray-200 rounded-md px-2 py-1 outline-none">
         </div>
         <div class="text-xs text-gray-400 mb-3">Feed shows only jobs scoring at or above this.</div>
         <input type="range" min="0" max="100" step="1" x-model.number="threshold" @change="saveThreshold()" class="w-full accent-[#B4791A]">
@@ -269,105 +245,5 @@
     </div>
   </div>
 </div>
-
-<script>
-function jobpilot() {
-  return {
-    tab: 'feed', jobs: [], counts: {}, health: [], stats: null, loading: true, q: '', detail: null,
-    running: false, lastRun: null, threshold: 70,
-    statuses: ['surfaced','saved','applied','interview','offer','rejected','dismissed'],
-    jobsNav: [
-      {k:'feed', label:'Feed', icon:'ti-inbox'},
-      {k:'saved', label:'Saved', icon:'ti-bookmark'},
-      {k:'applied', label:'Applied', icon:'ti-send'},
-      {k:'dismissed', label:'Dismissed', icon:'ti-archive'},
-    ],
-    sysNav: [
-      {k:'stats', label:'Stats', icon:'ti-chart-bar'},
-      {k:'admin', label:'Admin', icon:'ti-activity-heartbeat'},
-      {k:'settings', label:'Settings', icon:'ti-settings'},
-    ],
-
-    isJobView() { return ['feed','saved','applied','dismissed'].includes(this.tab); },
-
-    async load() {
-      this.loading = true;
-      const jobsP = this.isJobView()
-        ? fetch(`/api/jobs?tab=${this.tab}`).then(r=>r.json()).catch(()=>[])
-        : Promise.resolve(this.jobs);
-      const [jobs, counts, health, settings, stats] = await Promise.all([
-        jobsP,
-        fetch('/api/counts').then(r=>r.json()).catch(()=>({})),
-        fetch('/api/health').then(r=>r.json()).catch(()=>[]),
-        fetch('/api/settings').then(r=>r.json()).catch(()=>({score_threshold:70})),
-        fetch('/api/stats').then(r=>r.json()).catch(()=>null),
-      ]);
-      this.jobs = jobs;
-      this.counts = { ...counts };
-      this.health = health;
-      this.threshold = settings.score_threshold ?? 70;
-      this.stats = stats;
-      this.loading = false;
-    },
-
-    formatJD(text) {
-      if (!text) return 'No description available.';
-      if (/<(p|ul|ol|li|br|div|h[1-6]|strong|b)\b/i.test(text)) return text;
-      const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      const lines = text.split('\n').map(l=>l.trim()).filter(l=>l.length);
-      let html='';
-      for (const line of lines) {
-        const isH = /^[A-Z][A-Z0-9 &/\-'’()]{3,}$/.test(line) || /^[A-Za-z ]{2,40}:$/.test(line);
-        html += isH ? `<h4>${esc(line.replace(/:$/,''))}</h4>` : `<p>${esc(line)}</p>`;
-      }
-      return html;
-    },
-
-    filtered() {
-      if (!this.q.trim()) return this.jobs;
-      const s = this.q.toLowerCase();
-      return this.jobs.filter(j => (j.title||'').toLowerCase().includes(s) || (j.company||'').toLowerCase().includes(s) || (j.rationale||'').toLowerCase().includes(s));
-    },
-
-    openDetail(job){ this.detail = job; },
-
-    async setStatus(job, status) {
-      await fetch(`/api/jobs/${job.id}/status`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status})});
-      this.load();
-    },
-
-    async runNow() {
-      const r = await fetch('/api/run', {method:'POST'});
-      if (r.status===409){ alert('Already running'); return; }
-      this.running = true; this.poll();
-    },
-    poll() {
-      const iv = setInterval(async ()=>{
-        const s = await fetch('/api/run/status').then(r=>r.json());
-        this.running = s.running; this.lastRun = s.last_run;
-        if (!s.running){ clearInterval(iv); this.load(); }
-      }, 2000);
-    },
-
-    async saveThreshold() {
-      this.clampThreshold();
-      await fetch('/api/settings/threshold', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:this.threshold})});
-      await this.load();
-    },
-    clampThreshold() {
-      if (this.threshold==='' || isNaN(this.threshold)) this.threshold = 70;
-      this.threshold = Math.max(0, Math.min(100, Math.round(this.threshold)));
-    },
-
-    tier(score) {
-      if (score>=80) return {bg:'#1D9E75', fg:'#fff', stripe:'#1D9E75'};
-      if (score>=70) return {bg:'#EDDCB8', fg:'#7A4E0C', stripe:'#B4791A'};
-      return {bg:'#E5E7EB', fg:'#374151', stripe:'#E5E7EB'};
-    },
-    cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); },
-    timeAgo(d){ try{ const days=Math.floor((Date.now()-new Date(d))/8.64e7); return days<=0?'today':days+'d ago'; }catch{ return ''; } },
-  };
-}
-</script>
 </body>
 </html>

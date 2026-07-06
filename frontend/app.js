@@ -2,6 +2,10 @@ function jobpilot() {
   return {
     tab: 'feed', jobs: [], counts: {}, health: [], stats: null, loading: true, q: '', detail: null,
     running: false, lastRun: null, threshold: 70,
+    busy: null,
+    snack: null,
+    blocking: null,
+    confirmBox: null,
     statuses: ['surfaced', 'saved', 'applied', 'interview', 'offer', 'rejected', 'dismissed'],
     jobsNav: [
       { k: 'feed', label: 'Feed', icon: 'ti-inbox' },
@@ -71,17 +75,22 @@ function jobpilot() {
 
     async runNow() {
       const r = await fetch('/api/run', { method: 'POST' });
-      if (r.status === 409) { alert('Already running'); return; }
+      if (r.status === 409) { this.showSnack('Already running', 'error'); return; }
       this.running = true;
+      this.blocking = { label: 'Fetching and scoring jobs…' };
       this.poll();
     },
 
     poll() {
       const iv = setInterval(async () => {
         const s = await fetch('/api/run/status').then(r => r.json());
-        this.running = s.running;
-        this.lastRun = s.last_run;
-        if (!s.running) { clearInterval(iv); this.load(); }
+        this.running = s.running; this.lastRun = s.last_run;
+        if (!s.running) {
+          clearInterval(iv);
+          this.blocking = null;
+          this.showSnack('Run complete', 'success');
+          this.load();
+        }
       }, 2000);
     },
 
@@ -107,5 +116,49 @@ function jobpilot() {
 
     cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); },
     timeAgo(d) { try { const days = Math.floor((Date.now() - new Date(d)) / 8.64e7); return days <= 0 ? 'today' : days + 'd ago'; } catch { return ''; } },
+
+    clearDays: 30,
+    maintMsg: '',
+
+    ask(msg) {
+      return new Promise(resolve => { this.confirmBox = { msg, resolve }; });
+    },
+    confirmYes() { const c = this.confirmBox; this.confirmBox = null; c && c.resolve(true); },
+    confirmNo()  { const c = this.confirmBox; this.confirmBox = null; c && c.resolve(false); },
+
+    async maint(action, opts = {}) {
+      if (opts.confirm && !(await this.ask(opts.confirm))) return;
+      if (opts.heavy) this.blocking = { label: opts.busyLabel || (opts.label + '…') };
+      else this.busy = { label: opts.busyLabel || (opts.label + '…') };
+      try {
+        const r = await fetch(opts.url, {
+          method: opts.method || 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: opts.body ? JSON.stringify(opts.body) : undefined,
+        });
+        const data = await r.json();
+        this.showSnack(opts.label + ' — ' + this.summarize(data), 'success');
+      } catch (e) {
+        this.showSnack('Failed: ' + e, 'error');
+      } finally {
+        this.busy = null; this.blocking = null;
+      }
+      await this.load();
+    },
+
+    summarize(data) {
+      if (data && typeof data === 'object') {
+        return Object.entries(data).map(([k, v]) => `${v} ${k}`).join(', ');
+      }
+      return String(data);
+    },
+
+    exportCsv() { window.location.href = '/api/maint/export'; },
+
+    showSnack(msg, type = 'success') {
+      this.snack = { msg, type };
+      clearTimeout(this._snackT);
+      this._snackT = setTimeout(() => { this.snack = null; }, 3500);
+    },
   };
 }

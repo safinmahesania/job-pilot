@@ -7,6 +7,8 @@ from pydantic import BaseModel
 import threading
 from datetime import datetime
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, Response, PlainTextResponse
+from src import maintenance
 
 DB = "jobpilot.db"
 app = FastAPI(title="JobPilot")
@@ -202,6 +204,47 @@ def stats():
         "feed_size": feed_size, "distribution": dist, "sources": sources,
         "deadlines": deadlines, "rates": rates,
     }
+
+
+@app.post("/api/maint/rescore")
+def maint_rescore():
+    return maintenance.rescore_all()
+
+
+@app.post("/api/maint/cleanup")
+def maint_cleanup():
+    return maintenance.cleanup_below_threshold()
+
+
+class DaysBody(BaseModel):
+    days: int = 30
+
+
+@app.post("/api/maint/clear-old")
+def maint_clear_old(body: DaysBody):
+    return maintenance.clear_old_jobs(body.days)
+
+
+@app.get("/api/maint/export")
+def maint_export():
+    csv_data = maintenance.export_csv()
+    return Response(content=csv_data, media_type="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=jobpilot_jobs.csv"})
+
+
+@app.post("/api/maint/reload")
+def maint_reload():
+    return maintenance.reload_config()
+
+
+@app.post("/api/maint/clean-cache")
+def maint_clean_cache():
+    return maintenance.clean_cache()
+
+
+@app.post("/api/maint/reset")
+def maint_reset():
+    return maintenance.reset_all_jobs()
 
 
 app.mount("/", StaticFiles(

@@ -1,249 +1,477 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JobPilot</title>
-  <link rel="icon" href="/logo.svg">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = { theme: { extend: { colors: {
-      brand: '#B4791A', brandtint: '#F7EDD8', branddark: '#7A4E0C'
-    } } } };
-  </script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
-  <link rel="stylesheet" href="/styles.css">
-  <script src="/app.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JobPilot</title>
+    <link rel="icon" href="/logo.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: {
+          brand: '#B4791A', brandtint: '#F7EDD8', branddark: '#7A4E0C'
+        } } } };
+    </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="text-gray-800">
 <div x-data="jobpilot()" x-init="load()" x-cloak class="flex min-h-screen max-w-6xl mx-auto">
 
-  <!-- Sidebar -->
-  <aside class="w-56 shrink-0 border-r border-gray-200 flex flex-col px-3 py-5">
-    <div class="flex items-center gap-2 px-2 pb-5">
-      <svg viewBox="0 0 48 48" class="w-8 h-8"><rect width="48" height="48" rx="12" fill="#B4791A"/><circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/><path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/><path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/><path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/><path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/><circle cx="24" cy="24" r="1.8" fill="#fff"/></svg>
-      <span class="text-lg font-semibold">JobPilot</span>
-    </div>
-
-    <div class="text-[11px] text-gray-400 px-2 py-1">Jobs</div>
-    <template x-for="n in jobsNav" :key="n.k">
-      <div class="nav" :class="tab===n.k && 'active'" @click="tab=n.k; load()">
-        <i class="ti" :class="n.icon"></i>
-        <span class="flex-1" x-text="n.label"></span>
-        <span class="text-xs" :class="tab===n.k ? 'text-branddark' : 'text-gray-400'" x-text="counts[n.k] != null ? counts[n.k] : ''"></span>
-      </div>
-    </template>
-
-    <div class="h-px bg-gray-200 mx-2 my-3"></div>
-    <div class="text-[11px] text-gray-400 px-2 py-1">System</div>
-    <template x-for="n in sysNav" :key="n.k">
-      <div class="nav" :class="tab===n.k && 'active'" @click="tab=n.k; load()">
-        <i class="ti" :class="n.icon"></i>
-        <span x-text="n.label"></span>
-      </div>
-    </template>
-
-    <div class="mt-auto px-1">
-      <button @click="runNow()" :disabled="running" class="w-full h-9 rounded-lg bg-brand text-white text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
-        <i class="ti" :class="running ? 'ti-loader-2 animate-spin' : 'ti-player-play'"></i>
-        <span x-text="running ? 'Running…' : 'Run now'"></span>
-      </button>
-      <div x-show="lastRun" class="text-[11px] text-gray-400 text-center mt-2">Last run: <span x-text="lastRun"></span></div>
-    </div>
-  </aside>
-
-  <!-- Main -->
-  <main class="flex-1 min-w-0 px-6 py-6">
-
-    <!-- Job views -->
-    <div x-show="isJobView()">
-      <div class="flex items-center gap-2 mb-4">
-        <div class="flex-1 flex items-center gap-2 h-9 px-3 border border-gray-200 rounded-lg bg-white">
-          <i class="ti ti-search text-gray-400"></i>
-          <input x-model="q" placeholder="Search title, company, skill…" class="flex-1 text-sm outline-none bg-transparent">
+    <!-- Sidebar -->
+    <aside class="w-56 shrink-0 border-r border-gray-200 flex flex-col px-3 py-5">
+        <div class="flex items-center gap-2 px-2 pb-5">
+            <svg viewBox="0 0 48 48" class="w-8 h-8">
+                <rect width="48" height="48" rx="12" fill="#B4791A"/>
+                <circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/>
+                <path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/>
+                <path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/>
+                <path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/>
+                <path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/>
+                <circle cx="24" cy="24" r="1.8" fill="#fff"/>
+            </svg>
+            <span class="text-lg font-semibold">JobPilot</span>
         </div>
-        <span class="text-xs text-gray-400 capitalize" x-text="tab + ' · ' + filtered().length"></span>
-      </div>
 
-      <div x-show="loading" class="text-center text-gray-400 py-20 text-sm">Loading…</div>
-      <div x-show="!loading && filtered().length===0" class="text-center text-gray-400 py-20 text-sm">
-        <i class="ti ti-inbox text-3xl block mb-2 opacity-50"></i>
-        No jobs in <span x-text="tab"></span> yet.
-      </div>
-
-      <div class="flex flex-col gap-3">
-        <template x-for="job in filtered()" :key="job.id">
-          <div class="flex gap-3.5 bg-white border border-gray-200 rounded-xl p-4" :style="`border-left:3px solid ${tier(job.score).stripe}`">
-            <div class="shrink-0 w-14 h-14 rounded-full flex flex-col items-center justify-center" :style="`background:${tier(job.score).bg}`">
-              <span class="text-xl font-semibold leading-none" :style="`color:${tier(job.score).fg}`" x-text="Math.round(job.score)"></span>
-              <span class="text-[10px]" :style="`color:${tier(job.score).fg}`">match</span>
+        <div class="text-[11px] text-gray-400 px-2 py-1">Jobs</div>
+        <template x-for="n in jobsNav" :key="n.k">
+            <div class="nav" :class="tab===n.k && 'active'" @click="tab=n.k; load()">
+                <i class="ti" :class="n.icon"></i>
+                <span class="flex-1" x-text="n.label"></span>
+                <span class="text-xs" :class="tab===n.k ? 'text-branddark' : 'text-gray-400'"
+                      x-text="counts[n.k] != null ? counts[n.k] : ''"></span>
             </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-baseline justify-between gap-2">
-                <span class="font-medium cursor-pointer hover:text-brand" @click="openDetail(job)" x-text="job.title"></span>
-                <span class="text-xs text-gray-400 whitespace-nowrap" x-text="job.posted_date ? timeAgo(job.posted_date) : ''"></span>
-              </div>
-              <div class="text-[13px] text-gray-500 mt-0.5">
-                <span x-text="job.company"></span> · <span x-text="job.location"></span>
-                <span class="text-gray-400" x-show="job.job_type && job.job_type!=='Unknown'"> · <span x-text="job.job_type"></span></span>
-                <span class="text-amber-700" x-show="job.deadline"> · <i class="ti ti-calendar text-xs"></i> <span x-text="job.deadline"></span></span>
-              </div>
-              <div class="text-[13px] rounded-md px-2.5 py-2 my-2.5 leading-relaxed flex gap-1.5" style="background:#F7EDD8; color:#7A4E0C;" x-show="job.rationale">
-                <i class="ti ti-bulb mt-0.5"></i><span x-text="job.rationale"></span>
-              </div>
-              <div class="flex items-center gap-2">
-                <a :href="job.apply_url" target="_blank" class="text-[13px] h-8 px-4 rounded-md bg-brand text-white flex items-center gap-1"><i class="ti ti-external-link"></i> Apply</a>
-                <template x-if="tab!=='dismissed'">
-                  <div class="flex items-center gap-2">
-                    <button @click="setStatus(job,'saved')" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">Save</button>
-                    <button @click="setStatus(job,'dismissed')" class="text-[13px] h-8 px-3 rounded-md text-gray-400 hover:bg-gray-50">Dismiss</button>
-                  </div>
-                </template>
-                <template x-if="tab==='dismissed'">
-                  <button @click="setStatus(job,'surfaced')" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50"><i class="ti ti-arrow-back-up"></i> Restore</button>
-                </template>
-                <select @change="setStatus(job, $event.target.value)" class="ml-auto text-[13px] h-8 px-2 rounded-md border border-gray-200 text-gray-600 bg-white">
-                  <template x-for="s in statuses" :key="s"><option :value="s" :selected="job.status===s" x-text="cap(s)"></option></template>
-                </select>
-              </div>
-            </div>
-          </div>
         </template>
-      </div>
-    </div>
 
-    <!-- Stats -->
-    <div x-show="tab==='stats'">
-      <h2 class="text-lg font-semibold mb-4">Statistics</h2>
-      <template x-if="stats">
-        <div class="flex flex-col gap-5">
-          <div class="grid grid-cols-3 gap-3">
-            <div class="bg-white border border-gray-200 rounded-xl p-4 text-center"><div class="text-2xl font-semibold" x-text="stats.total"></div><div class="text-xs text-gray-400 mt-1">Total jobs</div></div>
-            <div class="bg-white border border-gray-200 rounded-xl p-4 text-center"><div class="text-2xl font-semibold" x-text="stats.feed_size"></div><div class="text-xs text-gray-400 mt-1">In feed</div></div>
-            <div class="bg-white border border-gray-200 rounded-xl p-4 text-center"><div class="text-2xl font-semibold" x-text="stats.avg_score"></div><div class="text-xs text-gray-400 mt-1">Avg score</div></div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-xl p-4">
-            <div class="text-sm font-medium mb-3">Application funnel</div>
-            <template x-for="[label,key] in [['Surfaced','surfaced'],['Saved','saved'],['Applied','applied'],['Interview','interview'],['Offer','offer'],['Rejected','rejected'],['Dismissed','dismissed']]" :key="key">
-              <div class="flex items-center gap-3 mb-2">
-                <span class="text-xs text-gray-500 w-20" x-text="label"></span>
-                <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-                  <div class="h-full bg-brand rounded-full" :style="`width:${stats.total ? Math.max(4,100*stats.funnel[key]/stats.total) : 0}%`" x-show="stats.funnel[key]>0"></div>
-                </div>
-                <span class="text-xs font-medium text-gray-700 w-6 text-right" x-text="stats.funnel[key]"></span>
-              </div>
-            </template>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-xl p-4">
-            <div class="text-sm font-medium mb-3">Score distribution</div>
-            <template x-for="[label,color] in [['80+','#1D9E75'],['70-79','#B4791A'],['60-69','#C0C0C0'],['<60','#E5A0A0']]" :key="label">
-              <div class="flex items-center gap-3 mb-2">
-                <span class="text-xs text-gray-500 w-12" x-text="label"></span>
-                <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-                  <div class="h-full rounded-full" :style="`width:${stats.total ? Math.max(4,100*stats.distribution[label]/stats.total) : 0}%; background:${color}`" x-show="stats.distribution[label]>0"></div>
-                </div>
-                <span class="text-xs font-medium text-gray-700 w-6 text-right" x-text="stats.distribution[label]"></span>
-              </div>
-            </template>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-xl p-4">
-            <div class="text-sm font-medium mb-3">By source</div>
-            <template x-for="s in stats.sources" :key="s.source">
-              <div class="flex items-center justify-between text-sm py-1 border-b border-gray-50 last:border-0">
-                <span class="text-gray-700" x-text="s.source"></span>
-                <span class="text-gray-500 text-xs"><span x-text="s.c"></span> jobs · avg <span class="font-medium text-gray-700" x-text="s.avg"></span></span>
-              </div>
-            </template>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-xl p-4" x-show="stats.deadlines.length">
-            <div class="text-sm font-medium mb-3">Upcoming deadlines</div>
-            <template x-for="d in stats.deadlines" :key="d.title">
-              <div class="flex items-center justify-between text-sm py-1">
-                <span class="text-gray-700 truncate mr-3" x-text="d.title + ' — ' + d.company"></span>
-                <span class="text-amber-700 text-xs whitespace-nowrap" x-text="d.deadline"></span>
-              </div>
-            </template>
-          </div>
-        </div>
-      </template>
-      <div x-show="!stats" class="text-center text-gray-400 py-16 text-sm">Loading stats…</div>
-    </div>
-
-    <!-- Admin -->
-    <div x-show="tab==='admin'">
-      <h2 class="text-lg font-semibold mb-4">Admin</h2>
-      <div class="text-sm text-gray-500 mb-3">Source health — last run per source</div>
-      <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <template x-for="s in health" :key="s.name">
-          <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0">
-            <span class="w-2 h-2 rounded-full shrink-0" :class="s.status==='ok' ? 'bg-green-500' : 'bg-red-500'"></span>
-            <div class="flex-1 min-w-0">
-              <div class="text-sm font-medium" x-text="s.name"></div>
-              <div class="text-xs text-gray-400"><span x-text="s.ats"></span><span x-show="s.error" class="text-red-500" x-text="' · ' + (s.error||'')"></span></div>
+        <div class="h-px bg-gray-200 mx-2 my-3"></div>
+        <div class="text-[11px] text-gray-400 px-2 py-1">System</div>
+        <template x-for="n in sysNav" :key="n.k">
+            <div class="nav" :class="tab===n.k && 'active'" @click="tab=n.k; load()">
+                <i class="ti" :class="n.icon"></i>
+                <span x-text="n.label"></span>
             </div>
-            <div class="text-right text-xs text-gray-500 shrink-0">
-              <div><span class="font-medium text-gray-700" x-text="s.fetched"></span> fetched</div>
-              <div><span class="font-medium text-gray-700" x-text="s.kept"></span> kept</div>
-            </div>
-          </div>
         </template>
-        <div x-show="health.length===0" class="px-4 py-8 text-center text-gray-400 text-sm">No run data yet. Hit "Run now".</div>
-      </div>
-    </div>
 
-    <!-- Settings -->
-    <div x-show="tab==='settings'">
-      <h2 class="text-lg font-semibold mb-4">Settings</h2>
-      <div class="bg-white border border-gray-200 rounded-xl p-4 max-w-md">
-        <div class="flex items-center justify-between mb-1">
-          <span class="text-sm font-medium">Score threshold</span>
-          <input type="number" min="0" max="100" x-model.number="threshold" @change="clampThreshold(); saveThreshold()" class="w-16 text-sm font-semibold text-brand text-right border border-gray-200 rounded-md px-2 py-1 outline-none">
+        <div class="mt-auto px-1">
+            <button @click="runNow()" :disabled="running"
+                    class="w-full h-9 rounded-lg bg-brand text-white text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
+                <i class="ti" :class="running ? 'ti-loader-2 animate-spin' : 'ti-player-play'"></i>
+                <span x-text="running ? 'Running…' : 'Run now'"></span>
+            </button>
+            <div x-show="lastRun" class="text-[11px] text-gray-400 text-center mt-2">Last run: <span
+                    x-text="lastRun"></span></div>
         </div>
-        <div class="text-xs text-gray-400 mb-3">Feed shows only jobs scoring at or above this.</div>
-        <input type="range" min="0" max="100" step="1" x-model.number="threshold" @change="saveThreshold()" class="w-full accent-[#B4791A]">
-        <div class="flex justify-between text-[11px] text-gray-400 mt-1"><span>0</span><span>50</span><span>100</span></div>
-      </div>
-    </div>
+    </aside>
 
-  </main>
+    <!-- Main -->
+    <main class="flex-1 min-w-0 px-6 py-6">
 
-  <!-- Detail modal -->
-  <div x-show="detail" x-cloak @click="detail=null" class="fixed inset-0 bg-black/40 flex items-start justify-center p-4 overflow-y-auto z-50">
-    <div @click.stop class="bg-white rounded-xl max-w-2xl w-full my-8 shadow-xl">
-      <template x-if="detail">
-        <div>
-          <div class="flex items-start justify-between gap-3 p-5 border-b border-gray-100">
-            <div class="flex gap-3">
-              <div class="shrink-0 w-12 h-12 rounded-full flex flex-col items-center justify-center" :style="`background:${tier(detail.score).bg}`">
-                <span class="text-lg font-semibold leading-none" :style="`color:${tier(detail.score).fg}`" x-text="Math.round(detail.score)"></span>
-              </div>
-              <div>
-                <div class="font-semibold text-lg leading-tight" x-text="detail.title"></div>
-                <div class="text-sm text-gray-500 mt-0.5"><span x-text="detail.company"></span> · <span x-text="detail.location"></span><span x-show="detail.job_type && detail.job_type!=='Unknown'"> · <span x-text="detail.job_type"></span></span></div>
-                <div class="text-xs text-amber-700 mt-1" x-show="detail.deadline"><i class="ti ti-calendar"></i> Closes <span x-text="detail.deadline"></span></div>
-              </div>
+        <!-- Job views -->
+        <div x-show="isJobView()">
+            <div class="flex items-center gap-2 mb-4">
+                <div class="flex-1 flex items-center gap-2 h-9 px-3 border border-gray-200 rounded-lg bg-white">
+                    <i class="ti ti-search text-gray-400"></i>
+                    <input x-model="q" placeholder="Search title, company, skill…"
+                           class="flex-1 text-sm outline-none bg-transparent">
+                </div>
+                <span class="text-xs text-gray-400 capitalize" x-text="tab + ' · ' + filtered().length"></span>
             </div>
-            <button @click="detail=null" class="text-gray-400 hover:text-gray-700"><i class="ti ti-x text-xl"></i></button>
-          </div>
-          <div class="p-5 max-h-[60vh] overflow-y-auto">
-            <div class="text-[13px] rounded-md px-3 py-2 mb-4 leading-relaxed flex gap-1.5" style="background:#F7EDD8; color:#7A4E0C;" x-show="detail.rationale"><i class="ti ti-bulb mt-0.5"></i><span x-text="detail.rationale"></span></div>
-            <div class="grid grid-cols-3 gap-2 mb-4 text-center">
-              <div class="bg-gray-50 rounded-md py-2"><div class="text-sm font-semibold text-gray-700" x-text="Math.round(detail.skills_score)"></div><div class="text-xs text-gray-400">Skills</div></div>
-              <div class="bg-gray-50 rounded-md py-2"><div class="text-sm font-semibold text-gray-700" x-text="Math.round(detail.seniority_score)"></div><div class="text-xs text-gray-400">Seniority</div></div>
-              <div class="bg-gray-50 rounded-md py-2"><div class="text-sm font-semibold text-gray-700" x-text="Math.round(detail.domain_score)"></div><div class="text-xs text-gray-400">Domain</div></div>
+
+            <div x-show="loading" class="text-center text-gray-400 py-20 text-sm">Loading…</div>
+            <div x-show="!loading && filtered().length===0" class="text-center text-gray-400 py-20 text-sm">
+                <i class="ti ti-inbox text-3xl block mb-2 opacity-50"></i>
+                No jobs in <span x-text="tab"></span> yet.
             </div>
-            <div class="jd text-sm text-gray-700 leading-relaxed" x-html="formatJD(detail.description)"></div>
-          </div>
-          <div class="flex items-center gap-2 p-5 border-t border-gray-100">
-            <a :href="detail.apply_url" target="_blank" class="text-sm h-9 px-5 rounded-md bg-brand text-white flex items-center gap-1"><i class="ti ti-external-link"></i> Apply</a>
-            <button @click="setStatus(detail,'saved'); detail=null" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Save</button>
-            <a :href="detail.source_url" target="_blank" class="text-sm h-9 px-4 rounded-md text-gray-500 hover:bg-gray-50 flex items-center ml-auto">View posting <i class="ti ti-external-link ml-1"></i></a>
-          </div>
+
+            <div class="flex flex-col gap-3">
+                <template x-for="job in filtered()" :key="job.id">
+                    <div class="flex gap-3.5 bg-white border border-gray-200 rounded-xl p-4"
+                         :style="`border-left:3px solid ${tier(job.score).stripe}`">
+                        <div class="shrink-0 w-14 h-14 rounded-full flex flex-col items-center justify-center"
+                             :style="`background:${tier(job.score).bg}`">
+                            <span class="text-xl font-semibold leading-none" :style="`color:${tier(job.score).fg}`"
+                                  x-text="Math.round(job.score)"></span>
+                            <span class="text-[10px]" :style="`color:${tier(job.score).fg}`">match</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-baseline justify-between gap-2">
+                                <span class="font-medium cursor-pointer hover:text-brand" @click="openDetail(job)"
+                                      x-text="job.title"></span>
+                                <span class="text-xs text-gray-400 whitespace-nowrap"
+                                      x-text="job.posted_date ? timeAgo(job.posted_date) : ''"></span>
+                            </div>
+                            <div class="text-[13px] text-gray-500 mt-0.5">
+                                <span x-text="job.company"></span> · <span x-text="job.location"></span>
+                                <span class="text-gray-400" x-show="job.job_type && job.job_type!=='Unknown'"> · <span
+                                        x-text="job.job_type"></span></span>
+                                <span class="text-amber-700" x-show="job.deadline"> · <i
+                                        class="ti ti-calendar text-xs"></i> <span x-text="job.deadline"></span></span>
+                            </div>
+                            <div class="text-[13px] rounded-md px-2.5 py-2 my-2.5 leading-relaxed flex gap-1.5"
+                                 style="background:#F7EDD8; color:#7A4E0C;" x-show="job.rationale">
+                                <i class="ti ti-bulb mt-0.5"></i><span x-text="job.rationale"></span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <a :href="job.apply_url" target="_blank"
+                                   class="text-[13px] h-8 px-4 rounded-md bg-brand text-white flex items-center gap-1"><i
+                                        class="ti ti-external-link"></i> Apply</a>
+                                <template x-if="tab!=='dismissed'">
+                                    <div class="flex items-center gap-2">
+                                        <button @click="setStatus(job,'saved')"
+                                                class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">
+                                            Save
+                                        </button>
+                                        <button @click="setStatus(job,'dismissed')"
+                                                class="text-[13px] h-8 px-3 rounded-md text-gray-400 hover:bg-gray-50">
+                                            Dismiss
+                                        </button>
+                                    </div>
+                                </template>
+                                <template x-if="tab==='dismissed'">
+                                    <button @click="setStatus(job,'surfaced')"
+                                            class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">
+                                        <i class="ti ti-arrow-back-up"></i> Restore
+                                    </button>
+                                </template>
+                                <select @change="setStatus(job, $event.target.value)"
+                                        class="ml-auto text-[13px] h-8 px-2 rounded-md border border-gray-200 text-gray-600 bg-white">
+                                    <template x-for="s in statuses" :key="s">
+                                        <option :value="s" :selected="job.status===s" x-text="cap(s)"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
         </div>
-      </template>
+
+        <!-- Stats -->
+        <div x-show="tab==='stats'">
+            <h2 class="text-lg font-semibold mb-4">Statistics</h2>
+            <template x-if="stats">
+                <div class="flex flex-col gap-5">
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
+                            <div class="text-2xl font-semibold" x-text="stats.total"></div>
+                            <div class="text-xs text-gray-400 mt-1">Total jobs</div>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
+                            <div class="text-2xl font-semibold" x-text="stats.feed_size"></div>
+                            <div class="text-xs text-gray-400 mt-1">In feed</div>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
+                            <div class="text-2xl font-semibold" x-text="stats.avg_score"></div>
+                            <div class="text-xs text-gray-400 mt-1">Avg score</div>
+                        </div>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-xl p-4">
+                        <div class="text-sm font-medium mb-3">Application funnel</div>
+                        <template
+                                x-for="[label,key] in [['Surfaced','surfaced'],['Saved','saved'],['Applied','applied'],['Interview','interview'],['Offer','offer'],['Rejected','rejected'],['Dismissed','dismissed']]"
+                                :key="key">
+                            <div class="flex items-center gap-3 mb-2">
+                                <span class="text-xs text-gray-500 w-20" x-text="label"></span>
+                                <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                                    <div class="h-full bg-brand rounded-full"
+                                         :style="`width:${stats.total ? Math.max(4,100*stats.funnel[key]/stats.total) : 0}%`"
+                                         x-show="stats.funnel[key]>0"></div>
+                                </div>
+                                <span class="text-xs font-medium text-gray-700 w-6 text-right"
+                                      x-text="stats.funnel[key]"></span>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-xl p-4">
+                        <div class="text-sm font-medium mb-3">Score distribution</div>
+                        <template
+                                x-for="[label,color] in [['80+','#1D9E75'],['70-79','#B4791A'],['60-69','#C0C0C0'],['<60','#E5A0A0']]"
+                                :key="label">
+                            <div class="flex items-center gap-3 mb-2">
+                                <span class="text-xs text-gray-500 w-12" x-text="label"></span>
+                                <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                                    <div class="h-full rounded-full"
+                                         :style="`width:${stats.total ? Math.max(4,100*stats.distribution[label]/stats.total) : 0}%; background:${color}`"
+                                         x-show="stats.distribution[label]>0"></div>
+                                </div>
+                                <span class="text-xs font-medium text-gray-700 w-6 text-right"
+                                      x-text="stats.distribution[label]"></span>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-xl p-4">
+                        <div class="text-sm font-medium mb-3">By source</div>
+                        <template x-for="s in stats.sources" :key="s.source">
+                            <div class="flex items-center justify-between text-sm py-1 border-b border-gray-50 last:border-0">
+                                <span class="text-gray-700" x-text="s.source"></span>
+                                <span class="text-gray-500 text-xs"><span x-text="s.c"></span> jobs · avg <span
+                                        class="font-medium text-gray-700" x-text="s.avg"></span></span>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-xl p-4" x-show="stats.deadlines.length">
+                        <div class="text-sm font-medium mb-3">Upcoming deadlines</div>
+                        <template x-for="d in stats.deadlines" :key="d.title">
+                            <div class="flex items-center justify-between text-sm py-1">
+                                <span class="text-gray-700 truncate mr-3" x-text="d.title + ' — ' + d.company"></span>
+                                <span class="text-amber-700 text-xs whitespace-nowrap" x-text="d.deadline"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+            <div x-show="!stats" class="text-center text-gray-400 py-16 text-sm">Loading stats…</div>
+        </div>
+
+        <!-- Admin -->
+        <div x-show="tab==='admin'">
+            <h2 class="text-lg font-semibold mb-4">Admin</h2>
+            <div class="text-sm text-gray-500 mb-3">Source health — last run per source</div>
+            <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <template x-for="s in health" :key="s.name">
+                    <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0">
+                        <span class="w-2 h-2 rounded-full shrink-0"
+                              :class="s.status==='ok' ? 'bg-green-500' : 'bg-red-500'"></span>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium" x-text="s.name"></div>
+                            <div class="text-xs text-gray-400"><span x-text="s.ats"></span><span x-show="s.error"
+                                                                                                 class="text-red-500"
+                                                                                                 x-text="' · ' + (s.error||'')"></span>
+                            </div>
+                        </div>
+                        <div class="text-right text-xs text-gray-500 shrink-0">
+                            <div><span class="font-medium text-gray-700" x-text="s.fetched"></span> fetched</div>
+                            <div><span class="font-medium text-gray-700" x-text="s.kept"></span> kept</div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="health.length===0" class="px-4 py-8 text-center text-gray-400 text-sm">No run data yet. Hit
+                    "Run now".
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings -->
+        <div x-show="tab==='settings'">
+            <h2 class="text-lg font-semibold mb-4">Settings</h2>
+            <div class="bg-white border border-gray-200 rounded-xl p-4 max-w-md">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-sm font-medium">Score threshold</span>
+                    <input type="number" min="0" max="100" x-model.number="threshold"
+                           @change="clampThreshold(); saveThreshold()"
+                           class="w-16 text-sm font-semibold text-brand text-right border border-gray-200 rounded-md px-2 py-1 outline-none">
+                </div>
+                <div class="text-xs text-gray-400 mb-3">Feed shows only jobs scoring at or above this.</div>
+                <input type="range" min="0" max="100" step="1" x-model.number="threshold" @change="saveThreshold()"
+                       class="w-full accent-[#B4791A]">
+                <div class="flex justify-between text-[11px] text-gray-400 mt-1">
+                    <span>0</span><span>50</span><span>100</span></div>
+            </div>
+            <div class="mt-6">
+                <h3 class="text-sm font-semibold text-gray-700 mb-3">Maintenance</h3>
+                <div class="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+
+                    <div class="flex items-center justify-between gap-4 p-4">
+                        <div>
+                            <div class="text-sm font-medium">Re-score all jobs</div>
+                            <div class="text-xs text-gray-400 mt-0.5">Re-run AI scoring with current profile +
+                                threshold. Slow.
+                            </div>
+                        </div>
+                        <button @click="maint('rescore',{url:'/api/maint/rescore',label:'Re-scored',heavy:true,busyLabel:'Re-scoring all jobs…',confirm:'Re-score all jobs? This runs the AI on every job and may take a while.'})"
+                                class="shrink-0 text-[13px] h-8 px-4 rounded-md bg-brand text-white">Re-score
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-4 p-4">
+                        <div>
+                            <div class="text-sm font-medium">Cleanup below threshold</div>
+                            <div class="text-xs text-gray-400 mt-0.5">Archive (dismiss) feed jobs scoring under the
+                                threshold.
+                            </div>
+                        </div>
+                        <button @click="maint('cleanup',{url:'/api/maint/cleanup',label:'Archived'})"
+                                class="shrink-0 text-[13px] h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50">
+                            Cleanup
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-4 p-4">
+                        <div>
+                            <div class="text-sm font-medium">Clear old jobs</div>
+                            <div class="text-xs text-gray-400 mt-0.5">Permanently delete jobs older than N days.</div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <input type="number" min="1" x-model.number="clearDays"
+                                   class="w-14 text-sm text-right border border-gray-200 rounded-md px-2 py-1 outline-none">
+                            <span class="text-xs text-gray-400">days</span>
+                            <button @click="maint('clear',{url:'/api/maint/clear-old',body:{days:clearDays},label:'Deleted',confirm:'Permanently delete jobs older than '+clearDays+' days?'})"
+                                    class="text-[13px] h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50">
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-4 p-4">
+                        <div>
+                            <div class="text-sm font-medium">Export jobs as CSV</div>
+                            <div class="text-xs text-gray-400 mt-0.5">Download all jobs for backup or Excel.</div>
+                        </div>
+                        <button @click="exportCsv()"
+                                class="shrink-0 text-[13px] h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50">
+                            Download
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-4 p-4">
+                        <div>
+                            <div class="text-sm font-medium">Reload config</div>
+                            <div class="text-xs text-gray-400 mt-0.5">Re-read profile.yaml + companies.yaml.</div>
+                        </div>
+                        <button @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})"
+                                class="shrink-0 text-[13px] h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50">
+                            Reload
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-4 p-4">
+                        <div>
+                            <div class="text-sm font-medium">Clean cache</div>
+                            <div class="text-xs text-gray-400 mt-0.5">Delete Python cache. Jobs preserved.</div>
+                        </div>
+                        <button @click="maint('cache',{url:'/api/maint/clean-cache',label:'Cleaned'})"
+                                class="shrink-0 text-[13px] h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50">
+                            Clean
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-4 p-4">
+                        <div>
+                            <div class="text-sm font-medium text-red-600">Reset all jobs</div>
+                            <div class="text-xs text-gray-400 mt-0.5">Wipe all jobs from DB. Cannot be undone. Config
+                                preserved.
+                            </div>
+                        </div>
+                        <button @click="maint('reset',{url:'/api/maint/reset',label:'Reset',confirm:'⚠ This deletes ALL jobs permanently. Continue?'})"
+                                class="shrink-0 text-[13px] h-8 px-4 rounded-md bg-red-500 text-white">Reset jobs
+                        </button>
+                    </div>
+
+                </div>
+                <div x-show="maintMsg" class="text-xs text-gray-500 mt-2" x-text="maintMsg"></div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Detail modal -->
+    <div x-show="detail" x-cloak @click="detail=null"
+         class="fixed inset-0 bg-black/40 flex items-start justify-center p-4 overflow-y-auto z-50">
+        <div @click.stop class="bg-white rounded-xl max-w-2xl w-full my-8 shadow-xl">
+            <template x-if="detail">
+                <div>
+                    <div class="flex items-start justify-between gap-3 p-5 border-b border-gray-100">
+                        <div class="flex gap-3">
+                            <div class="shrink-0 w-12 h-12 rounded-full flex flex-col items-center justify-center"
+                                 :style="`background:${tier(detail.score).bg}`">
+                                <span class="text-lg font-semibold leading-none"
+                                      :style="`color:${tier(detail.score).fg}`"
+                                      x-text="Math.round(detail.score)"></span>
+                            </div>
+                            <div>
+                                <div class="font-semibold text-lg leading-tight" x-text="detail.title"></div>
+                                <div class="text-sm text-gray-500 mt-0.5"><span x-text="detail.company"></span> · <span
+                                        x-text="detail.location"></span><span
+                                        x-show="detail.job_type && detail.job_type!=='Unknown'"> · <span
+                                        x-text="detail.job_type"></span></span></div>
+                                <div class="text-xs text-amber-700 mt-1" x-show="detail.deadline"><i
+                                        class="ti ti-calendar"></i> Closes <span x-text="detail.deadline"></span></div>
+                            </div>
+                        </div>
+                        <button @click="detail=null" class="text-gray-400 hover:text-gray-700"><i
+                                class="ti ti-x text-xl"></i></button>
+                    </div>
+                    <div class="p-5 max-h-[60vh] overflow-y-auto">
+                        <div class="text-[13px] rounded-md px-3 py-2 mb-4 leading-relaxed flex gap-1.5"
+                             style="background:#F7EDD8; color:#7A4E0C;" x-show="detail.rationale"><i
+                                class="ti ti-bulb mt-0.5"></i><span x-text="detail.rationale"></span></div>
+                        <div class="grid grid-cols-3 gap-2 mb-4 text-center">
+                            <div class="bg-gray-50 rounded-md py-2">
+                                <div class="text-sm font-semibold text-gray-700"
+                                     x-text="Math.round(detail.skills_score)"></div>
+                                <div class="text-xs text-gray-400">Skills</div>
+                            </div>
+                            <div class="bg-gray-50 rounded-md py-2">
+                                <div class="text-sm font-semibold text-gray-700"
+                                     x-text="Math.round(detail.seniority_score)"></div>
+                                <div class="text-xs text-gray-400">Seniority</div>
+                            </div>
+                            <div class="bg-gray-50 rounded-md py-2">
+                                <div class="text-sm font-semibold text-gray-700"
+                                     x-text="Math.round(detail.domain_score)"></div>
+                                <div class="text-xs text-gray-400">Domain</div>
+                            </div>
+                        </div>
+                        <div class="jd text-sm text-gray-700 leading-relaxed"
+                             x-html="formatJD(detail.description)"></div>
+                    </div>
+                    <div class="flex items-center gap-2 p-5 border-t border-gray-100">
+                        <a :href="detail.apply_url" target="_blank"
+                           class="text-sm h-9 px-5 rounded-md bg-brand text-white flex items-center gap-1"><i
+                                class="ti ti-external-link"></i> Apply</a>
+                        <button @click="setStatus(detail,'saved'); detail=null"
+                                class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Save
+                        </button>
+                        <a :href="detail.source_url" target="_blank"
+                           class="text-sm h-9 px-4 rounded-md text-gray-500 hover:bg-gray-50 flex items-center ml-auto">View
+                            posting <i class="ti ti-external-link ml-1"></i></a>
+                    </div>
+                </div>
+            </template>
+        </div>
     </div>
-  </div>
+
+    <!-- Center blocking modal -->
+    <div x-show="blocking" x-cloak class="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center">
+        <div class="bg-white rounded-2xl px-8 py-7 flex flex-col items-center gap-4 shadow-xl max-w-xs text-center">
+            <i class="ti ti-loader-2 animate-spin text-brand text-4xl"></i>
+            <div class="text-sm font-medium text-gray-700" x-text="blocking ? blocking.label : ''"></div>
+            <div class="text-xs text-gray-400">Please wait — don't close this tab.</div>
+        </div>
+    </div>
+
+    <!-- Custom confirm modal -->
+    <div x-show="confirmBox" x-cloak class="fixed inset-0 z-[75] bg-black/40 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl max-w-sm w-full p-5 shadow-xl">
+            <div class="text-sm text-gray-700 mb-4" x-text="confirmBox ? confirmBox.msg : ''"></div>
+            <div class="flex justify-end gap-2">
+                <button @click="confirmNo()"
+                        class="text-sm h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Cancel
+                </button>
+                <button @click="confirmYes()" class="text-sm h-8 px-4 rounded-md bg-brand text-white">Continue</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Processing toast -->
+    <div x-show="busy" x-cloak
+         class="fixed bottom-5 right-5 z-[60] flex items-center gap-3 bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-3">
+        <i class="ti ti-loader-2 animate-spin text-brand text-lg"></i>
+        <span class="text-sm text-gray-700" x-text="busy ? busy.label : ''"></span>
+    </div>
+
+    <!-- Success/error snackbar -->
+    <div x-show="snack" x-cloak
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 rounded-lg shadow-lg px-4 py-2.5 text-sm text-white"
+         :class="snack && snack.type==='error' ? 'bg-red-500' : 'bg-gray-800'">
+        <i class="ti" :class="snack && snack.type==='error' ? 'ti-alert-circle' : 'ti-circle-check'"></i>
+        <span x-text="snack ? snack.msg : ''"></span>
+    </div>
 </div>
 </body>
 </html>

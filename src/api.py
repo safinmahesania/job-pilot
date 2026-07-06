@@ -19,6 +19,7 @@ TAB_WHERE = {
     "feed": "status = 'surfaced'",
     "saved": "status = 'saved'",
     "applied": "status = 'applied'",
+    "dismissed": "status = 'dismissed'",
 }
 
 ALLOWED_STATUS = {"surfaced", "saved", "applied", "dismissed",

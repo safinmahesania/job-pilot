@@ -63,9 +63,10 @@ class WorkdayAdapter(SourceAdapter):
         return out
 
     def _detail(self, base, tenant, site, path):
-        url = f"{base}/wday/cxs/{tenant}/{site}/job{path}"
+        url = f"{base}/wday/cxs/{tenant}/{site}{path}"
         try:
-            r = httpx.get(url, headers={"Accept": "application/json"}, timeout=25)
+            r = httpx.get(url, headers={"Accept": "application/json",
+                                        "Content-Type": "application/json"}, timeout=25)
             r.raise_for_status()
             info = r.json().get("jobPostingInfo", {})
             return {

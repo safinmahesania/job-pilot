@@ -1,6 +1,9 @@
 """Map raw adapter records into the common schema + a dedupe hash."""
 import hashlib
 import re
+import html as _html
+from bs4 import BeautifulSoup
+
 
 
 def _clean(text: str | None) -> str:
@@ -17,6 +20,43 @@ def strip_html(text: str | None) -> str:
         return ""
     return re.sub(r"<[^>]+>", " ", text).replace("&nbsp;", " ").strip()
 
+ALLOWED = {"h1", "h2", "h3", "h4", "p", "ul", "ol", "li", "strong", "b", "em", "i", "br", "a"}
+
+
+def clean_html(raw: str | None) -> str:
+    if not raw:
+        return ""
+    # double-encoded HTML (&lt;div&gt;) ko pehle decode karo
+    if "&lt;" in raw and "<" not in raw:
+        raw = _html.unescape(raw)
+
+    soup = BeautifulSoup(raw, "html.parser")
+
+    # junk tags poori tarah hatao
+    for t in soup(["script", "style", "img", "svg", "iframe", "noscript"]):
+        t.decompose()
+
+    # disallowed tags unwrap; allowed pe sirf href rakho
+    for tag in soup.find_all(True):
+        if tag.name not in ALLOWED:
+            tag.unwrap()
+        else:
+            tag.attrs = {k: v for k, v in tag.attrs.items() if k == "href"}
+
+    # saari headings ko ek consistent size do (h1/h2 -> h3)
+    for tag in soup.find_all(["h1", "h2"]):
+        tag.name = "h3"
+
+    # khaali blocks (sirf space / &nbsp;) hatao
+    for tag in soup.find_all(["p", "li", "h3", "h4", "ul", "ol"]):
+        if not tag.get_text(strip=True).replace("\xa0", ""):
+            tag.decompose()
+
+    out = str(soup).replace("\xa0", " ")
+    out = re.sub(r"[ \t]{2,}", " ", out)                 # extra spaces
+    out = re.sub(r"(\s*<br\s*/?>\s*){2,}", "<br>", out)  # multiple <br> collapse
+    out = re.sub(r"\n{2,}", "\n", out)                   # extra newlines
+    return out.strip()
 
 def normalize(raw: dict) -> dict:
     company = raw.get("company")
@@ -31,7 +71,7 @@ def normalize(raw: dict) -> dict:
         "company": company,
         "location": location,
         "remote": 1 if location and "remote" in location.lower() else 0,
-        "description": strip_html(raw.get("description")),
+        "description": clean_html(raw.get("description")),
         "posted_date": raw.get("posted_date"),
         "job_type": raw.get("job_type") or "Unknown",
         "deadline": raw.get("deadline"),

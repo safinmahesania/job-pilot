@@ -10,8 +10,27 @@
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
-        body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #F7F7F8; }
-        [x-cloak] { display: none !important; }
+        body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #F7F7F8; .jd { word-break: break-word; }
+        .jd p { margin: 0 0 0.75rem; }
+        .jd ul, .jd ol { margin: 0 0 0.75rem 1.25rem; list-style: disc; }
+        .jd li { margin: 0.15rem 0; }
+        .jd h1, .jd h2, .jd h3, .jd h4, .jd b, .jd strong { font-weight: 600; }
+        .jd h1, .jd h2, .jd h3 { margin: 1rem 0 0.4rem; font-size: 0.95rem; }
+        .jd a { color: #534AB7; text-decoration: underline; }
+        .jd br { line-height: 1.6; }}
+        [x-cloak] { display: none !important;  }
+        .jd { word-break: break-word; }
+        .jd > *:first-child { margin-top: 0; }
+        .jd h3, .jd h4 { font-weight: 600; font-size: 0.9rem; margin: 1.1rem 0 0.35rem; color: #111827; }
+        .jd p { margin: 0 0 0.7rem; }
+        .jd ul, .jd ol { margin: 0 0 0.7rem 1.4rem; }
+        .jd ul { list-style: disc; }
+        .jd ol { list-style: decimal; }
+        .jd li { margin: 0.2rem 0; padding-left: 0.1rem; }
+        .jd strong, .jd b { font-weight: 600; }
+        .jd a { color: #534AB7; text-decoration: underline; word-break: break-all; }
+        .jd img { display: none !important; }
+        .jd h4 { font-weight: 600; font-size: 0.9rem; margin: 1.2rem 0 0.4rem; color: #111827; }
     </style>
 </head>
 <body class="text-gray-800">
@@ -33,12 +52,12 @@
 
         <!-- Tabs -->
         <div class="flex gap-1 text-sm mt-3">
-            <template x-for="t in ['feed','saved','applied','admin']" :key="t">
+            <template x-for="t in ['feed','saved','applied','dismissed','admin']" :key="t">
                 <button @click="tab=t; load()"
                         class="px-3 py-1.5 capitalize border-b-2 transition"
                         :class="tab===t ? 'border-brand text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'">
                     <span x-text="t"></span>
-                    <span class="text-gray-400" x-text="counts[t] ?? ''"></span>
+                    <span class="text-gray-400" x-text="(t!=='admin' && counts[t]!=null) ? counts[t] : ''"></span>
                 </button>
             </template>
         </div>
@@ -46,8 +65,8 @@
         <div x-show="lastRun" class="text-xs text-gray-400 mt-2">Last run: <span x-text="lastRun"></span></div>
     </div>
 
-    <!-- Search -->
-    <div class="flex gap-2 items-center my-4">
+    <!-- Search (feed/saved/applied only) -->
+    <div class="flex gap-2 items-center my-4" x-show="tab!=='admin'">
         <div class="flex-1 flex items-center gap-2 h-9 px-3 border border-gray-200 rounded-lg bg-white">
             <span class="text-gray-400">🔍</span>
             <input x-model="q" placeholder="Search title, company, skill…"
@@ -57,68 +76,85 @@
 
     <!-- States -->
     <div x-show="loading" class="text-center text-gray-400 py-16 text-sm">Loading…</div>
-    <div x-show="!loading && filtered().length===0" class="text-center text-gray-400 py-16 text-sm">
+    <div x-show="!loading && tab!=='admin' && filtered().length===0" class="text-center text-gray-400 py-16 text-sm">
         No jobs in <span x-text="tab"></span>.
     </div>
 
     <!-- Job cards -->
     <div class="flex flex-col gap-3" x-show="tab!=='admin'">
-        <div class="flex flex-col gap-3">
-            <template x-for="job in filtered()" :key="job.id">
-                <div class="flex gap-3.5 bg-white border border-gray-200 rounded-xl p-4"
-                     :style="`border-left:3px solid ${tier(job.score).stripe}`">
+        <template x-for="job in filtered()" :key="job.id">
+            <div class="flex gap-3.5 bg-white border border-gray-200 rounded-xl p-4"
+                 :style="`border-left:3px solid ${tier(job.score).stripe}`">
 
-                    <!-- score -->
-                    <div class="shrink-0 w-14 h-14 rounded-full flex flex-col items-center justify-center"
-                         :style="`background:${tier(job.score).bg}`">
-                        <span class="text-xl font-semibold leading-none" :style="`color:${tier(job.score).fg}`"
-                              x-text="Math.round(job.score)"></span>
-                        <span class="text-[10px]" :style="`color:${tier(job.score).fg}`">match</span>
+                <!-- score -->
+                <div class="shrink-0 w-14 h-14 rounded-full flex flex-col items-center justify-center"
+                     :style="`background:${tier(job.score).bg}`">
+                    <span class="text-xl font-semibold leading-none" :style="`color:${tier(job.score).fg}`"
+                          x-text="Math.round(job.score)"></span>
+                    <span class="text-[10px]" :style="`color:${tier(job.score).fg}`">match</span>
+                </div>
+
+                <!-- body -->
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-baseline justify-between gap-2">
+                        <span class="font-medium cursor-pointer hover:text-brand" @click="openDetail(job)"
+                              x-text="job.title"></span>
+                        <span class="text-xs text-gray-400 whitespace-nowrap"
+                              x-text="job.posted_date ? timeAgo(job.posted_date) : ''"></span>
+                    </div>
+                    <div class="text-[13px] text-gray-500 mt-0.5">
+                        <span x-text="job.company"></span> · <span x-text="job.location"></span>
+                        <span class="text-gray-400" x-show="job.job_type && job.job_type!=='Unknown'"> · <span
+                                x-text="job.job_type"></span></span>
+                        <span class="text-amber-700" x-show="job.deadline"> · 📅 <span
+                                x-text="job.deadline"></span></span>
                     </div>
 
-                    <!-- body -->
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-baseline justify-between gap-2">
-                            <span class="font-medium" x-text="job.title"></span>
-                            <span class="text-xs text-gray-400 whitespace-nowrap"
-                                  x-text="job.posted_date ? timeAgo(job.posted_date) : ''"></span>
-                        </div>
-                        <div class="text-[13px] text-gray-500 mt-0.5">
-                            <span x-text="job.company"></span> · <span x-text="job.location"></span>
-                            <span class="text-gray-400" x-show="job.job_type && job.job_type!=='Unknown'"> · <span
-                                    x-text="job.job_type"></span></span>
-                            <span class="text-amber-700" x-show="job.deadline"> · 📅 <span x-text="job.deadline"></span></span>
-                        </div>
+                    <div class="text-[13px] rounded-md px-2.5 py-2 my-2.5 leading-relaxed"
+                         style="background:#EEEDFE; color:#26215C;" x-show="job.rationale">
+                        ✨ <span x-text="job.rationale"></span>
+                    </div>
 
-                        <div class="text-[13px] rounded-md px-2.5 py-2 my-2.5 leading-relaxed"
-                             style="background:#EEEDFE; color:#26215C;" x-show="job.rationale">
-                            ✨ <span x-text="job.rationale"></span>
-                        </div>
+                    <!-- actions -->
+                    <div class="flex items-center gap-2">
+                        <a :href="job.apply_url" target="_blank"
+                           class="text-[13px] h-8 px-4 rounded-md bg-brand text-white flex items-center">Apply ↗</a>
 
-                        <!-- actions -->
-                        <div class="flex items-center gap-2">
-                            <a :href="job.apply_url" target="_blank"
-                               class="text-[13px] h-8 px-4 rounded-md bg-brand text-white flex items-center">Apply ↗</a>
-                            <button @click="setStatus(job, 'saved')"
-                                    class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">Save
+                        <!-- normal tabs -->
+                        <template x-if="tab!=='dismissed'">
+                            <div class="flex items-center gap-2">
+                                <button @click="setStatus(job, 'saved')"
+                                        class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">
+                                    Save
+                                </button>
+                                <button @click="setStatus(job, 'dismissed')"
+                                        class="text-[13px] h-8 px-3 rounded-md text-gray-400 hover:bg-gray-50">Dismiss
+                                </button>
+                            </div>
+                        </template>
+
+                        <!-- dismissed tab -->
+                        <template x-if="tab==='dismissed'">
+                            <button @click="setStatus(job, 'surfaced')"
+                                    class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">↩
+                                Restore
                             </button>
-                            <button @click="setStatus(job, 'dismissed')"
-                                    class="text-[13px] h-8 px-3 rounded-md text-gray-400 hover:bg-gray-50">Dismiss
-                            </button>
-                            <select @change="setStatus(job, $event.target.value)"
-                                    class="ml-auto text-[13px] h-8 px-2 rounded-md border border-gray-200 text-gray-600 bg-white">
-                                <template x-for="s in statuses" :key="s">
-                                    <option :value="s" :selected="job.status===s" x-text="cap(s)"></option>
-                                </template>
-                            </select>
-                        </div>
+                        </template>
+
+                        <select @change="setStatus(job, $event.target.value)"
+                                class="ml-auto text-[13px] h-8 px-2 rounded-md border border-gray-200 text-gray-600 bg-white">
+                            <template x-for="s in statuses" :key="s">
+                                <option :value="s" :selected="job.status===s" x-text="cap(s)"></option>
+                            </template>
+                        </select>
                     </div>
                 </div>
-            </template>
-        </div>
+            </div>
+        </template>
     </div>
+
     <!-- Admin: source health -->
-    <div x-show="tab==='admin'" class="mt-2">
+    <div x-show="tab==='admin'" class="mt-4">
         <div class="text-sm text-gray-500 mb-3">Source health — last run per source</div>
         <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <template x-for="s in health" :key="s.name">
@@ -143,23 +179,120 @@
             </div>
         </div>
     </div>
+
+    <!-- Detail modal -->
+    <div x-show="detail" x-cloak @click="detail=null"
+         class="fixed inset-0 bg-black/40 flex items-start justify-center p-4 overflow-y-auto z-50">
+        <div @click.stop class="bg-white rounded-xl max-w-2xl w-full my-8 shadow-xl">
+            <template x-if="detail">
+                <div>
+                    <!-- header -->
+                    <div class="flex items-start justify-between gap-3 p-5 border-b border-gray-100">
+                        <div class="flex gap-3">
+                            <div class="shrink-0 w-12 h-12 rounded-full flex flex-col items-center justify-center"
+                                 :style="`background:${tier(detail.score).bg}`">
+                                <span class="text-lg font-semibold leading-none"
+                                      :style="`color:${tier(detail.score).fg}`"
+                                      x-text="Math.round(detail.score)"></span>
+                            </div>
+                            <div>
+                                <div class="font-semibold text-lg leading-tight" x-text="detail.title"></div>
+                                <div class="text-sm text-gray-500 mt-0.5">
+                                    <span x-text="detail.company"></span> · <span x-text="detail.location"></span>
+                                    <span x-show="detail.job_type && detail.job_type!=='Unknown'"> · <span
+                                            x-text="detail.job_type"></span></span>
+                                </div>
+                                <div class="text-xs text-amber-700 mt-1" x-show="detail.deadline">📅 Closes <span
+                                        x-text="detail.deadline"></span></div>
+                            </div>
+                        </div>
+                        <button @click="detail=null" class="text-gray-400 hover:text-gray-700 text-xl leading-none">×
+                        </button>
+                    </div>
+
+                    <!-- body -->
+                    <div class="p-5 max-h-[60vh] overflow-y-auto">
+                        <div class="text-[13px] rounded-md px-3 py-2 mb-4 leading-relaxed"
+                             style="background:#EEEDFE; color:#26215C;" x-show="detail.rationale">
+                            ✨ <span x-text="detail.rationale"></span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 mb-4 text-center">
+                            <div class="bg-gray-50 rounded-md py-2">
+                                <div class="text-sm font-semibold text-gray-700"
+                                     x-text="Math.round(detail.skills_score)"></div>
+                                <div class="text-xs text-gray-400">Skills</div>
+                            </div>
+                            <div class="bg-gray-50 rounded-md py-2">
+                                <div class="text-sm font-semibold text-gray-700"
+                                     x-text="Math.round(detail.seniority_score)"></div>
+                                <div class="text-xs text-gray-400">Seniority</div>
+                            </div>
+                            <div class="bg-gray-50 rounded-md py-2">
+                                <div class="text-sm font-semibold text-gray-700"
+                                     x-text="Math.round(detail.domain_score)"></div>
+                                <div class="text-xs text-gray-400">Domain</div>
+                            </div>
+                        </div>
+                        <div class="jd text-sm text-gray-700 leading-relaxed"
+                             x-html="formatJD(detail.description)"></div>
+                    </div>
+
+                    <!-- footer -->
+                    <div class="flex items-center gap-2 p-5 border-t border-gray-100">
+                        <a :href="detail.apply_url" target="_blank"
+                           class="text-sm h-9 px-5 rounded-md bg-brand text-white flex items-center">Apply ↗</a>
+                        <button @click="setStatus(detail,'saved'); detail=null"
+                                class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Save
+                        </button>
+                        <a :href="detail.source_url" target="_blank"
+                           class="text-sm h-9 px-4 rounded-md text-gray-500 hover:bg-gray-50 flex items-center ml-auto">View
+                            posting ↗</a>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
 </div>
 
 <script>
     function jobpilot() {
+
       return {
-        tab: 'feed', jobs: [], counts: {}, health: [], loading: true, q: '',
+        tab: 'feed', jobs: [], counts: {}, health: [], loading: true, q: '', detail: null,
         running: false, lastRun: null,
         statuses: ['surfaced','saved','applied','interview','offer','rejected','dismissed'],
 
         async load() {
-            this.loading = true;
-            const [jobs, counts, health] = await Promise.all([
-                fetch(`/api/jobs?tab=${this.tab}`).then(r => r.json()),
-                fetch('/api/counts').then(r => r.json()),
-                fetch('/api/health').then(r => r.json()),
-            ]);
-            this.jobs = jobs; this.counts = counts; this.health = health; this.loading = false;
+          this.loading = true;
+          const [jobs, counts, health] = await Promise.all([
+            fetch(`/api/jobs?tab=${this.tab}`).then(r => r.json()).catch(() => []),
+            fetch('/api/counts').then(r => r.json()).catch(() => ({})),
+            fetch('/api/health').then(r => r.json()).catch(() => []),
+          ]);
+          this.jobs = jobs; this.counts = counts; this.health = health; this.loading = false;
+        },
+
+        formatJD(text) {
+          if (!text) return 'No description available.';
+          // HTML already hai -> waise render
+          if (/<(p|ul|ol|li|br|div|h[1-6]|strong|b)\b/i.test(text)) return text;
+
+          // plain text: line-by-line process
+          const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          const lines = text.split('\n').map(l => l.trim()).filter(l => l.length);
+          let html = '';
+          for (const line of lines) {
+            const isHeading =
+              /^[A-Z][A-Z0-9 &/\-'’()]{3,}$/.test(line) ||   // ALL CAPS heading
+              /^[A-Za-z ]{2,40}:$/.test(line);                // "Label:" style
+            if (isHeading) {
+              html += `<h4>${esc(line.replace(/:$/,''))}</h4>`;
+            } else {
+              html += `<p>${esc(line)}</p>`;
+            }
+          }
+          return html;
         },
 
         filtered() {
@@ -170,6 +303,8 @@
             (j.company||'').toLowerCase().includes(s) ||
             (j.rationale||'').toLowerCase().includes(s));
         },
+
+        openDetail(job) { this.detail = job; },
 
         async setStatus(job, status) {
           await fetch(`/api/jobs/${job.id}/status`, {

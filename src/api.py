@@ -100,19 +100,6 @@ def _get_setting(conn, key, default=None):
     return row[0] if row else default
 
 
-@app.get("/api/jobs")
-def list_jobs(tab: str = "feed"):
-    conn = _conn()
-    threshold = int(_get_setting(conn, "score_threshold", 70))
-    if tab == "feed":
-        where = f"status='surfaced' AND score >= {threshold}"
-    else:
-        where = TAB_WHERE.get(tab, TAB_WHERE["feed"])
-    rows = conn.execute(f"SELECT {COLS} FROM jobs WHERE {where} ORDER BY score DESC").fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
 @app.get("/api/counts")
 def counts():
     conn = _conn()
@@ -245,6 +232,37 @@ def maint_clean_cache():
 @app.post("/api/maint/reset")
 def maint_reset():
     return maintenance.reset_all_jobs()
+
+@app.get("/api/jobs")
+def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all"):
+    conn = _conn()
+    threshold = int(_get_setting(conn, "score_threshold", 70))
+
+    if tab == "feed":
+        where = f"status='surfaced' AND score >= {threshold}"
+    else:
+        where = TAB_WHERE.get(tab, TAB_WHERE["feed"])
+
+    if source and source != "all":
+        where += f" AND source = '{source}'"
+
+    order = {
+        "score": "score DESC",
+        "newest": "posted_date DESC",
+        "company": "company ASC",
+    }.get(sort, "score DESC")
+
+    sql = f"SELECT {COLS} FROM jobs WHERE {where} ORDER BY {order}"
+    rows = conn.execute(sql).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+@app.get("/api/sources")
+def sources_list():
+    conn = _conn()
+    rows = conn.execute("SELECT DISTINCT source FROM jobs ORDER BY source").fetchall()
+    conn.close()
+    return [r["source"] for r in rows if r["source"]]
 
 
 app.mount("/", StaticFiles(

@@ -1,6 +1,7 @@
 function jobpilot() {
   return {
     tab: 'feed', jobs: [], counts: {}, health: [], stats: null, loading: true, q: '', detail: null,
+    sort: 'score', source: 'all', sources: [],
     running: false, lastRun: null, threshold: 70,
     busy: null,
     snack: null,
@@ -24,20 +25,22 @@ function jobpilot() {
     async load() {
       this.loading = true;
       const jobsP = this.isJobView()
-        ? fetch(`/api/jobs?tab=${this.tab}`).then(r => r.json()).catch(() => [])
+        ? fetch(`/api/jobs?tab=${this.tab}&sort=${this.sort}&source=${this.source}`).then(r => r.json()).catch(() => [])
         : Promise.resolve(this.jobs);
-      const [jobs, counts, health, settings, stats] = await Promise.all([
+      const [jobs, counts, health, settings, stats, sources] = await Promise.all([
         jobsP,
         fetch('/api/counts').then(r => r.json()).catch(() => ({})),
         fetch('/api/health').then(r => r.json()).catch(() => []),
         fetch('/api/settings').then(r => r.json()).catch(() => ({ score_threshold: 70 })),
         fetch('/api/stats').then(r => r.json()).catch(() => null),
+        fetch('/api/sources').then(r => r.json()).catch(() => []),
       ]);
       this.jobs = jobs;
       this.counts = { ...counts };
       this.health = health;
       this.threshold = settings.score_threshold ?? 70;
       this.stats = stats;
+      this.sources = sources;
       this.loading = false;
     },
 

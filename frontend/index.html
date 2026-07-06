@@ -75,7 +75,21 @@
                     <input x-model="q" placeholder="Search title, company, skill…"
                            class="flex-1 text-sm outline-none bg-transparent">
                 </div>
-                <span class="text-xs text-gray-400 capitalize" x-text="tab + ' · ' + filtered().length"></span>
+                <select x-model="sort" @change="load()"
+                        class="h-9 px-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600">
+                    <option value="score">Sort: Score</option>
+                    <option value="newest">Sort: Newest</option>
+                    <option value="company">Sort: Company</option>
+                </select>
+                <select x-model="source" @change="load()"
+                        class="h-9 px-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600">
+                    <option value="all">All sources</option>
+                    <template x-for="s in sources" :key="s">
+                        <option :value="s" x-text="s"></option>
+                    </template>
+                </select>
+                <span class="text-xs text-gray-400 capitalize whitespace-nowrap"
+                      x-text="filtered().length + ' jobs'"></span>
             </div>
 
             <div x-show="loading" class="text-center text-gray-400 py-20 text-sm">Loading…</div>

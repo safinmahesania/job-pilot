@@ -126,7 +126,8 @@ def counts():
     conn = _conn()
     threshold = int(_get_setting(conn, "score_threshold", 70))
     out = {
-        "feed": conn.execute(f"SELECT COUNT(*) FROM jobs WHERE status='surfaced' AND score >= {threshold}").fetchone()[0],
+        "feed": conn.execute(f"SELECT COUNT(*) FROM jobs WHERE status='surfaced' AND score >= {threshold}").fetchone()[
+            0],
         "saved": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='saved'").fetchone()[0],
         "applied": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='applied'").fetchone()[0],
         "dismissed": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='dismissed'").fetchone()[0],
@@ -156,3 +157,58 @@ def set_threshold(body: ThresholdUpdate):
     conn.commit()
     conn.close()
     return {"score_threshold": v}
+
+
+@app.get("/api/stats")
+def stats():
+    conn = _conn()
+    threshold = int(_get_setting(conn, "score_threshold", 70))
+    q = lambda sql, *a: conn.execute(sql, a).fetchone()[0]
+
+    # funnel (status counts)
+    statuses = ["surfaced", "saved", "applied", "interview", "offer", "rejected", "dismissed"]
+    funnel = {s: q("SELECT COUNT(*) FROM jobs WHERE status=?", s) for s in statuses}
+
+    # volume
+    total = q("SELECT COUNT(*) FROM jobs")
+    avg_score = q("SELECT ROUND(AVG(score),1) FROM jobs") or 0
+    feed_size = q("SELECT COUNT(*) FROM jobs WHERE status='surfaced' AND score>=?", threshold)
+
+    # score distribution
+    dist = {
+        "80+": q("SELECT COUNT(*) FROM jobs WHERE score>=80"),
+        "70-79": q("SELECT COUNT(*) FROM jobs WHERE score>=70 AND score<80"),
+        "60-69": q("SELECT COUNT(*) FROM jobs WHERE score>=60 AND score<70"),
+        "<60": q("SELECT COUNT(*) FROM jobs WHERE score<60"),
+    }
+
+    # source breakdown (jobs table se, avg score + count per source)
+    src_rows = conn.execute(
+        "SELECT source, COUNT(*) c, ROUND(AVG(score),1) avg FROM jobs "
+        "GROUP BY source ORDER BY c DESC"
+    ).fetchall()
+    sources = [dict(r) for r in src_rows]
+
+    # deadlines — agle 14 din / expired (deadline text hai, isliye date-compare best-effort)
+    deadline_rows = conn.execute(
+        "SELECT title, company, deadline FROM jobs "
+        "WHERE deadline IS NOT NULL AND deadline != '' ORDER BY deadline ASC LIMIT 10"
+    ).fetchall()
+    deadlines = [dict(r) for r in deadline_rows]
+
+    # conversion rates
+    def pct(a, b): return round(100 * a / b, 1) if b else 0
+
+    applied = funnel["applied"] + funnel["interview"] + funnel["offer"]  # applied+ aage bhi
+    rates = {
+        "applied_of_total": pct(applied, total),
+        "interview_of_applied": pct(funnel["interview"] + funnel["offer"], applied),
+        "offer_of_interview": pct(funnel["offer"], funnel["interview"] + funnel["offer"]),
+    }
+
+    conn.close()
+    return {
+        "funnel": funnel, "total": total, "avg_score": avg_score,
+        "feed_size": feed_size, "distribution": dist, "sources": sources,
+        "deadlines": deadlines, "rates": rates,
+    }

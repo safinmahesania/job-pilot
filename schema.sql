@@ -44,3 +44,9 @@ CREATE TABLE IF NOT EXISTS source_health (
     error       TEXT,              -- error message agar fail hua
     last_run    TEXT
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
+INSERT OR IGNORE INTO settings (key, value) VALUES ('score_threshold', '70');

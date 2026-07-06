@@ -32,26 +32,6 @@ def _conn():
     return c
 
 
-@app.get("/api/jobs")
-def list_jobs(tab: str = "feed"):
-    where = TAB_WHERE.get(tab, TAB_WHERE["feed"])
-    conn = _conn()
-    rows = conn.execute(
-        f"SELECT {COLS} FROM jobs WHERE {where} ORDER BY score DESC"
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-@app.get("/api/counts")
-def counts():
-    conn = _conn()
-    out = {tab: conn.execute(f"SELECT COUNT(*) FROM jobs WHERE {w}").fetchone()[0]
-           for tab, w in TAB_WHERE.items()}
-    conn.close()
-    return out
-
-
 class StatusUpdate(BaseModel):
     status: str
 
@@ -80,6 +60,7 @@ def index():
     if FRONTEND.exists():
         return FileResponse(FRONTEND)
     return {"msg": "JobPilot API running. Frontend abhi banana baaki hai."}
+
 
 # ---- pipeline run state (in-memory) ----
 _run_state = {"running": False, "last_run": None, "last_summary": None}
@@ -110,6 +91,7 @@ def trigger_run():
 def run_status():
     return _run_state
 
+
 @app.get("/api/health")
 def source_health():
     conn = _conn()
@@ -119,3 +101,58 @@ def source_health():
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def _get_setting(conn, key, default=None):
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return row[0] if row else default
+
+
+@app.get("/api/jobs")
+def list_jobs(tab: str = "feed"):
+    conn = _conn()
+    threshold = int(_get_setting(conn, "score_threshold", 70))
+    if tab == "feed":
+        where = f"status='surfaced' AND score >= {threshold}"
+    else:
+        where = TAB_WHERE.get(tab, TAB_WHERE["feed"])
+    rows = conn.execute(f"SELECT {COLS} FROM jobs WHERE {where} ORDER BY score DESC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/counts")
+def counts():
+    conn = _conn()
+    threshold = int(_get_setting(conn, "score_threshold", 70))
+    out = {
+        "feed": conn.execute(f"SELECT COUNT(*) FROM jobs WHERE status='surfaced' AND score >= {threshold}").fetchone()[0],
+        "saved": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='saved'").fetchone()[0],
+        "applied": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='applied'").fetchone()[0],
+        "dismissed": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='dismissed'").fetchone()[0],
+    }
+    conn.close()
+    return out
+
+
+@app.get("/api/settings")
+def get_settings():
+    conn = _conn()
+    t = int(_get_setting(conn, "score_threshold", 70))
+    conn.close()
+    return {"score_threshold": t}
+
+
+class ThresholdUpdate(BaseModel):
+    value: int
+
+
+@app.post("/api/settings/threshold")
+def set_threshold(body: ThresholdUpdate):
+    v = max(0, min(100, body.value))
+    conn = _conn()
+    conn.execute("INSERT INTO settings (key,value) VALUES ('score_threshold',?) "
+                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(v),))
+    conn.commit()
+    conn.close()
+    return {"score_threshold": v}

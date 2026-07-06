@@ -10,27 +10,19 @@
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
-        body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #F7F7F8; .jd { word-break: break-word; }
-        .jd p { margin: 0 0 0.75rem; }
-        .jd ul, .jd ol { margin: 0 0 0.75rem 1.25rem; list-style: disc; }
-        .jd li { margin: 0.15rem 0; }
-        .jd h1, .jd h2, .jd h3, .jd h4, .jd b, .jd strong { font-weight: 600; }
-        .jd h1, .jd h2, .jd h3 { margin: 1rem 0 0.4rem; font-size: 0.95rem; }
-        .jd a { color: #534AB7; text-decoration: underline; }
-        .jd br { line-height: 1.6; }}
-        [x-cloak] { display: none !important;  }
+        body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #F7F7F8; }
+        [x-cloak] { display: none !important; }
         .jd { word-break: break-word; }
         .jd > *:first-child { margin-top: 0; }
-        .jd h3, .jd h4 { font-weight: 600; font-size: 0.9rem; margin: 1.1rem 0 0.35rem; color: #111827; }
+        .jd h3, .jd h4 { font-weight: 600; font-size: 0.9rem; margin: 1.1rem 0 0.4rem; color: #111827; }
         .jd p { margin: 0 0 0.7rem; }
         .jd ul, .jd ol { margin: 0 0 0.7rem 1.4rem; }
         .jd ul { list-style: disc; }
         .jd ol { list-style: decimal; }
-        .jd li { margin: 0.2rem 0; padding-left: 0.1rem; }
+        .jd li { margin: 0.2rem 0; }
         .jd strong, .jd b { font-weight: 600; }
         .jd a { color: #534AB7; text-decoration: underline; word-break: break-all; }
         .jd img { display: none !important; }
-        .jd h4 { font-weight: 600; font-size: 0.9rem; margin: 1.2rem 0 0.4rem; color: #111827; }
     </style>
 </head>
 <body class="text-gray-800">
@@ -154,31 +146,50 @@
     </div>
 
     <!-- Admin: source health -->
-    <div x-show="tab==='admin'" class="mt-4">
-        <div class="text-sm text-gray-500 mb-3">Source health — last run per source</div>
-        <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <template x-for="s in health" :key="s.name">
-                <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0">
-          <span class="w-2 h-2 rounded-full shrink-0"
-                :class="s.status==='ok' ? 'bg-green-500' : 'bg-red-500'"></span>
-                    <div class="flex-1 min-w-0">
-                        <div class="text-sm font-medium" x-text="s.name"></div>
-                        <div class="text-xs text-gray-400">
-                            <span x-text="s.ats"></span>
-                            <span x-show="s.error" class="text-red-500" x-text="' · ' + (s.error||'')"></span>
-                        </div>
-                    </div>
-                    <div class="text-right text-xs text-gray-500 shrink-0">
-                        <div><span class="font-medium text-gray-700" x-text="s.fetched"></span> fetched</div>
-                        <div><span class="font-medium text-gray-700" x-text="s.kept"></span> kept</div>
-                    </div>
-                </div>
-            </template>
-            <div x-show="health.length===0" class="px-4 py-8 text-center text-gray-400 text-sm">
-                No run data yet. Hit "Run now".
-            </div>
-        </div>
+    <!-- Admin -->
+  <div x-show="tab==='admin'" class="mt-4 flex flex-col gap-5">
+
+    <!-- threshold -->
+    <div class="bg-white border border-gray-200 rounded-xl p-4">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-sm font-medium">Score threshold</span>
+        <input type="number" min="0" max="100" x-model.number="threshold"
+          @change="clampThreshold(); saveThreshold()"
+          class="w-16 text-sm font-semibold text-brand text-right border border-gray-200 rounded-md px-2 py-1 outline-none">
+      </div>
+      <div class="text-xs text-gray-400 mb-3">Feed shows only jobs scoring at or above this.</div>
+      <input type="range" min="0" max="100" step="1" x-model.number="threshold"
+        @input="threshold = Math.round(threshold)" @change="saveThreshold()"
+        class="w-full accent-[#534AB7]">
+      <div class="flex justify-between text-[11px] text-gray-400 mt-1"><span>0</span><span>50</span><span>100</span></div>
     </div>
+
+    <!-- source health -->
+    <div>
+      <div class="text-sm text-gray-500 mb-3">Source health — last run per source</div>
+      <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <template x-for="s in health" :key="s.name">
+          <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0">
+            <span class="w-2 h-2 rounded-full shrink-0" :class="s.status==='ok' ? 'bg-green-500' : 'bg-red-500'"></span>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium" x-text="s.name"></div>
+              <div class="text-xs text-gray-400">
+                <span x-text="s.ats"></span>
+                <span x-show="s.error" class="text-red-500" x-text="' · ' + (s.error||'')"></span>
+              </div>
+            </div>
+            <div class="text-right text-xs text-gray-500 shrink-0">
+              <div><span class="font-medium text-gray-700" x-text="s.fetched"></span> fetched</div>
+              <div><span class="font-medium text-gray-700" x-text="s.kept"></span> kept</div>
+            </div>
+          </div>
+        </template>
+        <div x-show="health.length===0" class="px-4 py-8 text-center text-gray-400 text-sm">
+          No run data yet. Hit "Run now".
+        </div>
+      </div>
+    </div>
+  </div>
 
     <!-- Detail modal -->
     <div x-show="detail" x-cloak @click="detail=null"
@@ -260,17 +271,22 @@
 
       return {
         tab: 'feed', jobs: [], counts: {}, health: [], loading: true, q: '', detail: null,
-        running: false, lastRun: null,
+        running: false, lastRun: null, threshold: 70,
         statuses: ['surfaced','saved','applied','interview','offer','rejected','dismissed'],
 
         async load() {
           this.loading = true;
-          const [jobs, counts, health] = await Promise.all([
+          const [jobs, counts, health, settings] = await Promise.all([
             fetch(`/api/jobs?tab=${this.tab}`).then(r => r.json()).catch(() => []),
             fetch('/api/counts').then(r => r.json()).catch(() => ({})),
             fetch('/api/health').then(r => r.json()).catch(() => []),
+            fetch('/api/settings').then(r => r.json()).catch(() => ({score_threshold:70})),
           ]);
-          this.jobs = jobs; this.counts = counts; this.health = health; this.loading = false;
+          this.jobs = jobs;
+          this.counts = { ...counts };
+          this.health = health;
+          this.threshold = settings.score_threshold ?? 70;
+          this.loading = false;
         },
 
         formatJD(text) {
@@ -337,6 +353,20 @@
         },
         cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); },
         timeAgo(d){ try { const days=Math.floor((Date.now()-new Date(d))/8.64e7); return days<=0?'today':days+'d ago'; } catch { return ''; } },
+
+        async saveThreshold() {
+          this.clampThreshold();
+          await fetch('/api/settings/threshold', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ value: this.threshold }),
+          });
+          await this.load();
+        },
+
+        clampThreshold() {
+          if (this.threshold === '' || isNaN(this.threshold)) this.threshold = 70;
+          this.threshold = Math.max(0, Math.min(100, Math.round(this.threshold)));
+        },
       };
     }
 </script>

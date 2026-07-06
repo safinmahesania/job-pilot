@@ -1,13 +1,11 @@
-"""Phase 1 pipeline: fetch -> prefilter -> AI score -> threshold -> store."""
+"""Phase 1 pipeline: fetch -> prefilter -> AI score -> store."""
+from datetime import datetime
 from src.config import load_companies, load_profile
 from src.adapters.base import get_adapter
-from src.normalize import normalize
+from src.normalize import normalize, is_valid
 from src.scoring.prefilter import passes
 from src.scoring.rerank import score_job
 from src import store
-from src.normalize import normalize, is_valid
-
-SCORE_THRESHOLD = 70          # is se upar overall -> kept, neeche -> trashed
 
 
 def run():
@@ -16,8 +14,6 @@ def run():
     conn = store.connect()
 
     stats = {"fetched": 0, "seen": 0, "dropped": 0, "trashed": 0, "kept": 0, "errors": 0}
-
-    from datetime import datetime
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     for c in companies:
@@ -45,25 +41,28 @@ def run():
                 stats["seen"] += 1
                 continue
             if not is_valid(job):
-                store.mark_seen(conn, h, "dropped");
-                stats["dropped"] += 1;
+                store.mark_seen(conn, h, "dropped")
+                stats["dropped"] += 1
                 continue
             if not passes(job, profile):
-                store.mark_seen(conn, h, "dropped");
-                stats["dropped"] += 1;
+                store.mark_seen(conn, h, "dropped")
+                stats["dropped"] += 1
                 continue
 
             result = score_job(job, profile)
             if result is None:
-                stats["errors"] += 1;
+                stats["errors"] += 1
                 continue
 
-            if result.overall >= SCORE_THRESHOLD:
-                job.update(score=result.overall, skills_score=result.skills_score,
-                           seniority_score=result.seniority_score,
-                           domain_score=result.domain_score,
-                           rationale=result.rationale, flags=None)
-                store.save_job(conn, job)
+            # store ALL scored jobs (feed threshold se filter karega), kept/trashed mark
+            job.update(score=result.overall, skills_score=result.skills_score,
+                       seniority_score=result.seniority_score,
+                       domain_score=result.domain_score,
+                       rationale=result.rationale, flags=None)
+            store.save_job(conn, job)
+
+            threshold = int(store.get_setting(conn, "score_threshold", 70))
+            if result.overall >= threshold:
                 store.mark_seen(conn, h, "kept", result.overall)
                 stats["kept"] += 1
                 src_stat["kept"] += 1

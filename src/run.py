@@ -14,6 +14,7 @@ def run():
     conn = store.connect()
 
     stats = {"fetched": 0, "seen": 0, "dropped": 0, "trashed": 0, "kept": 0, "errors": 0}
+    seen_this_run = set()  # <- YEH LINE ADD KAR
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     for c in companies:
@@ -37,9 +38,10 @@ def run():
             job = normalize(raw)
             h = job["dedupe_hash"]
 
-            if store.already_seen(conn, h):
+            if store.already_seen(conn, h) or h in seen_this_run:
                 stats["seen"] += 1
                 continue
+            seen_this_run.add(h)
             if not is_valid(job):
                 store.mark_seen(conn, h, "dropped")
                 stats["dropped"] += 1

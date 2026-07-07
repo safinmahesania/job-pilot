@@ -157,3 +157,12 @@ companies:
     ats: aggregator
     careers_url: https://ca.talent.com/jobs?k=Software+Developer&l=Montreal%2C+CA
     active: true
+
+  - name: "RemoteOK — dev"
+    ats: remoteok
+    query: developer
+    active: true
+
+  - name: "WeWorkRemotely — programming"
+    ats: weworkremotely
+    active: true

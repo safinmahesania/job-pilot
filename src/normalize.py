@@ -9,9 +9,23 @@ from bs4 import BeautifulSoup
 def _clean(text: str | None) -> str:
     return (text or "").strip().lower()
 
+def _norm_title(t):
+    t = _clean(t)
+    t = re.sub(r"\(.*?\)", " ", t)                          # parentheticals hatao
+    t = re.sub(r"\b(remote|hybrid|on-?site|wfh|work from home)\b", " ", t)
+    t = re.sub(r"[^a-z0-9 ]", " ", t)                       # punctuation hatao
+    t = re.sub(r"\s+", " ", t)
+    return t.strip()
 
-def dedupe_hash(company: str, title: str, location: str | None) -> str:
-    raw = f"{_clean(company)}|{_clean(title)}|{_clean(location)}"
+def _norm_company(c):
+    c = _clean(c)
+    for suf in (" inc", " inc.", " llc", " ltd", " ltd.", " corp", " corporation", " co", " gmbh", " limited"):
+        if c.endswith(suf):
+            c = c[:-len(suf)]
+    return c.strip()
+
+def dedupe_hash(company, title, location=None):
+    raw = f"{_norm_company(company)}|{_norm_title(title)}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 

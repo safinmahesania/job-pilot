@@ -20,6 +20,7 @@ class RemotiveAdapter(SourceAdapter):
         for j in jobs:
             out.append({
                 "source": "remotive",
+                "scope": "global",
                 "company": j.get("company_name"),
                 "title": j.get("title"),
                 "location": j.get("candidate_required_location") or "Remote",

@@ -5,17 +5,18 @@ import html as _html
 from bs4 import BeautifulSoup
 
 
-
 def _clean(text: str | None) -> str:
     return (text or "").strip().lower()
 
+
 def _norm_title(t):
     t = _clean(t)
-    t = re.sub(r"\(.*?\)", " ", t)                          # parentheticals hatao
+    t = re.sub(r"\(.*?\)", " ", t)  # parentheticals hatao
     t = re.sub(r"\b(remote|hybrid|on-?site|wfh|work from home)\b", " ", t)
-    t = re.sub(r"[^a-z0-9 ]", " ", t)                       # punctuation hatao
+    t = re.sub(r"[^a-z0-9 ]", " ", t)  # punctuation hatao
     t = re.sub(r"\s+", " ", t)
     return t.strip()
+
 
 def _norm_company(c):
     c = _clean(c)
@@ -23,6 +24,7 @@ def _norm_company(c):
         if c.endswith(suf):
             c = c[:-len(suf)]
     return c.strip()
+
 
 def dedupe_hash(company, title, location=None):
     raw = f"{_norm_company(company)}|{_norm_title(title)}"
@@ -33,6 +35,7 @@ def strip_html(text: str | None) -> str:
     if not text:
         return ""
     return re.sub(r"<[^>]+>", " ", text).replace("&nbsp;", " ").strip()
+
 
 ALLOWED = {"h1", "h2", "h3", "h4", "p", "ul", "ol", "li", "strong", "b", "em", "i", "br", "a"}
 
@@ -67,10 +70,11 @@ def clean_html(raw: str | None) -> str:
             tag.decompose()
 
     out = str(soup).replace("\xa0", " ")
-    out = re.sub(r"[ \t]{2,}", " ", out)                 # extra spaces
+    out = re.sub(r"[ \t]{2,}", " ", out)  # extra spaces
     out = re.sub(r"(\s*<br\s*/?>\s*){2,}", "<br>", out)  # multiple <br> collapse
-    out = re.sub(r"\n{2,}", "\n", out)                   # extra newlines
+    out = re.sub(r"\n{2,}", "\n", out)  # extra newlines
     return out.strip()
+
 
 def normalize(raw: dict) -> dict:
     company = raw.get("company")
@@ -79,6 +83,7 @@ def normalize(raw: dict) -> dict:
     return {
         "dedupe_hash": dedupe_hash(company, title, location),
         "source": raw.get("source"),
+        "scope": raw.get("scope", "regional"),
         "source_url": raw.get("source_url"),
         "apply_url": raw.get("apply_url") or raw.get("source_url"),
         "title": title,
@@ -90,6 +95,7 @@ def normalize(raw: dict) -> dict:
         "job_type": raw.get("job_type") or "Unknown",
         "deadline": raw.get("deadline"),
     }
+
 
 MANDATORY = ("source", "apply_url", "title", "company",
              "location", "description")

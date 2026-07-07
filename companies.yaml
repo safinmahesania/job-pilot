@@ -45,9 +45,10 @@ companies:
     max_pages: 5
     active: true
 
-  - name: "Remotive — python remote"
+  - name: "Remotive — dev"
     ats: remotive
-    limit: 40
+    query: developer
+    scope: global
     active: true
 
 
@@ -59,6 +60,7 @@ companies:
     site: TD_Bank_Careers
     careers_url: https://td.wd3.myworkdayjobs.com/TD_Bank_Careers
     active: true
+    max_pages: 5
 
   - name: CIBC
     ats: workday
@@ -67,6 +69,7 @@ companies:
     site: search
     careers_url: https://cibc.wd3.myworkdayjobs.com/search
     active: true
+    max_pages: 5
 
   - name: RBC
     ats: workday
@@ -75,6 +78,7 @@ companies:
     site: RBCGLOBAL1
     careers_url: https://rbc.wd3.myworkdayjobs.com/en-US/RBCGLOBAL1
     active: true
+    max_pages: 5
 
   - name: RBC Early Talent
     ats: workday
@@ -83,6 +87,7 @@ companies:
     site: RBCEARLYTALENT1
     careers_url: https://rbc.wd3.myworkdayjobs.com/en-US/RBCEARLYTALENT1
     active: true
+    max_pages: 5
 
 
   # ---- SuccessFactors (needs its own adapter) ----
@@ -161,8 +166,10 @@ companies:
   - name: "RemoteOK — dev"
     ats: remoteok
     query: developer
+    scope: global
     active: true
 
   - name: "WeWorkRemotely — programming"
     ats: weworkremotely
+    scope: global
     active: true

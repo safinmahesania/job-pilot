@@ -22,6 +22,7 @@ class RemoteOKAdapter(SourceAdapter):
             url = j.get("url") or j.get("apply_url")
             out.append({
                 "source": "remoteok",
+                "scope": "global",
                 "company": j.get("company"),
                 "title": title,
                 "location": j.get("location") or "Remote",

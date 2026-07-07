@@ -22,6 +22,7 @@ class WeWorkRemotelyAdapter(SourceAdapter):
             link = (item.findtext("link") or "").strip()
             out.append({
                 "source": "weworkremotely",
+                "scope": "global",
                 "company": company.strip() or "Unknown",
                 "title": job_title.strip(),
                 "location": "Remote",

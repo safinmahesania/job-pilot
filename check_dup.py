@@ -1,5 +1,16 @@
-import sqlite3;
+import yaml
 
-c = sqlite3.connect('jobpilot.db');
-[print(f'{s} | {src} | {t[:35]}') for s, t, src in c.execute(
-    'SELECT score,title,source FROM jobs WHERE source IN (\"remoteok\",\"weworkremotely\",\"remotive\") ORDER BY score DESC LIMIT 10')]
+data = yaml.safe_load(open("companies.yaml", encoding="utf-8"))["companies"]
+keys = ("query", "category", "level", "location", "max_pages", "limit", "feed")
+
+print("=== ACTIVE SOURCES ===\n")
+for c in data:
+    if not c.get("active"):
+        continue
+    filters = {k: c[k] for k in keys if k in c}
+    print(f"{c.get('ats',''):16} | {c['name']}")
+    if filters:
+        print(f"{'':16} | filters: {filters}")
+    else:
+        print(f"{'':16} | filters: none (fetches all jobs)")
+    print()

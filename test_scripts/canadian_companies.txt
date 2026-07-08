@@ -1,0 +1,61 @@
+# Canadian IT / tech employers — seed list for ATS auto-detection.
+# Format: Company Name | careers URL
+# The detector visits each URL, figures out the ATS + token, and verifies it.
+# Add/remove freely. Lines starting with # are ignored.
+
+Shopify | https://www.shopify.com/careers
+Lightspeed Commerce | https://www.lightspeedhq.com/careers/
+Wealthsimple | https://www.wealthsimple.com/en-ca/careers
+Clio | https://www.clio.com/about/careers/
+Hootsuite | https://careers.hootsuite.com/
+Jobber | https://careers.getjobber.com/
+1Password | https://1password.com/careers/
+Ada | https://www.ada.cx/careers/
+Cohere | https://cohere.com/careers
+Faire | https://www.faire.com/careers
+ecobee | https://www.ecobee.com/en-us/careers/
+FreshBooks | https://www.freshbooks.com/careers
+theScore | https://www.thescore.com/careers
+League | https://league.com/careers/
+Thinkific | https://www.thinkific.com/careers/
+Klue | https://klue.com/careers
+Visier | https://www.visier.com/careers/
+Dapper Labs | https://www.dapperlabs.com/careers
+SSENSE | https://www.ssense.com/en-ca/careers
+Hopper | https://www.hopper.com/careers
+AlayaCare | https://www.alayacare.com/careers
+Mistplay | https://www.mistplay.com/careers
+Workleap | https://careers.workleap.com/
+Coveo | https://www.coveo.com/en/company/careers
+Kinaxis | https://www.kinaxis.com/en/careers
+OpenText | https://careers.opentext.com/
+Benevity | https://benevity.com/careers
+Absorb Software | https://www.absorblms.com/company/careers
+Neo Financial | https://www.neofinancial.com/careers
+TELUS Digital | https://www.telusdigital.com/careers
+Vidyard | https://www.vidyard.com/careers/
+Docebo | https://www.docebo.com/careers/
+Q4 | https://www.q4inc.com/careers/
+Article | https://www.article.com/careers
+Procurify | https://procurify.com/careers/
+Trulioo | https://www.trulioo.com/company/careers
+Dialogue | https://www.dialogue.co/en/careers
+Plusgrade | https://www.plusgrade.com/careers/
+PolicyMe | https://www.policyme.com/careers
+Wattpad | https://company.wattpad.com/careers
+Later | https://later.com/careers/
+Konrad | https://www.konrad.com/careers
+Apply Digital | https://www.applydigital.com/careers/
+Nuvei | https://www.nuvei.com/careers/
+PointClickCare | https://pointclickcare.com/careers/
+Achievers | https://www.achievers.com/careers/
+Loopio | https://loopio.com/careers/
+Fullscript | https://fullscript.com/careers
+Assent | https://www.assent.com/careers/
+Ross Video | https://www.rossvideo.com/careers/
+Sonder | https://www.sonder.com/careers
+Properly | https://properly.ca/careers
+Bench Accounting | https://bench.co/careers/
+Vention | https://www.ventionteams.com/careers
+Relay | https://relayfi.com/careers
+Float | https://www.floatfinancial.com/careers

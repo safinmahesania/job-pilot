@@ -22,6 +22,10 @@ def get_adapter(company: dict) -> SourceAdapter:
     from .workday import WorkdayAdapter
     from .remoteok import RemoteOKAdapter
     from .weworkremotely import WeWorkRemotelyAdapter
+    from .jobspresso import JobspressoAdapter
+    from .oracle import OracleAdapter
+    from .phenom import PhenomAdapter
+    from .ashby import AshbyAdapter
 
     ats = company.get("ats")
     registry = {
@@ -32,6 +36,10 @@ def get_adapter(company: dict) -> SourceAdapter:
         "workday": WorkdayAdapter,
         "remoteok": RemoteOKAdapter,
         "weworkremotely": WeWorkRemotelyAdapter,
+        "jobspresso": JobspressoAdapter,
+        "oracle": OracleAdapter,
+        "phenom": PhenomAdapter,
+        "ashby": AshbyAdapter,
     }
     if ats not in registry:
         raise ValueError(f"No adapter for ats='{ats}' (company: {company['name']})")

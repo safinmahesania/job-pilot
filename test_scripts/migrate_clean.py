@@ -1,7 +1,7 @@
 import sqlite3
 from src.normalize import clean_html
 
-conn = sqlite3.connect("jobpilot.db")
+conn = sqlite3.connect("../jobpilot.db")
 rows = conn.execute("SELECT id, description FROM jobs").fetchall()
 n = 0
 for job_id, desc in rows:

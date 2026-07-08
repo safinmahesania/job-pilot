@@ -1,33 +1,151 @@
-# Registry of companies to ingest from.
-# `ats` routes each company to an adapter; `identifier` is the one value
-# that adapter needs (board token / handle). Only `custom` entries scrape HTML.
+# ============================================================
+#  JobPilot — sources config
+#  Adapters available: greenhouse, lever, ashby, workday, oracle, phenom,
+#                      themuse, remotive, remoteok, weworkremotely, jobspresso
+#  scope: global  -> location filter requires Canada explicitly (global remote boards)
+#
+#  NOTE: newly added company identifiers (Ashby + Sonder Workday) are best-guess.
+#  Confirm the exact token/tenant/site from your discovered_companies.yaml if any 404s.
+# ============================================================
+
 companies:
+
+  # ═══════════════ Company ATS boards (Canada tech employers) ═══════════════
+
+  # ---- Greenhouse ----
   - name: DoorDash Canada
     ats: greenhouse
-    identifier: doordashcanada        # the board token
-    careers_url: https://careersatdoordash.com/job-search/
+    identifier: doordashcanada
+    active: true
+  - name: Properly
+    ats: greenhouse
+    identifier: pine
     active: true
 
-  - name: Beta Labs
+  # ---- Lever ----
+  - name: Mistplay
     ats: lever
-    identifier: betalabs        # the handle in the lever URL
-    careers_url: https://www.shopify.com/careers
-    active: false
+    identifier: mistplay
+    active: true
+  - name: PolicyMe
+    ats: lever
+    identifier: policyme
+    active: true
+  - name: Fullscript
+    ats: lever
+    identifier: fullscript
+    active: true
 
-  - name: Gamma Inc
+  # ---- Ashby ---- (verify identifiers vs discovered_companies.yaml)
+  - name: Cohere
     ats: ashby
-    identifier: gamma
-    careers_url: https://jobs.ashbyhq.com/gamma
-    active: false
+    identifier: cohere
+    active: true
+  - name: 1Password
+    ats: ashby
+    identifier: 1password
+    active: true
+  - name: Wealthsimple
+    ats: ashby
+    identifier: wealthsimple
+    active: true
+  - name: Benevity
+    ats: ashby
+    identifier: benevity
+    active: true
+  - name: Absorb Software
+    ats: ashby
+    identifier: absorblms
+    active: true
+  - name: Loopio
+    ats: ashby
+    identifier: loopio
+    active: true
+  - name: Relay
+    ats: ashby
+    identifier: relayfi
+    active: true
+  - name: Float
+    ats: ashby
+    identifier: Float
+    active: true
 
-  - name: Delta Systems
-    ats: custom                 # no known ATS — the fragile path
-    careers_url: https://delta.com/careers
-    scrape:
-      list_selector: ".job-listing"
-      title_selector: ".job-title"
-      link_selector: "a.apply"
-    active: false               # leave off until the others work
+  # ---- Workday ---- (banks fetch all jobs; filter/AI narrows)
+  - name: TD Bank
+    ats: workday
+    tenant: td
+    host: wd3
+    site: TD_Bank_Careers
+    max_pages: 5
+    active: true
+  - name: CIBC
+    ats: workday
+    tenant: cibc
+    host: wd3
+    site: search
+    max_pages: 5
+    active: true
+  - name: RBC
+    ats: workday
+    tenant: rbc
+    host: wd3
+    site: RBCGLOBAL1
+    max_pages: 5
+    active: true
+  - name: RBC Early Talent
+    ats: workday
+    tenant: rbc
+    host: wd3
+    site: RBCEARLYTALENT1
+    max_pages: 5
+    active: true
+  - name: Sonder
+    ats: workday
+    tenant: sonder
+    host: wd1
+    site: Join_Sonder
+    max_pages: 5
+    active: true
+  - name: CIBC Campus
+    ats: workday
+    tenant: cibc
+    host: wd3
+    site: campus
+    max_pages: 5
+    active: true
+  - name: BMO
+    ats: workday
+    tenant: bmo
+    host: wd3
+    site: External
+    max_pages: 5
+    active: true
+  - name: BMO Campus
+    ats: workday
+    tenant: bmo
+    host: wd3
+    site: Campus
+    max_pages: 5
+    active: true
+
+  # ---- Oracle ---- (JPMorgan: huge/US-heavy, keyword-narrowed)
+  - name: JPMorgan Chase
+    ats: oracle
+    host: jpmc.fa.oraclecloud.com
+    site: CX_1001
+    query: software developer
+    max_pages: 5
+    active: true
+
+  # ---- Phenom (HTML scrape) ----
+  - name: Scotiabank
+    ats: phenom
+    base: https://jobs.scotiabank.com
+    query: developer
+    max_pages: 5
+    active: true
+
+  # ═══════════════ Job portals (broad, global remote) ═══════════════
 
   - name: "The Muse — entry-level SWE Toronto"
     ats: themuse
@@ -36,7 +154,6 @@ companies:
     location: "Toronto, Canada"
     max_pages: 5
     active: true
-
   - name: "The Muse — internships Toronto"
     ats: themuse
     category: "Software Engineering"
@@ -44,132 +161,65 @@ companies:
     location: "Toronto, Canada"
     max_pages: 5
     active: true
-
   - name: "Remotive — dev"
     ats: remotive
     query: developer
     scope: global
     active: true
-
-
-  # ---- Workday (JSON path exists — next adapter to build) ----
-  - name: TD Bank
-    ats: workday
-    tenant: td
-    host: wd3
-    site: TD_Bank_Careers
-    careers_url: https://td.wd3.myworkdayjobs.com/TD_Bank_Careers
-    active: true
-    max_pages: 5
-
-  - name: CIBC
-    ats: workday
-    tenant: cibc
-    host: wd3
-    site: search
-    careers_url: https://cibc.wd3.myworkdayjobs.com/search
-    active: true
-    max_pages: 5
-
-  - name: RBC
-    ats: workday
-    tenant: rbc
-    host: wd3
-    site: RBCGLOBAL1
-    careers_url: https://rbc.wd3.myworkdayjobs.com/en-US/RBCGLOBAL1
-    active: true
-    max_pages: 5
-
-  - name: RBC Early Talent
-    ats: workday
-    tenant: rbc
-    host: wd3
-    site: RBCEARLYTALENT1
-    careers_url: https://rbc.wd3.myworkdayjobs.com/en-US/RBCEARLYTALENT1
-    active: true
-    max_pages: 5
-
-
-  # ---- SuccessFactors (needs its own adapter) ----
-  - name: Scotiabank
-    ats: successfactors
-    careers_url: https://jobs.scotiabank.com
-    active: true
-
-  - name: National Bank of Canada
-    ats: successfactors
-    careers_url: https://emplois.bnc.ca/en_CA/careers/searchjobs
-    active: true
-
-  - name: Deloitte Canada
-    ats: successfactors
-    careers_url: https://careers.deloitte.ca
-    active: true
-
-
-  # ---- Oracle Recruiting Cloud ----
-  - name: JPMorgan Chase
-    ats: oracle
-    careers_url: https://careers.jpmorgan.com
-    active: true
-
-
-  # ---- Custom / niche portals (Playwright scrape) ----
-  - name: CGI
-    ats: custom
-    careers_url: https://www.cgi.com/canada/en-ca/careers-search
-    active: true
-
-  - name: Intact Financial
-    ats: custom
-    careers_url: https://careers.intactfc.com/jobs
-    active: true
-
-  - name: Jobspresso
-    ats: custom
-    careers_url: https://jobspresso.co/remote-work/?_job_categories=programming
-    note: has RSS feed — easier than scraping
-    active: true
-
-  - name: Remote.co
-    ats: custom
-    careers_url: https://remote.co/remote-jobs/developer
-    active: true
-
-  - name: NewCanadianJobs
-    ats: custom
-    careers_url: https://www.newcanadianjobs.com/jobs
-    active: true
-
-  - name: ITjobs.ca
-    ats: custom
-    careers_url: https://www.itjobs.ca/jobs/browse
-    active: true
-
-
-  # ---- Aggregators (custom scrape; watch for duplicates) ----
-  - name: Eluta
-    ats: aggregator
-    careers_url: https://www.eluta.ca
-    active: true
-
-  - name: Talent.com Toronto
-    ats: aggregator
-    careers_url: https://ca.talent.com/jobs?k=Software+Developer&l=Toronto%2C+ON
-    active: true
-
-  - name: Talent.com Montreal
-    ats: aggregator
-    careers_url: https://ca.talent.com/jobs?k=Software+Developer&l=Montreal%2C+CA
-    active: true
-
   - name: "RemoteOK — dev"
     ats: remoteok
     query: developer
     scope: global
     active: true
-
   - name: "WeWorkRemotely — programming"
     ats: weworkremotely
     scope: global
     active: true
+  - name: "Jobspresso"
+    ats: jobspresso
+    scope: global
+    active: true
+
+  # ═══════════════ Disabled — no adapter / low value (reference) ═══════════════
+  # Enable only after building the matching adapter.
+
+  - name: National Bank of Canada
+    ats: successfactors
+    careers_url: https://emplois.bnc.ca/en_CA/careers/searchjobs
+    active: false
+  - name: Deloitte Canada
+    ats: successfactors
+    careers_url: https://careers.deloitte.ca
+    active: false
+  - name: CGI
+    ats: custom
+    careers_url: https://www.cgi.com/canada/en-ca/careers-search
+    active: false
+  - name: Intact Financial
+    ats: custom
+    careers_url: https://careers.intactfc.com/jobs
+    active: false
+  - name: Remote.co
+    ats: custom
+    careers_url: https://remote.co/remote-jobs/developer
+    active: false
+  - name: NewCanadianJobs
+    ats: custom
+    careers_url: https://www.newcanadianjobs.com/jobs
+    active: false
+  - name: ITjobs.ca
+    ats: custom
+    careers_url: https://www.itjobs.ca/jobs/browse
+    active: false
+  - name: Eluta
+    ats: aggregator
+    careers_url: https://www.eluta.ca
+    active: false
+  - name: Talent.com Toronto
+    ats: aggregator
+    careers_url: https://ca.talent.com/jobs?k=Software+Developer&l=Toronto%2C+ON
+    active: false
+  - name: Talent.com Montreal
+    ats: aggregator
+    careers_url: https://ca.talent.com/jobs?k=Software+Developer&l=Montreal%2C+CA
+    active: false

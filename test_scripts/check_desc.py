@@ -1,6 +1,6 @@
 import sqlite3
 
-conn = sqlite3.connect("jobpilot.db")
+conn = sqlite3.connect("../jobpilot.db")
 row = conn.execute(
     "SELECT description FROM jobs WHERE company LIKE '%DoorDash%' LIMIT 1"
 ).fetchone()

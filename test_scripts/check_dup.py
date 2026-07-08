@@ -1,6 +1,6 @@
 import yaml
 
-data = yaml.safe_load(open("companies.yaml", encoding="utf-8"))["companies"]
+data = yaml.safe_load(open("../companies.yaml", encoding="utf-8"))["companies"]
 keys = ("query", "category", "level", "location", "max_pages", "limit", "feed")
 
 print("=== ACTIVE SOURCES ===\n")

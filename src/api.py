@@ -252,7 +252,7 @@ def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all"):
         "company": "company ASC",
     }.get(sort, "score DESC")
 
-    sql = f"SELECT {COLS} FROM jobs WHERE {where} ORDER BY {order} LIMIT 50"
+    sql = sql = f"SELECT {COLS} FROM jobs WHERE {where} ORDER BY {order} LIMIT 50"
     rows = conn.execute(sql).fetchall()
     conn.close()
     return [dict(r) for r in rows]

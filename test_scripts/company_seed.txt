@@ -1,0 +1,158 @@
+# Canadian tech / IT employers — one per line. Comments with # ignored.
+# The harvester guesses board tokens from these names and verifies them
+# against the Greenhouse, Lever and Ashby public APIs.
+
+Shopify
+Lightspeed
+Wealthsimple
+Clio
+Hootsuite
+Jobber
+1Password
+Ada
+Cohere
+Faire
+ecobee
+FreshBooks
+theScore
+League
+Thinkific
+Klue
+Visier
+Dapper Labs
+SSENSE
+Hopper
+AlayaCare
+Mistplay
+Workleap
+Coveo
+Kinaxis
+OpenText
+Benevity
+Absorb
+Neo Financial
+Vidyard
+Docebo
+Article
+Procurify
+Trulioo
+Dialogue
+Plusgrade
+PolicyMe
+Wattpad
+Later
+Konrad
+Apply Digital
+Nuvei
+PointClickCare
+Achievers
+Loopio
+Fullscript
+Assent
+Ross Video
+Properly
+Bench Accounting
+Vention
+Relay
+Float
+Wave
+Axonify
+Ecobee
+Flipp
+Ritual
+Wealthfront Canada
+Borrowell
+Koho
+Drop
+Blockchain Foundry
+Symend
+Attabotics
+Zymeworks
+Deep Genomics
+BlueDot
+Verafin
+Introhive
+Kognitiv
+Wysdom
+Tulip Retail
+Sampler
+Sensibill
+Rubikloud
+Uken Games
+Big Viking Games
+Behaviour Interactive
+Ubisoft Toronto
+Unity Montreal
+Element AI
+Imagia
+Hexagon
+Nymi
+ApplyBoard
+Vidcruiter
+Buildscale
+Bonsai
+Certn
+Jane Software
+Aspect Biosystems
+Semios
+Terramera
+Copperleaf
+Finn AI
+MetaOptima
+Kabam
+Slack Vancouver
+Fable
+Chexy
+Bridgit
+Voiceflow
+Cover Genius
+Fiix Software
+Geotab
+Enkel
+Aterlo
+Nudge Rewards
+League Data
+Guided Compass
+Kira Systems
+Blue J Legal
+Diagnos
+Hopper Labs
+Rewind
+Clearco
+Willful
+Dye and Durham
+Coconut Software
+Jane App
+Later Media
+Wagepoint
+Rise People
+Humi
+Knix
+Peninsula
+FlipGive
+Nulogy
+Rangle
+Shakepay
+Neo Brokerage
+Zafin
+Trellis
+Bird Canada
+Swept
+Beanworks
+Payfirma
+Klipfolio
+Solink
+You i TV
+Fellow app
+Alida
+Unbounce
+Bananatag
+Prevue
+Traction on Demand
+BuildDirect
+Mobify
+Grow Technologies
+Thrive Health
+Aware Networks
+Hiring Branch
+Tulip

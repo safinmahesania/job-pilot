@@ -71,8 +71,8 @@ def _ok_domain(job, s):
     domains = [d.lower() for d in s.get("domains", [])]
     if not domains:
         return True
-    text = f"{job.get('title', '')} {job.get('description', '')}".lower()
-    return any(d in text for d in domains)
+    title = (job.get("title") or "").lower()
+    return any(d in title for d in domains)     # title only, not description
 
 
 def _ok_job_type(job, s):

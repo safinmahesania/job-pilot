@@ -1,0 +1,104 @@
+# ============================================================
+#  JobPilot — sources config (TEMPLATE)
+#
+#  Copy this file to companies.yaml and fill in your own boards.
+#  companies.yaml is gitignored (it's your personal source list); this
+#  template documents the format for every supported ATS.
+#
+#  Available adapters:
+#    greenhouse, lever, ashby, workday, oracle, phenom, successfactors,
+#    themuse, remotive, remoteok, weworkremotely, jobspresso, custom
+#
+#  Common fields:
+#    name      display name (any string)
+#    ats       which adapter to use (see list above)
+#    active    true / false — toggle a board without deleting it
+#    scope     optional; "global" means the location filter requires Canada
+#              to be named explicitly (used for worldwide remote boards)
+#
+#  Tip: use `python scripts/detect_ats.py` to find a company's ATS + token
+#  from its careers-page URL, or `python scripts/harvest_board_tokens.py`
+#  to verify many tokens at once.
+# ============================================================
+
+companies:
+
+  # ---- Greenhouse ----  identifier = the token in boards.greenhouse.io/<identifier>
+  - name: Example Greenhouse Co
+    ats: greenhouse
+    identifier: examplecompany
+    active: true
+
+  # ---- Lever ----  identifier = the token in jobs.lever.co/<identifier>
+  - name: Example Lever Co
+    ats: lever
+    identifier: examplecompany
+    active: true
+
+  # ---- Ashby ----  identifier = the token in jobs.ashbyhq.com/<identifier>
+  - name: Example Ashby Co
+    ats: ashby
+    identifier: examplecompany
+    active: true
+
+  # ---- Workday ----  tenant/host/site come from the careers URL:
+  #   https://<tenant>.<host>.myworkdayjobs.com/<site>
+  - name: Example Workday Co
+    ats: workday
+    tenant: examplecompany
+    host: wd3
+    site: Example_Careers
+    max_pages: 5
+    active: true
+
+  # ---- Oracle Cloud (Taleo/Fusion) ----
+  - name: Example Oracle Co
+    ats: oracle
+    host: example.fa.oraclecloud.com
+    site: CX_1001
+    query: software developer
+    max_pages: 5
+    active: true
+
+  # ---- Phenom ----  base = the careers site root
+  - name: Example Phenom Co
+    ats: phenom
+    base: https://jobs.examplecompany.com
+    query: developer
+    max_pages: 5
+    active: true
+
+  # ---- The Muse ----  filter by category / level / location
+  - name: "The Muse — entry-level SWE"
+    ats: themuse
+    category: "Software Engineering"
+    level: "Entry Level"          # or "Internship"
+    location: "Toronto, Canada"
+    max_pages: 5
+    active: true
+
+  # ═══════════════ Global remote portals ═══════════════
+  # These are worldwide; scope: global makes the location filter require
+  # Canada to be named explicitly so you don't drown in US-only remote roles.
+
+  - name: "Remotive — dev"
+    ats: remotive
+    query: developer
+    scope: global
+    active: true
+
+  - name: "RemoteOK — dev"
+    ats: remoteok
+    query: developer
+    scope: global
+    active: true
+
+  - name: "WeWorkRemotely — programming"
+    ats: weworkremotely
+    scope: global
+    active: true
+
+  - name: "Jobspresso"
+    ats: jobspresso
+    scope: global
+    active: true

@@ -7,8 +7,8 @@ verifies it against the ATS public API where possible, and writes
 config-ready companies.yaml entries.
 
 Usage:
-    python ats_detect.py                 # uses canadian_companies.txt
-    python ats_detect.py mylist.txt      # custom seed file
+    python scripts/detect_ats.py                 # uses canadian_companies.txt
+    python scripts/detect_ats.py mylist.txt      # custom seed file
 
 Output:
     discovered_companies.yaml   -> paste the entries into your companies.yaml
@@ -21,10 +21,13 @@ need an adapter before enabling.
 """
 import re
 import sys
+import pathlib
 import time
 import httpx
 
-SEED = sys.argv[1] if len(sys.argv) > 1 else "canadian_companies.txt"
+# Seed and output live in scripts/seeds/ next to this file.
+SEEDS_DIR = pathlib.Path(__file__).resolve().parent / "seeds"
+SEED = sys.argv[1] if len(sys.argv) > 1 else str(SEEDS_DIR / "canadian_companies.txt")
 HEADERS = {"User-Agent": "Mozilla/5.0 (JobPilot ATS detector)"}
 HAVE_ADAPTER = {"greenhouse", "lever", "workday", "oracle", "phenom"}
 
@@ -157,7 +160,7 @@ def main():
         time.sleep(0.3)
 
     # write yaml (verified first)
-    with open("discovered_companies.yaml", "w", encoding="utf-8") as out:
+    with open(SEEDS_DIR / "discovered_companies.yaml", "w", encoding="utf-8") as out:
         out.write("# Auto-detected companies. Review, then set active: true on the ones you want.\n")
         out.write("# Entries marked 'NO ADAPTER YET' need an adapter before they'll fetch.\n\n")
         out.write("companies:\n")
@@ -166,7 +169,7 @@ def main():
 
     print("\n" + "=" * 50)
     print(f"Resolved: {len(resolved)}  |  Unresolved: {len(unresolved)}")
-    print("Written -> discovered_companies.yaml")
+    print("Written -> scripts/seeds/discovered_companies.yaml")
     if unresolved:
         print("\nUnresolved (check careers page manually):")
         for name, url, why in unresolved:

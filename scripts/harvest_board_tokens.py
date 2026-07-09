@@ -6,8 +6,8 @@ this guesses likely board tokens from the company name and *verifies* each one
 against the public Greenhouse / Lever / Ashby APIs. A 200 + job list means the
 token is real. No Playwright, no scraping.
 
-    python token_harvest.py                  # uses company_seed.txt
-    python token_harvest.py myseed.txt
+    python scripts/harvest_board_tokens.py                  # uses company_seed.txt
+    python scripts/harvest_board_tokens.py myseed.txt
 
 Writes harvested_companies.yaml, sorted so boards with the most CANADIAN jobs
 come first. Boards with zero Canadian jobs today are written active: false
@@ -18,11 +18,14 @@ cannot be guessed. Use ats_detect.py for those.
 """
 import re
 import sys
+import pathlib
 import time
 import httpx
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-SEED = sys.argv[1] if len(sys.argv) > 1 else "company_seed.txt"
+# Seed and output live in scripts/seeds/ next to this file.
+SEEDS_DIR = pathlib.Path(__file__).resolve().parent / "seeds"
+SEED = sys.argv[1] if len(sys.argv) > 1 else str(SEEDS_DIR / "company_seed.txt")
 HEADERS = {"User-Agent": "Mozilla/5.0 (JobPilot harvester)", "Accept": "application/json"}
 WORKERS = 8
 TIMEOUT = 12
@@ -125,7 +128,7 @@ def main():
 
     hits.sort(key=lambda h: (-h[4], -h[3]))
 
-    with open("harvested_companies.yaml", "w", encoding="utf-8") as out:
+    with open(SEEDS_DIR / "harvested_companies.yaml", "w", encoding="utf-8") as out:
         out.write("# Auto-harvested + API-verified board tokens.\n")
         out.write("# Sorted by number of Canadian postings at harvest time.\n")
         out.write("# active: false = zero Canadian jobs right now (may change).\n\n")
@@ -140,7 +143,7 @@ def main():
     print("\n" + "=" * 55)
     print(f"Verified boards: {len(hits)}   |   No token found: {len(misses)}")
     print(f"With Canadian jobs today: {sum(1 for h in hits if h[4])}")
-    print("Written -> harvested_companies.yaml")
+    print("Written -> scripts/seeds/harvested_companies.yaml")
     if misses:
         print("\nNo token guessable (run ats_detect.py on these, or check manually):")
         print("  " + ", ".join(misses))

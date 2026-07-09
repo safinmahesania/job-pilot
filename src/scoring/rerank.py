@@ -1,8 +1,45 @@
-"""AI scoring via Ollama (local, zero cost), schema-constrained JSON."""
+"""AI scoring via Ollama (local, zero cost), schema-constrained JSON.
+
+Model selection:
+  - PRIMARY (14b) is the default, best quality.
+  - If a job fails on the primary (OOM/CUDA/etc.), that job falls back to
+    FALLBACK (7b) — but only for that run. reset_model_state() (called at the
+    start of every run) puts it back to primary.
+  - A user-picked model from Settings overrides PRIMARY via set_preferred().
+"""
 import ollama
 from pydantic import BaseModel
 
-MODEL = "qwen2.5:14b"   # OOM aaye to "qwen2.5:7b" kar de
+from src.paths import (
+    MODEL_PRIMARY as PRIMARY,
+    MODEL_FALLBACK as FALLBACK,
+    MODEL_NUM_CTX,
+    MODEL_TEMPERATURE,
+    SCORE_WEIGHT_SKILLS,
+    SCORE_WEIGHT_SENIORITY,
+    SCORE_WEIGHT_DOMAIN,
+)
+
+# live scoring state — the UI reads this to show which model is active
+MODEL_STATE = {"active": PRIMARY, "fallback_active": False, "preferred": PRIMARY}
+
+
+def set_preferred(model: str):
+    """User picked a model in Settings. Becomes the run's starting model."""
+    if model in (PRIMARY, FALLBACK):
+        MODEL_STATE["preferred"] = model
+        MODEL_STATE["active"] = model
+
+
+def reset_model_state():
+    """Call at the START of every run — back to the preferred model."""
+    MODEL_STATE["active"] = MODEL_STATE["preferred"]
+    MODEL_STATE["fallback_active"] = False
+
+
+def get_model_state() -> dict:
+    return dict(MODEL_STATE)
+
 
 SCORING_GUIDE = """
 Score EACH dimension across the full 0-100 range — do not cluster around 60-75.
@@ -42,15 +79,15 @@ def _candidate_summary(profile: dict) -> str:
     if profile.get("experience"):
         lines = []
         for e in profile["experience"]:
-            lines.append(f"- {e.get('role')} @ {e.get('company')} ({e.get('start','?')}–{e.get('end','?')})")
-            lines += [f"    • {h}" for h in e.get("highlights", [])]
+            lines.append(f"- {e.get('role')} @ {e.get('company')} ({e.get('start','?')}-{e.get('end','?')})")
+            lines += [f"    - {h}" for h in e.get("highlights", [])]
         parts.append("EXPERIENCE:\n" + "\n".join(lines))
 
     if profile.get("projects"):
         lines = []
         for p in profile["projects"]:
             lines.append(f"- {p.get('name')} [{', '.join(p.get('tech', []))}]: {p.get('description','')}")
-            lines += [f"    • {h}" for h in p.get("highlights", [])]
+            lines += [f"    - {h}" for h in p.get("highlights", [])]
         parts.append("PROJECTS:\n" + "\n".join(lines))
 
     if profile.get("education"):
@@ -85,21 +122,36 @@ against the job's requirements.
 Return only JSON matching the schema."""
 
 
+def _call(model: str, job: dict, profile: dict) -> ScoreResult:
+    resp = ollama.chat(
+        model=model,
+        messages=[{"role": "user", "content": _prompt(job, profile)}],
+        format=ScoreResult.model_json_schema(),   # constrained decoding
+        options={"temperature": MODEL_TEMPERATURE, "num_ctx": MODEL_NUM_CTX},
+    )
+    return ScoreResult.model_validate_json(resp["message"]["content"])
+
+
 def score_job(job: dict, profile: dict) -> ScoreResult | None:
     try:
-        resp = ollama.chat(
-            model=MODEL,
-            messages=[{"role": "user", "content": _prompt(job, profile)}],
-            format=ScoreResult.model_json_schema(),   # constrained decoding
-            options={"temperature": 0, "num_ctx": 4096},
-        )
-        result = ScoreResult.model_validate_json(resp["message"]["content"])
-
-        # model's own `overall` is unreliable (clusters low) — recompute
-        result.overall = round(0.5 * result.skills_score
-                               + 0.3 * result.seniority_score
-                               + 0.2 * result.domain_score)
-        return result
+        result = _call(MODEL_STATE["active"], job, profile)
     except Exception as e:
-        print(f"  score failed for '{job.get('title')}': {e}")
-        return None
+        # primary failed — try the fallback model for THIS job (run-scoped)
+        if MODEL_STATE["active"] != FALLBACK:
+            print(f"  {MODEL_STATE['active']} failed ({str(e)[:50]}) - falling back to {FALLBACK}")
+            MODEL_STATE["active"] = FALLBACK
+            MODEL_STATE["fallback_active"] = True
+            try:
+                result = _call(FALLBACK, job, profile)
+            except Exception as e2:
+                print(f"  fallback also failed for '{job.get('title')}': {e2}")
+                return None
+        else:
+            print(f"  score failed for '{job.get('title')}': {e}")
+            return None
+
+    # model's own `overall` is unreliable (clusters low) — recompute
+    result.overall = round(SCORE_WEIGHT_SKILLS * result.skills_score
+                           + SCORE_WEIGHT_SENIORITY * result.seniority_score
+                           + SCORE_WEIGHT_DOMAIN * result.domain_score)
+    return result

@@ -30,7 +30,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     flags           TEXT,                 -- JSON string
     status          TEXT DEFAULT 'surfaced',
     job_type        TEXT,
-    deadline        TEXT
+    deadline        TEXT,
+    applied_on      TEXT,                 -- date stamped when status -> 'applied'
+    notes           TEXT                  -- free-text notes from the Applied tab
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_score ON jobs(score DESC);
@@ -50,3 +52,18 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT
 );
 INSERT OR IGNORE INTO settings (key, value) VALUES ('score_threshold', '70');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('scheduler_enabled', '0');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('run_interval_hours', '8');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('notify_enabled', '1');
+
+CREATE TABLE IF NOT EXISTS runs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at  TEXT DEFAULT (datetime('now')),
+    kind        TEXT,                     -- 'fetch' (reserved for future kinds)
+    fetched     INTEGER DEFAULT 0,
+    seen        INTEGER DEFAULT 0,
+    dropped     INTEGER DEFAULT 0,
+    trashed     INTEGER DEFAULT 0,
+    kept        INTEGER DEFAULT 0,
+    errors      INTEGER DEFAULT 0
+);

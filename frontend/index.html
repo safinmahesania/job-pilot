@@ -1,491 +1,638 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JobPilot</title>
-    <link rel="icon" href="/logo.svg">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = { theme: { extend: { colors: {
-          brand: '#B4791A', brandtint: '#F7EDD8', branddark: '#7A4E0C'
-        } } } };
-    </script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
-    <link rel="stylesheet" href="/styles.css">
-    <script src="/app.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JobPilot</title>
+  <link rel="icon" href="/logo.svg">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: {
+      brand: '#B4791A', brandtint: '#F7EDD8', branddark: '#7A4E0C'
+    } } } };
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="text-gray-800">
-<div x-data="jobpilot()" x-init="load()" x-cloak class="flex min-h-screen max-w-6xl mx-auto">
+<div x-data="jobpilot()" x-init="load()" x-cloak class="md:flex md:min-h-screen md:max-w-6xl md:mx-auto">
 
-    <!-- Sidebar -->
-    <aside class="w-56 shrink-0 border-r border-gray-200 flex flex-col px-3 py-5">
-        <div class="flex items-center gap-2 px-2 pb-5">
-            <svg viewBox="0 0 48 48" class="w-8 h-8">
-                <rect width="48" height="48" rx="12" fill="#B4791A"/>
-                <circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/>
-                <path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/>
-                <path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/>
-                <path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/>
-                <path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/>
-                <circle cx="24" cy="24" r="1.8" fill="#fff"/>
-            </svg>
-            <span class="text-lg font-semibold">JobPilot</span>
+  <!-- ══ Mobile top bar ══ -->
+  <header class="md:hidden sticky top-0 z-40 flex items-center gap-3 px-4 h-14 bg-white border-b border-gray-200">
+    <button @click="mobileNav = true" class="text-gray-500 -ml-1"><i class="ti ti-menu-2 text-2xl"></i></button>
+    <svg viewBox="0 0 48 48" class="w-7 h-7 cursor-pointer" @click="go('feed')"><rect width="48" height="48" rx="12" fill="#B4791A"/><circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/><path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/><path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/><path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/><path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/><circle cx="24" cy="24" r="1.8" fill="#fff"/></svg>
+    <span class="font-semibold" x-text="tabLabel()"></span>
+    <button @click="runNow()" :disabled="running" class="ml-auto h-8 px-3 rounded-md bg-brand text-white text-[13px] flex items-center gap-1 disabled:opacity-50">
+      <i class="ti" :class="running ? 'ti-loader-2 animate-spin' : 'ti-player-play'"></i>
+      <span x-text="running ? 'Running' : 'Run'"></span>
+    </button>
+  </header>
+
+  <!-- ══ Mobile drawer ══ -->
+  <div x-show="mobileNav" x-cloak @click="mobileNav=false" class="md:hidden fixed inset-0 z-50 bg-black/40"></div>
+  <aside x-show="mobileNav" x-cloak
+    x-transition:enter="transition ease-out duration-200" x-transition:enter-start="-translate-x-full" x-transition:enter-end="translate-x-0"
+    class="md:hidden fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col px-3 py-5 overflow-y-auto">
+    <div class="flex items-center gap-2 px-2 pb-5">
+      <svg viewBox="0 0 48 48" class="w-8 h-8"><rect width="48" height="48" rx="12" fill="#B4791A"/><circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/><path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/><path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/><path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/><path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/><circle cx="24" cy="24" r="1.8" fill="#fff"/></svg>
+      <span class="text-lg font-semibold">JobPilot</span>
+      <button @click="mobileNav=false" class="ml-auto text-gray-400"><i class="ti ti-x text-xl"></i></button>
+    </div>
+    <div class="text-[11px] text-gray-400 px-2 py-1">Jobs</div>
+    <template x-for="n in jobsNav" :key="'m'+n.k">
+      <div class="nav" :class="tab===n.k && 'active'" @click="go(n.k)">
+        <i class="ti" :class="n.icon"></i><span class="flex-1" x-text="n.label"></span>
+        <span class="text-xs text-gray-400" x-text="counts[n.k] != null ? counts[n.k] : ''"></span>
+      </div>
+    </template>
+    <div class="h-px bg-gray-200 mx-2 my-3"></div>
+    <div class="text-[11px] text-gray-400 px-2 py-1">System</div>
+    <template x-for="n in sysNav" :key="'m'+n.k">
+      <div class="nav" :class="tab===n.k && 'active'" @click="go(n.k)">
+        <i class="ti" :class="n.icon"></i><span x-text="n.label"></span>
+      </div>
+    </template>
+    <div class="mt-auto pt-4 px-2 text-[11px] text-gray-400">
+      <div x-show="lastRun">Last: <span x-text="lastRun"></span></div>
+      <div x-show="nextRun && sched.enabled">Next: <span x-text="nextRun"></span></div>
+    </div>
+  </aside>
+
+  <!-- ══ Desktop sidebar ══ -->
+  <aside class="hidden md:flex w-56 shrink-0 border-r border-gray-200 flex-col px-3 py-5">
+    <div class="flex items-center gap-2 px-2 pb-5 cursor-pointer" @click="go('feed')">
+      <svg viewBox="0 0 48 48" class="w-8 h-8"><rect width="48" height="48" rx="12" fill="#B4791A"/><circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/><path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/><path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/><path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/><path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/><circle cx="24" cy="24" r="1.8" fill="#fff"/></svg>
+      <span class="text-lg font-semibold">JobPilot</span>
+    </div>
+    <div class="text-[11px] text-gray-400 px-2 py-1">Jobs</div>
+    <template x-for="n in jobsNav" :key="n.k">
+      <div class="nav" :class="tab===n.k && 'active'" @click="go(n.k)">
+        <i class="ti" :class="n.icon"></i><span class="flex-1" x-text="n.label"></span>
+        <span class="text-xs" :class="tab===n.k ? 'text-branddark' : 'text-gray-400'" x-text="counts[n.k] != null ? counts[n.k] : ''"></span>
+      </div>
+    </template>
+    <div class="h-px bg-gray-200 mx-2 my-3"></div>
+    <div class="text-[11px] text-gray-400 px-2 py-1">System</div>
+    <template x-for="n in sysNav" :key="n.k">
+      <div class="nav" :class="tab===n.k && 'active'" @click="go(n.k)">
+        <i class="ti" :class="n.icon"></i><span x-text="n.label"></span>
+      </div>
+    </template>
+    <div class="mt-auto px-1">
+      <button @click="runNow()" :disabled="running" class="w-full h-9 rounded-lg bg-brand text-white text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
+        <i class="ti" :class="running ? 'ti-loader-2 animate-spin' : 'ti-player-play'"></i>
+        <span x-text="running ? 'Running…' : 'Run now'"></span>
+      </button>
+      <div class="text-[11px] text-gray-400 text-center mt-2 leading-relaxed">
+        <div x-show="lastRun">Last: <span x-text="lastRun"></span></div>
+        <div x-show="nextRun && sched.enabled">Next: <span x-text="nextRun"></span></div>
+        <div x-show="!sched.enabled" class="text-gray-300">Auto-fetch off</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══ Main ══ -->
+  <main class="flex-1 min-w-0 px-4 py-4 pb-24 md:px-6 md:py-6 md:pb-6">
+
+    <!-- ─── Job views ─── -->
+    <div x-show="isJobView()">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
+        <div class="flex-1 flex items-center gap-2 h-9 px-3 border border-gray-200 rounded-lg bg-white">
+          <i class="ti ti-search text-gray-400"></i>
+          <input x-model="q" placeholder="Search title, company, skill…" class="flex-1 text-sm outline-none bg-transparent">
         </div>
-
-        <div class="text-[11px] text-gray-400 px-2 py-1">Jobs</div>
-        <template x-for="n in jobsNav" :key="n.k">
-            <div class="nav" :class="tab===n.k && 'active'" @click="tab=n.k; load()">
-                <i class="ti" :class="n.icon"></i>
-                <span class="flex-1" x-text="n.label"></span>
-                <span class="text-xs" :class="tab===n.k ? 'text-branddark' : 'text-gray-400'"
-                      x-text="counts[n.k] != null ? counts[n.k] : ''"></span>
-            </div>
-        </template>
-
-        <div class="h-px bg-gray-200 mx-2 my-3"></div>
-        <div class="text-[11px] text-gray-400 px-2 py-1">System</div>
-        <template x-for="n in sysNav" :key="n.k">
-            <div class="nav" :class="tab===n.k && 'active'" @click="tab=n.k; load()">
-                <i class="ti" :class="n.icon"></i>
-                <span x-text="n.label"></span>
-            </div>
-        </template>
-
-        <div class="mt-auto px-1">
-            <button @click="runNow()" :disabled="running"
-                    class="w-full h-9 rounded-lg bg-brand text-white text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
-                <i class="ti" :class="running ? 'ti-loader-2 animate-spin' : 'ti-player-play'"></i>
-                <span x-text="running ? 'Running…' : 'Run now'"></span>
-            </button>
-            <div x-show="lastRun" class="text-[11px] text-gray-400 text-center mt-2">Last run: <span
-                    x-text="lastRun"></span></div>
+        <div class="flex gap-2">
+          <select x-model="sort" @change="load()" class="flex-1 sm:flex-none h-9 px-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600">
+            <option value="score">Score</option><option value="newest">Newest</option><option value="company">Company</option>
+          </select>
+          <select x-model="source" @change="load()" class="flex-1 sm:flex-none h-9 px-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 max-w-[45vw]">
+            <option value="all">All sources</option>
+            <template x-for="s in sources" :key="s"><option :value="s" x-text="s"></option></template>
+          </select>
+          <span class="hidden sm:inline self-center text-xs text-gray-400 whitespace-nowrap" x-text="filtered().length + ' jobs'"></span>
         </div>
-    </aside>
+      </div>
 
-    <!-- Main -->
-    <main class="flex-1 min-w-0 px-6 py-6">
+      <div x-show="loading" class="text-center text-gray-400 py-20 text-sm">Loading…</div>
+      <div x-show="!loading && filtered().length===0" class="text-center text-gray-400 py-20 text-sm">
+        <i class="ti ti-inbox text-3xl block mb-2 opacity-50"></i>
+        No jobs in <span x-text="tab"></span> yet.
+      </div>
 
-        <!-- Job views -->
-        <div x-show="isJobView()">
-            <div class="flex items-center gap-2 mb-4">
-                <div class="flex-1 flex items-center gap-2 h-9 px-3 border border-gray-200 rounded-lg bg-white">
-                    <i class="ti ti-search text-gray-400"></i>
-                    <input x-model="q" placeholder="Search title, company, skill…"
-                           class="flex-1 text-sm outline-none bg-transparent">
+      <div class="flex flex-col gap-3">
+        <template x-for="job in filtered()" :key="job.id">
+          <div class="flex gap-3 sm:gap-3.5 card p-3 sm:p-4" :style="`border-left:3px solid ${tier(job.score).stripe}`">
+            <div class="shrink-0 w-11 h-11 sm:w-14 sm:h-14 rounded-full flex flex-col items-center justify-center" :style="`background:${tier(job.score).bg}`">
+              <span class="text-base sm:text-xl font-semibold leading-none" :style="`color:${tier(job.score).fg}`" x-text="Math.round(job.score)"></span>
+              <span class="text-[9px] sm:text-[10px]" :style="`color:${tier(job.score).fg}`">match</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-baseline justify-between gap-2">
+                <span class="font-medium text-[15px] cursor-pointer hover:text-brand" @click="openDetail(job)" x-text="job.title"></span>
+                <span class="hidden sm:block text-xs text-gray-400 whitespace-nowrap" x-text="job.posted_date ? timeAgo(job.posted_date) : ''"></span>
+              </div>
+              <div class="text-[13px] text-gray-500 mt-0.5">
+                <span x-text="job.company"></span> · <span x-text="job.location"></span>
+                <span class="text-gray-400" x-show="job.job_type && job.job_type!=='Unknown'"> · <span x-text="job.job_type"></span></span>
+                <span class="text-amber-700" x-show="job.deadline"> · <i class="ti ti-calendar text-xs"></i> <span x-text="job.deadline"></span></span>
+              </div>
+              <div class="text-[13px] rounded-md px-2.5 py-2 my-2.5 leading-relaxed flex gap-1.5" style="background:#F7EDD8; color:#7A4E0C;" x-show="job.rationale">
+                <i class="ti ti-bulb mt-0.5 shrink-0"></i><span x-text="job.rationale"></span>
+              </div>
+              <div x-show="tab==='applied'" class="mt-2 mb-2.5 rounded-md border border-gray-100 bg-gray-50 p-2.5">
+                <div class="flex items-center gap-1.5 text-xs text-gray-500 mb-2">
+                  <i class="ti ti-calendar-check"></i>
+                  Applied <span class="font-medium text-gray-700" x-text="job.applied_on || '—'"></span>
                 </div>
-                <select x-model="sort" @change="load()"
-                        class="h-9 px-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600">
-                    <option value="score">Sort: Score</option>
-                    <option value="newest">Sort: Newest</option>
-                    <option value="company">Sort: Company</option>
-                </select>
-                <select x-model="source" @change="load()"
-                        class="h-9 px-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600">
-                    <option value="all">All sources</option>
-                    <template x-for="s in sources" :key="s">
-                        <option :value="s" x-text="s"></option>
-                    </template>
-                </select>
-                <span class="text-xs text-gray-400 capitalize whitespace-nowrap"
-                      x-text="filtered().length + ' jobs'"></span>
-            </div>
-
-            <div x-show="loading" class="text-center text-gray-400 py-20 text-sm">Loading…</div>
-            <div x-show="!loading && filtered().length===0" class="text-center text-gray-400 py-20 text-sm">
-                <i class="ti ti-inbox text-3xl block mb-2 opacity-50"></i>
-                No jobs in <span x-text="tab"></span> yet.
-            </div>
-
-            <div class="flex flex-col gap-3">
-                <template x-for="job in filtered()" :key="job.id">
-                    <div class="flex gap-3.5 bg-white border border-gray-200 rounded-xl p-4"
-                         :style="`border-left:3px solid ${tier(job.score).stripe}`">
-                        <div class="shrink-0 w-14 h-14 rounded-full flex flex-col items-center justify-center"
-                             :style="`background:${tier(job.score).bg}`">
-                            <span class="text-xl font-semibold leading-none" :style="`color:${tier(job.score).fg}`"
-                                  x-text="Math.round(job.score)"></span>
-                            <span class="text-[10px]" :style="`color:${tier(job.score).fg}`">match</span>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-baseline justify-between gap-2">
-                                <span class="font-medium cursor-pointer hover:text-brand" @click="openDetail(job)"
-                                      x-text="job.title"></span>
-                                <span class="text-xs text-gray-400 whitespace-nowrap"
-                                      x-text="job.posted_date ? timeAgo(job.posted_date) : ''"></span>
-                            </div>
-                            <div class="text-[13px] text-gray-500 mt-0.5">
-                                <span x-text="job.company"></span> · <span x-text="job.location"></span>
-                                <span class="text-gray-400" x-show="job.job_type && job.job_type!=='Unknown'"> · <span
-                                        x-text="job.job_type"></span></span>
-                                <span class="text-amber-700" x-show="job.deadline"> · <i
-                                        class="ti ti-calendar text-xs"></i> <span x-text="job.deadline"></span></span>
-                            </div>
-                            <div class="text-[13px] rounded-md px-2.5 py-2 my-2.5 leading-relaxed flex gap-1.5"
-                                 style="background:#F7EDD8; color:#7A4E0C;" x-show="job.rationale">
-                                <i class="ti ti-bulb mt-0.5"></i><span x-text="job.rationale"></span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <a :href="job.apply_url" target="_blank"
-                                   class="text-[13px] h-8 px-4 rounded-md bg-brand text-white flex items-center gap-1"><i
-                                        class="ti ti-external-link"></i> Apply</a>
-                                <template x-if="tab!=='dismissed'">
-                                    <div class="flex items-center gap-2">
-                                        <button @click="setStatus(job,'saved')"
-                                                class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">
-                                            Save
-                                        </button>
-                                        <button @click="setStatus(job,'dismissed')"
-                                                class="text-[13px] h-8 px-3 rounded-md text-gray-400 hover:bg-gray-50">
-                                            Dismiss
-                                        </button>
-                                    </div>
-                                </template>
-                                <template x-if="tab==='dismissed'">
-                                    <button @click="setStatus(job,'surfaced')"
-                                            class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">
-                                        <i class="ti ti-arrow-back-up"></i> Restore
-                                    </button>
-                                </template>
-                                <select @change="setStatus(job, $event.target.value)"
-                                        class="ml-auto text-[13px] h-8 px-2 rounded-md border border-gray-200 text-gray-600 bg-white">
-                                    <template x-for="s in statuses" :key="s">
-                                        <option :value="s" :selected="job.status===s" x-text="cap(s)"></option>
-                                    </template>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
+                <textarea x-model="job.notes" @blur="saveNotes(job)" rows="2"
+                  placeholder="Notes — referral, follow-up date, contact…"
+                  class="w-full text-[13px] px-2.5 py-1.5 border border-gray-200 rounded-md outline-none focus:border-brand resize-none bg-white"></textarea>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <a :href="job.apply_url" target="_blank" class="text-[13px] h-8 px-4 rounded-md bg-brand text-white flex items-center gap-1"><i class="ti ti-external-link"></i> Apply</a>
+                <template x-if="tab!=='dismissed'">
+                  <div class="flex items-center gap-2">
+                    <button @click="setStatus(job,'saved')" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">Save</button>
+                    <button @click="setStatus(job,'dismissed')" class="text-[13px] h-8 px-3 rounded-md text-gray-400 hover:bg-gray-50">Dismiss</button>
+                  </div>
                 </template>
-            </div>
-        </div>
-
-        <!-- Stats -->
-        <div x-show="tab==='stats'">
-            <h2 class="text-lg font-semibold mb-4">Statistics</h2>
-            <template x-if="stats">
-                <div class="flex flex-col gap-5">
-                    <div class="grid grid-cols-3 gap-3">
-                        <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
-                            <div class="text-2xl font-semibold" x-text="stats.total"></div>
-                            <div class="text-xs text-gray-400 mt-1">Total jobs</div>
-                        </div>
-                        <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
-                            <div class="text-2xl font-semibold" x-text="stats.feed_size"></div>
-                            <div class="text-xs text-gray-400 mt-1">In feed</div>
-                        </div>
-                        <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
-                            <div class="text-2xl font-semibold" x-text="stats.avg_score"></div>
-                            <div class="text-xs text-gray-400 mt-1">Avg score</div>
-                        </div>
-                    </div>
-                    <div class="bg-white border border-gray-200 rounded-xl p-4">
-                        <div class="text-sm font-medium mb-3">Application funnel</div>
-                        <template
-                                x-for="[label,key] in [['Surfaced','surfaced'],['Saved','saved'],['Applied','applied'],['Interview','interview'],['Offer','offer'],['Rejected','rejected'],['Dismissed','dismissed']]"
-                                :key="key">
-                            <div class="flex items-center gap-3 mb-2">
-                                <span class="text-xs text-gray-500 w-20" x-text="label"></span>
-                                <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-                                    <div class="h-full bg-brand rounded-full"
-                                         :style="`width:${stats.total ? Math.max(4,100*stats.funnel[key]/stats.total) : 0}%`"
-                                         x-show="stats.funnel[key]>0"></div>
-                                </div>
-                                <span class="text-xs font-medium text-gray-700 w-6 text-right"
-                                      x-text="stats.funnel[key]"></span>
-                            </div>
-                        </template>
-                    </div>
-                    <div class="bg-white border border-gray-200 rounded-xl p-4">
-                        <div class="text-sm font-medium mb-3">Score distribution</div>
-                        <template
-                                x-for="[label,color] in [['80+','#1D9E75'],['70-79','#B4791A'],['60-69','#C0C0C0'],['<60','#E5A0A0']]"
-                                :key="label">
-                            <div class="flex items-center gap-3 mb-2">
-                                <span class="text-xs text-gray-500 w-12" x-text="label"></span>
-                                <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-                                    <div class="h-full rounded-full"
-                                         :style="`width:${stats.total ? Math.max(4,100*stats.distribution[label]/stats.total) : 0}%; background:${color}`"
-                                         x-show="stats.distribution[label]>0"></div>
-                                </div>
-                                <span class="text-xs font-medium text-gray-700 w-6 text-right"
-                                      x-text="stats.distribution[label]"></span>
-                            </div>
-                        </template>
-                    </div>
-                    <div class="bg-white border border-gray-200 rounded-xl p-4">
-                        <div class="text-sm font-medium mb-3">By source</div>
-                        <template x-for="s in stats.sources" :key="s.source">
-                            <div class="flex items-center justify-between text-sm py-1 border-b border-gray-50 last:border-0">
-                                <span class="text-gray-700" x-text="s.source"></span>
-                                <span class="text-gray-500 text-xs"><span x-text="s.c"></span> jobs · avg <span
-                                        class="font-medium text-gray-700" x-text="s.avg"></span></span>
-                            </div>
-                        </template>
-                    </div>
-                    <div class="bg-white border border-gray-200 rounded-xl p-4" x-show="stats.deadlines.length">
-                        <div class="text-sm font-medium mb-3">Upcoming deadlines</div>
-                        <template x-for="d in stats.deadlines" :key="d.title">
-                            <div class="flex items-center justify-between text-sm py-1">
-                                <span class="text-gray-700 truncate mr-3" x-text="d.title + ' — ' + d.company"></span>
-                                <span class="text-amber-700 text-xs whitespace-nowrap" x-text="d.deadline"></span>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-            </template>
-            <div x-show="!stats" class="text-center text-gray-400 py-16 text-sm">Loading stats…</div>
-        </div>
-
-        <!-- Admin -->
-        <div x-show="tab==='admin'">
-            <h2 class="text-lg font-semibold mb-4">Admin</h2>
-            <div class="text-sm text-gray-500 mb-3">Source health — last run per source</div>
-            <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <template x-for="s in health" :key="s.name">
-                    <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0">
-                        <span class="w-2 h-2 rounded-full shrink-0"
-                              :class="s.status==='ok' ? 'bg-green-500' : 'bg-red-500'"></span>
-                        <div class="flex-1 min-w-0">
-                            <div class="text-sm font-medium" x-text="s.name"></div>
-                            <div class="text-xs text-gray-400"><span x-text="s.ats"></span><span x-show="s.error"
-                                                                                                 class="text-red-500"
-                                                                                                 x-text="' · ' + (s.error||'')"></span>
-                            </div>
-                        </div>
-                        <div class="text-right text-xs text-gray-500 shrink-0">
-                            <div><span class="font-medium text-gray-700" x-text="s.fetched"></span> fetched</div>
-                            <div><span class="font-medium text-gray-700" x-text="s.kept"></span> kept</div>
-                        </div>
-                    </div>
+                <template x-if="tab==='dismissed'">
+                  <button @click="setStatus(job,'surfaced')" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50"><i class="ti ti-arrow-back-up"></i> Restore</button>
                 </template>
-                <div x-show="health.length===0" class="px-4 py-8 text-center text-gray-400 text-sm">No run data yet. Hit
-                    "Run now".
-                </div>
+                <select @change="setStatus(job, $event.target.value)" class="w-full sm:w-auto sm:ml-auto text-[13px] h-8 px-2 rounded-md border border-gray-200 text-gray-600 bg-white">
+                  <template x-for="s in statuses" :key="s"><option :value="s" :selected="job.status===s" x-text="cap(s)"></option></template>
+                </select>
+              </div>
             </div>
-        </div>
+          </div>
+        </template>
+      </div>
+    </div>
 
-        <!-- Settings -->
-        <div x-show="tab==='settings'">
-            <h2 class="text-lg font-semibold mb-4">Settings</h2>
-            <div class="bg-white border border-gray-200 rounded-xl p-4 max-w-md">
-                <div class="flex items-center justify-between mb-1">
-                    <span class="text-sm font-medium">Score threshold</span>
-                    <input type="number" min="0" max="100" x-model.number="threshold"
-                           @change="clampThreshold(); saveThreshold()"
-                           class="w-16 text-sm font-semibold text-brand text-right border border-gray-200 rounded-md px-2 py-1 outline-none">
+    <!-- ─── Stats ─── -->
+    <div x-show="tab==='stats'">
+      <h2 class="text-lg font-semibold mb-4 hidden md:block">Statistics</h2>
+      <template x-if="stats">
+        <div class="flex flex-col gap-4 sm:gap-5">
+          <div class="grid grid-cols-3 gap-2 sm:gap-3">
+            <div class="card p-3 sm:p-4 text-center"><div class="text-xl sm:text-2xl font-semibold" x-text="stats.total"></div><div class="text-[11px] sm:text-xs text-gray-400 mt-1">Total</div></div>
+            <div class="card p-3 sm:p-4 text-center"><div class="text-xl sm:text-2xl font-semibold" x-text="stats.feed_size"></div><div class="text-[11px] sm:text-xs text-gray-400 mt-1">In feed</div></div>
+            <div class="card p-3 sm:p-4 text-center"><div class="text-xl sm:text-2xl font-semibold" x-text="stats.avg_score"></div><div class="text-[11px] sm:text-xs text-gray-400 mt-1">Avg score</div></div>
+          </div>
+          <div class="card p-4">
+            <div class="text-sm font-medium mb-3">Application funnel</div>
+            <template x-for="[label,key] in [['Surfaced','surfaced'],['Saved','saved'],['Applied','applied'],['Interview','interview'],['Offer','offer'],['Rejected','rejected'],['Dismissed','dismissed']]" :key="key">
+              <div class="flex items-center gap-2 sm:gap-3 mb-2">
+                <span class="text-xs text-gray-500 w-16 sm:w-20 shrink-0" x-text="label"></span>
+                <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                  <div class="h-full bg-brand rounded-full" :style="`width:${stats.total ? Math.max(4,100*stats.funnel[key]/stats.total) : 0}%`" x-show="stats.funnel[key]>0"></div>
                 </div>
-                <div class="text-xs text-gray-400 mb-3">Feed shows only jobs scoring at or above this.</div>
-                <input type="range" min="0" max="100" step="1" x-model.number="threshold" @change="saveThreshold()"
-                       class="w-full accent-[#B4791A]">
-                <div class="flex justify-between text-[11px] text-gray-400 mt-1">
-                    <span>0</span><span>50</span><span>100</span></div>
-            </div>
-            <div class="mt-6">
-                <h3 class="text-sm font-semibold text-gray-700 mb-3">Maintenance</h3>
-                <div class="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
-
-                    <div class="flex items-center justify-between gap-4 p-4">
-                        <div>
-                            <div class="text-sm font-medium">Re-score all jobs</div>
-                            <div class="text-xs text-gray-400 mt-0.5">Re-run AI scoring with current profile +
-                                threshold. Slow.
-                            </div>
-                        </div>
-                        <button @click="maint('rescore',{url:'/api/maint/rescore',label:'Re-scored',heavy:true,busyLabel:'Re-scoring all jobs…',confirm:'Re-score all jobs? This runs the AI on every job and may take a while.'})"
-                                class="shrink-0 text-[13px] h-8 px-4 rounded-md bg-brand text-white">Re-score
-                        </button>
-                    </div>
-
-                    <div class="flex items-center justify-between gap-4 p-4">
-                        <div>
-                            <div class="text-sm font-medium">Cleanup below threshold</div>
-                            <div class="text-xs text-gray-400 mt-0.5">Archive (dismiss) feed jobs scoring under the
-                                threshold.
-                            </div>
-                        </div>
-                        <button @click="maint('cleanup',{url:'/api/maint/cleanup',label:'Archived'})"
-                                class="shrink-0 text-[13px] h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50">
-                            Cleanup
-                        </button>
-                    </div>
-
-                    <div class="flex items-center justify-between gap-4 p-4">
-                        <div>
-                            <div class="text-sm font-medium">Clear old jobs</div>
-                            <div class="text-xs text-gray-400 mt-0.5">Permanently delete jobs older than N days.</div>
-                        </div>
-                        <div class="flex items-center gap-2 shrink-0">
-                            <input type="number" min="1" x-model.number="clearDays"
-                                   class="w-14 text-sm text-right border border-gray-200 rounded-md px-2 py-1 outline-none">
-                            <span class="text-xs text-gray-400">days</span>
-                            <button @click="maint('clear',{url:'/api/maint/clear-old',body:{days:clearDays},label:'Deleted',confirm:'Permanently delete jobs older than '+clearDays+' days?'})"
-                                    class="text-[13px] h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50">
-                                Clear
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center justify-between gap-4 p-4">
-                        <div>
-                            <div class="text-sm font-medium">Export jobs as CSV</div>
-                            <div class="text-xs text-gray-400 mt-0.5">Download all jobs for backup or Excel.</div>
-                        </div>
-                        <button @click="exportCsv()"
-                                class="shrink-0 text-[13px] h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50">
-                            Download
-                        </button>
-                    </div>
-
-                    <div class="flex items-center justify-between gap-4 p-4">
-                        <div>
-                            <div class="text-sm font-medium">Reload config</div>
-                            <div class="text-xs text-gray-400 mt-0.5">Re-read profile.yaml + companies.yaml.</div>
-                        </div>
-                        <button @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})"
-                                class="shrink-0 text-[13px] h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50">
-                            Reload
-                        </button>
-                    </div>
-
-                    <div class="flex items-center justify-between gap-4 p-4">
-                        <div>
-                            <div class="text-sm font-medium">Clean cache</div>
-                            <div class="text-xs text-gray-400 mt-0.5">Delete Python cache. Jobs preserved.</div>
-                        </div>
-                        <button @click="maint('cache',{url:'/api/maint/clean-cache',label:'Cleaned'})"
-                                class="shrink-0 text-[13px] h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50">
-                            Clean
-                        </button>
-                    </div>
-
-                    <div class="flex items-center justify-between gap-4 p-4">
-                        <div>
-                            <div class="text-sm font-medium text-red-600">Reset all jobs</div>
-                            <div class="text-xs text-gray-400 mt-0.5">Wipe all jobs from DB. Cannot be undone. Config
-                                preserved.
-                            </div>
-                        </div>
-                        <button @click="maint('reset',{url:'/api/maint/reset',label:'Reset',confirm:'⚠ This deletes ALL jobs permanently. Continue?'})"
-                                class="shrink-0 text-[13px] h-8 px-4 rounded-md bg-red-500 text-white">Reset jobs
-                        </button>
-                    </div>
-
-                </div>
-                <div x-show="maintMsg" class="text-xs text-gray-500 mt-2" x-text="maintMsg"></div>
-            </div>
-        </div>
-
-    </main>
-
-    <!-- Detail modal -->
-    <div x-show="detail" x-cloak @click="detail=null"
-         class="fixed inset-0 bg-black/40 flex items-start justify-center p-4 overflow-y-auto z-50">
-        <div @click.stop class="bg-white rounded-xl max-w-2xl w-full my-8 shadow-xl">
-            <template x-if="detail">
-                <div>
-                    <div class="flex items-start justify-between gap-3 p-5 border-b border-gray-100">
-                        <div class="flex gap-3">
-                            <div class="shrink-0 w-12 h-12 rounded-full flex flex-col items-center justify-center"
-                                 :style="`background:${tier(detail.score).bg}`">
-                                <span class="text-lg font-semibold leading-none"
-                                      :style="`color:${tier(detail.score).fg}`"
-                                      x-text="Math.round(detail.score)"></span>
-                            </div>
-                            <div>
-                                <div class="font-semibold text-lg leading-tight" x-text="detail.title"></div>
-                                <div class="text-sm text-gray-500 mt-0.5"><span x-text="detail.company"></span> · <span
-                                        x-text="detail.location"></span><span
-                                        x-show="detail.job_type && detail.job_type!=='Unknown'"> · <span
-                                        x-text="detail.job_type"></span></span></div>
-                                <div class="text-xs text-amber-700 mt-1" x-show="detail.deadline"><i
-                                        class="ti ti-calendar"></i> Closes <span x-text="detail.deadline"></span></div>
-                            </div>
-                        </div>
-                        <button @click="detail=null" class="text-gray-400 hover:text-gray-700"><i
-                                class="ti ti-x text-xl"></i></button>
-                    </div>
-                    <div class="p-5 max-h-[60vh] overflow-y-auto">
-                        <div class="text-[13px] rounded-md px-3 py-2 mb-4 leading-relaxed flex gap-1.5"
-                             style="background:#F7EDD8; color:#7A4E0C;" x-show="detail.rationale"><i
-                                class="ti ti-bulb mt-0.5"></i><span x-text="detail.rationale"></span></div>
-                        <div class="grid grid-cols-3 gap-2 mb-4 text-center">
-                            <div class="bg-gray-50 rounded-md py-2">
-                                <div class="text-sm font-semibold text-gray-700"
-                                     x-text="Math.round(detail.skills_score)"></div>
-                                <div class="text-xs text-gray-400">Skills</div>
-                            </div>
-                            <div class="bg-gray-50 rounded-md py-2">
-                                <div class="text-sm font-semibold text-gray-700"
-                                     x-text="Math.round(detail.seniority_score)"></div>
-                                <div class="text-xs text-gray-400">Seniority</div>
-                            </div>
-                            <div class="bg-gray-50 rounded-md py-2">
-                                <div class="text-sm font-semibold text-gray-700"
-                                     x-text="Math.round(detail.domain_score)"></div>
-                                <div class="text-xs text-gray-400">Domain</div>
-                            </div>
-                        </div>
-                        <div class="jd text-sm text-gray-700 leading-relaxed"
-                             x-html="formatJD(detail.description)"></div>
-                    </div>
-                    <div class="flex items-center gap-2 p-5 border-t border-gray-100">
-                        <a :href="detail.apply_url" target="_blank"
-                           class="text-sm h-9 px-5 rounded-md bg-brand text-white flex items-center gap-1"><i
-                                class="ti ti-external-link"></i> Apply</a>
-                        <button @click="setStatus(detail,'saved'); detail=null"
-                                class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Save
-                        </button>
-                        <a :href="detail.source_url" target="_blank"
-                           class="text-sm h-9 px-4 rounded-md text-gray-500 hover:bg-gray-50 flex items-center ml-auto">View
-                            posting <i class="ti ti-external-link ml-1"></i></a>
-                    </div>
-                </div>
+                <span class="text-xs font-medium text-gray-700 w-6 text-right" x-text="stats.funnel[key]"></span>
+              </div>
             </template>
+          </div>
+          <div class="card p-4">
+            <div class="text-sm font-medium mb-3">Score distribution</div>
+            <template x-for="[label,color] in [['80+','#1D9E75'],['70-79','#B4791A'],['60-69','#C0C0C0'],['<60','#E5A0A0']]" :key="label">
+              <div class="flex items-center gap-2 sm:gap-3 mb-2">
+                <span class="text-xs text-gray-500 w-12 shrink-0" x-text="label"></span>
+                <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                  <div class="h-full rounded-full" :style="`width:${stats.total ? Math.max(4,100*stats.distribution[label]/stats.total) : 0}%; background:${color}`" x-show="stats.distribution[label]>0"></div>
+                </div>
+                <span class="text-xs font-medium text-gray-700 w-6 text-right" x-text="stats.distribution[label]"></span>
+              </div>
+            </template>
+          </div>
+          <div class="card p-4">
+            <div class="text-sm font-medium mb-3">By source</div>
+            <template x-for="s in stats.sources" :key="s.source">
+              <div class="flex items-center justify-between gap-3 text-sm py-1 border-b border-gray-50 last:border-0">
+                <span class="text-gray-700 truncate" x-text="s.source"></span>
+                <span class="text-gray-500 text-xs whitespace-nowrap"><span x-text="s.c"></span> jobs · avg <span class="font-medium text-gray-700" x-text="s.avg"></span></span>
+              </div>
+            </template>
+          </div>
+          <div class="card p-4" x-show="stats.deadlines.length">
+            <div class="text-sm font-medium mb-3">Upcoming deadlines</div>
+            <template x-for="d in stats.deadlines" :key="d.title">
+              <div class="flex items-center justify-between gap-3 text-sm py-1">
+                <span class="text-gray-700 truncate" x-text="d.title + ' — ' + d.company"></span>
+                <span class="text-amber-700 text-xs whitespace-nowrap" x-text="d.deadline"></span>
+              </div>
+            </template>
+          </div>
         </div>
+      </template>
+      <div x-show="!stats" class="text-center text-gray-400 py-16 text-sm">Loading stats…</div>
     </div>
 
-    <!-- Center blocking modal -->
-    <div x-show="blocking" x-cloak class="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center">
-        <div class="bg-white rounded-2xl px-8 py-7 flex flex-col items-center gap-4 shadow-xl max-w-xs text-center">
-            <i class="ti ti-loader-2 animate-spin text-brand text-4xl"></i>
-            <div class="text-sm font-medium text-gray-700" x-text="blocking ? blocking.label : ''"></div>
-            <div class="text-xs text-gray-400">Please wait — don't close this tab.</div>
+    <!-- ─── Sources ─── -->
+    <div x-show="tab==='sourcesTab'">
+      <h2 class="text-lg font-semibold mb-1 hidden md:block">Sources</h2>
+      <div class="text-xs text-gray-400 mb-4">Toggle boards on and off. Saved to companies.yaml; takes effect on the next run.</div>
+      <div class="card p-4 mb-5">
+        <div class="text-sm font-medium mb-3">Add a source</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+          <div><label class="lbl">Company name</label><input x-model="newSource.name" class="fld"></div>
+          <div><label class="lbl">ATS</label>
+            <select x-model="newSource.ats" class="fld">
+              <template x-for="a in atsTypes" :key="a"><option :value="a" x-text="a"></option></template>
+            </select>
+          </div>
+          <div><label class="lbl">Board token / identifier</label><input x-model="newSource.identifier" class="fld"></div>
+          <div><label class="lbl">Query (optional)</label><input x-model="newSource.query" class="fld"></div>
         </div>
-    </div>
-
-    <!-- Custom confirm modal -->
-    <div x-show="confirmBox" x-cloak class="fixed inset-0 z-[75] bg-black/40 flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl max-w-sm w-full p-5 shadow-xl">
-            <div class="text-sm text-gray-700 mb-4" x-text="confirmBox ? confirmBox.msg : ''"></div>
-            <div class="flex justify-end gap-2">
-                <button @click="confirmNo()"
-                        class="text-sm h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Cancel
-                </button>
-                <button @click="confirmYes()" class="text-sm h-8 px-4 rounded-md bg-brand text-white">Continue</button>
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+          <button @click="addSource()" class="text-[13px] h-9 px-4 rounded-md bg-brand text-white">Add source</button>
+          <span class="text-xs text-gray-400">Workday and Phenom need tenant/host/site or base — edit companies.yaml for those.</span>
+        </div>
+      </div>
+      <div class="card divide-y divide-gray-100">
+        <template x-for="s in sourceCfg" :key="s.index">
+          <div class="flex items-center gap-3 px-3 sm:px-4 py-3">
+            <button @click="toggleSource(s)" class="sw" :class="s.active ? 'on' : 'off'"><span></span></button>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium truncate" :class="!s.active && 'text-gray-400'" x-text="s.name"></div>
+              <div class="text-xs text-gray-400 truncate">
+                <span x-text="s.ats"></span>
+                <span x-show="s.identifier"> · <span x-text="s.identifier"></span></span>
+                <span x-show="s.query"> · q=<span x-text="s.query"></span></span>
+              </div>
             </div>
+            <button @click="deleteSource(s)" class="shrink-0 text-gray-300 hover:text-red-500"><i class="ti ti-trash"></i></button>
+          </div>
+        </template>
+        <div x-show="sourceCfg.length===0" class="px-4 py-8 text-center text-gray-400 text-sm">No sources configured.</div>
+      </div>
+    </div>
+
+    <!-- ─── Profile (form) ─── -->
+    <div x-show="tab==='profile'">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
+        <div class="flex-1">
+          <h2 class="text-lg font-semibold hidden md:block">Profile</h2>
+          <div class="text-xs text-gray-400">The scorer reads this on every run. Comma-separate lists; one highlight per line.</div>
         </div>
+        <button @click="toggleRaw()" class="text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">
+          <span x-text="rawMode ? 'Form editor' : 'Raw YAML'"></span>
+        </button>
+      </div>
+      <div x-show="rawMode">
+        <textarea x-model="profileRaw" @input="profileDirty = true" spellcheck="false" class="ta font-mono text-[12px] h-[55vh]"></textarea>
+      </div>
+      <template x-if="!rawMode && profile">
+        <div class="flex flex-col gap-4">
+          <div class="card p-4">
+            <div class="text-sm font-medium mb-3">Identity</div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label class="lbl">Name</label><input x-model="profile.identity.name" @input="profileDirty=true" class="fld"></div>
+              <div><label class="lbl">Seniority</label>
+                <select x-model="profile.identity.seniority" @change="profileDirty=true" class="fld">
+                  <template x-for="s in seniorityOpts" :key="s"><option :value="s" x-text="s"></option></template>
+                </select>
+              </div>
+              <div class="sm:col-span-2"><label class="lbl">Target titles (comma separated)</label>
+                <input :value="csv(profile.identity.titles)" @change="setList(profile.identity,'titles',$event.target.value)" class="fld"></div>
+              <div class="sm:col-span-2"><label class="lbl">Summary</label>
+                <textarea x-model="profile.summary" @input="profileDirty=true" rows="3" class="ta"></textarea></div>
+            </div>
+          </div>
+          <div class="card p-4">
+            <div class="text-sm font-medium mb-3">Constraints</div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div class="sm:col-span-2"><label class="lbl">Locations</label>
+                <input :value="csv(profile.constraints.locations)" @change="setList(profile.constraints,'locations',$event.target.value)" class="fld"></div>
+              <div><label class="lbl">Salary floor</label>
+                <input type="number" x-model.number="profile.constraints.salary_floor" @input="profileDirty=true" class="fld"></div>
+              <div><label class="lbl">Currency</label>
+                <input x-model="profile.constraints.currency" @input="profileDirty=true" class="fld"></div>
+              <div class="flex items-center gap-3 sm:col-span-2">
+                <button @click="profile.constraints.needs_sponsorship = !profile.constraints.needs_sponsorship; profileDirty=true"
+                  class="sw" :class="profile.constraints.needs_sponsorship ? 'on' : 'off'"><span></span></button>
+                <span class="text-sm text-gray-600">Needs sponsorship</span>
+              </div>
+            </div>
+          </div>
+          <div class="card p-4">
+            <div class="text-sm font-medium mb-3">Search filters</div>
+            <div class="grid grid-cols-1 gap-3">
+              <div><label class="lbl">Role levels to include</label>
+                <input :value="csv(profile.search.role_levels)" @change="setList(profile.search,'role_levels',$event.target.value)" class="fld"></div>
+              <div><label class="lbl">Levels to exclude</label>
+                <input :value="csv(profile.search.exclude_levels)" @change="setList(profile.search,'exclude_levels',$event.target.value)" class="fld"></div>
+              <div><label class="lbl">Domains (matched against job title)</label>
+                <input :value="csv(profile.search.domains)" @change="setList(profile.search,'domains',$event.target.value)" class="fld"></div>
+              <div><label class="lbl">Exclude keywords</label>
+                <input :value="csv(profile.search.exclude_keywords)" @change="setList(profile.search,'exclude_keywords',$event.target.value)" class="fld"></div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><label class="lbl">Job types</label>
+                  <input :value="csv(profile.search.job_types)" @change="setList(profile.search,'job_types',$event.target.value)" class="fld"></div>
+                <div><label class="lbl">Posted within (days)</label>
+                  <input type="number" x-model.number="profile.search.posted_within_days" @input="profileDirty=true" class="fld"></div>
+              </div>
+            </div>
+          </div>
+          <div class="card p-4">
+            <div class="text-sm font-medium mb-3">Skills</div>
+            <div class="grid grid-cols-1 gap-3">
+              <div><label class="lbl">Expert</label>
+                <input :value="csv(profile.skills.expert)" @change="setList(profile.skills,'expert',$event.target.value)" class="fld"></div>
+              <div><label class="lbl">Proficient</label>
+                <input :value="csv(profile.skills.proficient)" @change="setList(profile.skills,'proficient',$event.target.value)" class="fld"></div>
+              <div><label class="lbl">Familiar</label>
+                <input :value="csv(profile.skills.familiar)" @change="setList(profile.skills,'familiar',$event.target.value)" class="fld"></div>
+            </div>
+          </div>
+          <div class="card p-4">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-sm font-medium">Experience</span>
+              <button @click="addExp()" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50"><i class="ti ti-plus"></i> Add</button>
+            </div>
+            <template x-for="(e, i) in profile.experience" :key="'e'+i">
+              <div class="border border-gray-100 rounded-lg p-3 mb-3 last:mb-0">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div><label class="lbl">Role</label><input x-model="e.role" @input="profileDirty=true" class="fld"></div>
+                  <div><label class="lbl">Company</label><input x-model="e.company" @input="profileDirty=true" class="fld"></div>
+                  <div><label class="lbl">Start</label><input x-model="e.start" @input="profileDirty=true" class="fld"></div>
+                  <div><label class="lbl">End</label><input x-model="e.end" @input="profileDirty=true" class="fld"></div>
+                </div>
+                <label class="lbl">Highlights (one per line)</label>
+                <textarea rows="3" :value="lines(e.highlights)" @change="setLines(e,'highlights',$event.target.value)" class="ta"></textarea>
+                <button @click="removeAt(profile.experience, i, 'role')" class="mt-2 text-xs text-gray-400 hover:text-red-500"><i class="ti ti-trash"></i> Remove</button>
+              </div>
+            </template>
+            <div x-show="profile.experience.length===0" class="text-xs text-gray-400 py-2">None yet.</div>
+          </div>
+          <div class="card p-4">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-sm font-medium">Projects</span>
+              <button @click="addProj()" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50"><i class="ti ti-plus"></i> Add</button>
+            </div>
+            <template x-for="(p, i) in profile.projects" :key="'p'+i">
+              <div class="border border-gray-100 rounded-lg p-3 mb-3 last:mb-0">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div><label class="lbl">Name</label><input x-model="p.name" @input="profileDirty=true" class="fld"></div>
+                  <div><label class="lbl">Tech (comma separated)</label>
+                    <input :value="csv(p.tech)" @change="setList(p,'tech',$event.target.value)" class="fld"></div>
+                </div>
+                <label class="lbl">Description</label>
+                <textarea rows="2" x-model="p.description" @input="profileDirty=true" class="ta mb-3"></textarea>
+                <label class="lbl">Highlights (one per line)</label>
+                <textarea rows="2" :value="lines(p.highlights)" @change="setLines(p,'highlights',$event.target.value)" class="ta"></textarea>
+                <button @click="removeAt(profile.projects, i, 'project')" class="mt-2 text-xs text-gray-400 hover:text-red-500"><i class="ti ti-trash"></i> Remove</button>
+              </div>
+            </template>
+            <div x-show="profile.projects.length===0" class="text-xs text-gray-400 py-2">None yet.</div>
+          </div>
+          <div class="card p-4">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-sm font-medium">Education</span>
+              <button @click="addEdu()" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50"><i class="ti ti-plus"></i> Add</button>
+            </div>
+            <template x-for="(e, i) in profile.education" :key="'d'+i">
+              <div class="border border-gray-100 rounded-lg p-3 mb-3 last:mb-0">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div><label class="lbl">Degree</label><input x-model="e.degree" @input="profileDirty=true" class="fld"></div>
+                  <div><label class="lbl">Field</label><input x-model="e.field" @input="profileDirty=true" class="fld"></div>
+                  <div><label class="lbl">Institution</label><input x-model="e.institution" @input="profileDirty=true" class="fld"></div>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div><label class="lbl">End</label><input x-model="e.end" @input="profileDirty=true" class="fld"></div>
+                    <div><label class="lbl">GPA</label><input x-model="e.gpa" @input="profileDirty=true" class="fld"></div>
+                  </div>
+                </div>
+                <button @click="removeAt(profile.education, i, 'entry')" class="mt-2 text-xs text-gray-400 hover:text-red-500"><i class="ti ti-trash"></i> Remove</button>
+              </div>
+            </template>
+            <div x-show="profile.education.length===0" class="text-xs text-gray-400 py-2">None yet.</div>
+          </div>
+        </div>
+      </template>
+      <div class="sticky bottom-0 -mx-4 md:mx-0 mt-4 px-4 py-3 bg-white/95 backdrop-blur border-t border-gray-200 md:static md:bg-transparent md:border-0 md:px-0 md:py-0 flex items-center gap-3">
+        <button @click="saveProfile()" :disabled="!profileDirty" class="text-[13px] h-9 px-5 rounded-md bg-brand text-white disabled:opacity-40">Save profile</button>
+        <button @click="rawMode ? loadRaw() : loadProfile()" class="text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Revert</button>
+        <span class="text-xs text-gray-400 hidden sm:inline">A .bak copy is written on every save.</span>
+      </div>
     </div>
 
+    <!-- ─── Admin ─── -->
+    <div x-show="tab==='admin'">
+      <h2 class="text-lg font-semibold mb-4 hidden md:block">Admin</h2>
+      <div class="text-sm text-gray-500 mb-3">Source health — last run per source</div>
+      <div class="card overflow-hidden">
+        <template x-for="s in health" :key="s.name">
+          <div class="flex items-center gap-3 px-3 sm:px-4 py-3 border-b border-gray-100 last:border-0">
+            <span class="w-2 h-2 rounded-full shrink-0" :class="s.status==='ok' ? 'bg-green-500' : 'bg-red-500'"></span>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium truncate" x-text="s.name"></div>
+              <div class="text-xs text-gray-400 truncate"><span x-text="s.ats"></span><span x-show="s.error" class="text-red-500" x-text="' · ' + (s.error||'')"></span></div>
+            </div>
+            <div class="text-right text-xs text-gray-500 shrink-0">
+              <div><span class="font-medium text-gray-700" x-text="s.fetched"></span> fetched</div>
+              <div><span class="font-medium text-gray-700" x-text="s.kept"></span> kept</div>
+            </div>
+          </div>
+        </template>
+        <div x-show="health.length===0" class="px-4 py-8 text-center text-gray-400 text-sm">No run data yet. Hit "Run now".</div>
+      </div>
 
-    <!-- Processing toast -->
-    <div x-show="busy" x-cloak
-         class="fixed bottom-5 right-5 z-[60] flex items-center gap-3 bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-3">
-        <i class="ti ti-loader-2 animate-spin text-brand text-lg"></i>
-        <span class="text-sm text-gray-700" x-text="busy ? busy.label : ''"></span>
+      <div class="text-sm text-gray-500 mt-6 mb-3">Run history</div>
+      <div class="card overflow-hidden">
+        <template x-for="r in runs" :key="r.id">
+          <div class="flex items-center gap-3 px-3 sm:px-4 py-3 border-b border-gray-100 last:border-0">
+            <i class="ti ti-history text-gray-300 shrink-0"></i>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium" x-text="r.started_at"></div>
+              <div class="text-xs text-gray-400">
+                <span x-text="r.fetched"></span> fetched ·
+                <span x-text="r.seen"></span> seen ·
+                <span x-text="r.dropped"></span> dropped
+                <span class="text-red-500" x-show="r.errors>0"> · <span x-text="r.errors"></span> err</span>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <div class="text-sm font-semibold text-green-600" x-text="r.kept + ' kept'"></div>
+            </div>
+          </div>
+        </template>
+        <div x-show="runs.length===0" class="px-4 py-8 text-center text-gray-400 text-sm">No runs recorded yet.</div>
+      </div>
     </div>
 
-    <!-- Success/error snackbar -->
-    <div x-show="snack" x-cloak
-         x-transition:enter="transition ease-out duration-200"
-         x-transition:enter-start="opacity-0 translate-y-2"
-         x-transition:enter-end="opacity-100 translate-y-0"
-         class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 rounded-lg shadow-lg px-4 py-2.5 text-sm text-white"
-         :class="snack && snack.type==='error' ? 'bg-red-500' : 'bg-gray-800'">
-        <i class="ti" :class="snack && snack.type==='error' ? 'ti-alert-circle' : 'ti-circle-check'"></i>
-        <span x-text="snack ? snack.msg : ''"></span>
+    <!-- ─── Settings ─── -->
+    <div x-show="tab==='settings'">
+      <h2 class="text-lg font-semibold mb-4 hidden md:block">Settings</h2>
+
+      <div class="card p-4 max-w-2xl mb-5">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-medium">Auto-fetch</span>
+          <button @click="sched.enabled = !sched.enabled; saveSchedule()" class="sw" :class="sched.enabled ? 'on' : 'off'"><span></span></button>
+        </div>
+        <div class="text-xs text-gray-400 mb-3">Runs the pipeline automatically while JobPilot is open.</div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-gray-600">Every</span>
+          <input type="number" min="0.5" max="168" step="0.5" x-model.number="sched.interval_hours" @change="saveSchedule()" class="w-20 fld text-right">
+          <span class="text-sm text-gray-600">hours</span>
+        </div>
+        <div class="text-xs text-gray-400 mt-3" x-show="sched.enabled && nextRun">Next run: <span x-text="nextRun"></span></div>
+        <div class="text-xs text-gray-400 mt-2">If the app was closed past a due run, it fires shortly after you reopen it.</div>
+      </div>
+
+      <div class="card p-4 max-w-2xl mb-5">
+        <div class="text-sm font-medium mb-1">Scoring model</div>
+        <div class="text-xs text-gray-400 mb-3">14b is more accurate; 7b is faster and uses less memory. Falls back to 7b automatically if a job runs out of memory.</div>
+        <div class="flex items-center gap-3">
+          <select x-model="selectedModel" @change="saveModel()" class="fld max-w-xs">
+            <option value="qwen2.5:14b">qwen2.5:14b — best quality</option>
+            <option value="qwen2.5:7b">qwen2.5:7b — faster</option>
+          </select>
+          <span class="text-xs px-2 py-1 rounded-md" x-show="modelState.fallback_active" style="background:#F7EDD8; color:#7A4E0C;">
+            currently on 7b (fallback)
+          </span>
+        </div>
+      </div>
+
+      <div class="card p-4 max-w-2xl mb-5">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-medium">Telegram notifications</span>
+          <button @click="notify.enabled = !notify.enabled; saveNotify()" class="sw"
+            :class="notify.enabled ? 'on' : 'off'" :disabled="!notify.configured"><span></span></button>
+        </div>
+        <div class="text-xs text-gray-400 mb-3" x-show="notify.configured">Sends a run summary to Telegram after each run.</div>
+        <div class="text-xs text-red-500 mb-3" x-show="!notify.configured">Not configured — add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to .env.</div>
+        <button @click="testNotify()" :disabled="!notify.configured" class="text-[13px] h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40">Send test message</button>
+      </div>
+
+      <div class="card p-4 max-w-2xl">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-medium">Score threshold</span>
+          <input type="number" min="0" max="100" x-model.number="threshold" @change="clampThreshold(); saveThreshold()" class="w-16 text-sm font-semibold text-brand text-right border border-gray-200 rounded-md px-2 py-1 outline-none">
+        </div>
+        <div class="text-xs text-gray-400 mb-3">Feed shows only jobs scoring at or above this.</div>
+        <input type="range" min="0" max="100" step="1" x-model.number="threshold" @change="saveThreshold()" class="w-full accent-[#B4791A]">
+        <div class="flex justify-between text-[11px] text-gray-400 mt-1"><span>0</span><span>50</span><span>100</span></div>
+      </div>
+
+      <div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Maintenance</h3>
+        <div class="card divide-y divide-gray-100">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Re-score all jobs</div><div class="text-xs text-gray-400 mt-0.5">Re-run AI scoring with the current profile. Slow.</div></div>
+            <button @click="maint('rescore',{url:'/api/maint/rescore',label:'Re-scored',heavy:true,busyLabel:'Re-scoring all jobs…',confirm:'Re-score all jobs? This runs the AI on every job and may take a while.'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md bg-brand text-white self-start">Re-score</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Cleanup below threshold</div><div class="text-xs text-gray-400 mt-0.5">Archive feed jobs scoring under the threshold.</div></div>
+            <button @click="maint('cleanup',{url:'/api/maint/cleanup',label:'Archived'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Cleanup</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Clear old jobs</div><div class="text-xs text-gray-400 mt-0.5">Permanently delete jobs older than N days.</div></div>
+            <div class="flex items-center gap-2 shrink-0">
+              <input type="number" min="1" x-model.number="clearDays" class="w-16 fld text-right">
+              <span class="text-xs text-gray-400">days</span>
+              <button @click="maint('clear',{url:'/api/maint/clear-old',body:{days:clearDays},label:'Deleted',confirm:'Permanently delete jobs older than '+clearDays+' days?'})" class="text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Clear</button>
+            </div>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Export jobs as CSV</div><div class="text-xs text-gray-400 mt-0.5">Download all jobs for backup or Excel.</div></div>
+            <button @click="exportCsv()" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Download</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Reload config</div><div class="text-xs text-gray-400 mt-0.5">Re-read profile.yaml + companies.yaml.</div></div>
+            <button @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Reload</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Clean cache</div><div class="text-xs text-gray-400 mt-0.5">Delete Python cache. Jobs preserved.</div></div>
+            <button @click="maint('cache',{url:'/api/maint/clean-cache',label:'Cleaned'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Clean</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium text-red-600">Reset all jobs</div><div class="text-xs text-gray-400 mt-0.5">Wipe all jobs from the DB. Cannot be undone.</div></div>
+            <button @click="maint('reset',{url:'/api/maint/reset',label:'Reset',confirm:'This deletes ALL jobs permanently. Continue?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md bg-red-500 text-white self-start">Reset jobs</button>
+          </div>
+        </div>
+      </div>
     </div>
+
+  </main>
+
+  <!-- ══ Detail modal ══ -->
+  <div x-show="detail" x-cloak @click="detail=null" class="fixed inset-0 bg-black/40 flex items-start justify-center p-2 sm:p-4 overflow-y-auto z-50">
+    <div @click.stop class="bg-white rounded-xl max-w-2xl w-full my-4 sm:my-8 shadow-xl">
+      <template x-if="detail">
+        <div>
+          <div class="flex items-start justify-between gap-3 p-4 sm:p-5 border-b border-gray-100">
+            <div class="flex gap-3 min-w-0">
+              <div class="shrink-0 w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center" :style="`background:${tier(detail.score).bg}`">
+                <span class="text-base sm:text-lg font-semibold" :style="`color:${tier(detail.score).fg}`" x-text="Math.round(detail.score)"></span>
+              </div>
+              <div class="min-w-0">
+                <div class="font-semibold text-base sm:text-lg leading-tight" x-text="detail.title"></div>
+                <div class="text-[13px] sm:text-sm text-gray-500 mt-0.5"><span x-text="detail.company"></span> · <span x-text="detail.location"></span><span x-show="detail.job_type && detail.job_type!=='Unknown'"> · <span x-text="detail.job_type"></span></span></div>
+                <div class="text-xs text-amber-700 mt-1" x-show="detail.deadline"><i class="ti ti-calendar"></i> Closes <span x-text="detail.deadline"></span></div>
+              </div>
+            </div>
+            <button @click="detail=null" class="text-gray-400 hover:text-gray-700 shrink-0"><i class="ti ti-x text-xl"></i></button>
+          </div>
+          <div class="p-4 sm:p-5 max-h-[55vh] sm:max-h-[60vh] overflow-y-auto">
+            <div class="text-[13px] rounded-md px-3 py-2 mb-4 leading-relaxed flex gap-1.5" style="background:#F7EDD8; color:#7A4E0C;" x-show="detail.rationale"><i class="ti ti-bulb mt-0.5 shrink-0"></i><span x-text="detail.rationale"></span></div>
+            <div class="grid grid-cols-3 gap-2 mb-4 text-center">
+              <div class="bg-gray-50 rounded-md py-2"><div class="text-sm font-semibold text-gray-700" x-text="Math.round(detail.skills_score)"></div><div class="text-xs text-gray-400">Skills</div></div>
+              <div class="bg-gray-50 rounded-md py-2"><div class="text-sm font-semibold text-gray-700" x-text="Math.round(detail.seniority_score)"></div><div class="text-xs text-gray-400">Seniority</div></div>
+              <div class="bg-gray-50 rounded-md py-2"><div class="text-sm font-semibold text-gray-700" x-text="Math.round(detail.domain_score)"></div><div class="text-xs text-gray-400">Domain</div></div>
+            </div>
+            <div class="jd text-sm text-gray-700 leading-relaxed" x-html="formatJD(detail.description)"></div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 p-4 sm:p-5 border-t border-gray-100">
+            <a :href="detail.apply_url" target="_blank" class="text-sm h-9 px-5 rounded-md bg-brand text-white flex items-center gap-1"><i class="ti ti-external-link"></i> Apply</a>
+            <button @click="setStatus(detail,'saved'); detail=null" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Save</button>
+            <a :href="detail.source_url" target="_blank" class="text-sm h-9 px-4 rounded-md text-gray-500 hover:bg-gray-50 flex items-center sm:ml-auto">View posting <i class="ti ti-external-link ml-1"></i></a>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ══ Blocking modal ══ -->
+  <div x-show="blocking" x-cloak class="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl px-8 py-7 flex flex-col items-center gap-3 shadow-xl max-w-xs text-center">
+      <i class="ti ti-loader-2 animate-spin text-brand text-4xl"></i>
+      <div class="text-sm font-medium text-gray-700" x-text="blocking ? blocking.label : ''"></div>
+      <div class="text-xs" x-show="modelState.fallback_active" style="color:#B4791A;">
+        <i class="ti ti-arrow-down-circle"></i> Fell back to 7b for speed
+      </div>
+      <div class="text-xs text-gray-400" x-show="!modelState.fallback_active">
+        Scoring on <span x-text="modelShort(modelState.active)"></span>
+      </div>
+      <div class="text-xs text-gray-400">Please wait — don't close this tab.</div>
+    </div>
+  </div>
+
+  <!-- ══ Confirm modal ══ -->
+  <div x-show="confirmBox" x-cloak class="fixed inset-0 z-[75] bg-black/40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl max-w-sm w-full p-5 shadow-xl">
+      <div class="text-sm text-gray-700 mb-4" x-text="confirmBox ? confirmBox.msg : ''"></div>
+      <div class="flex justify-end gap-2">
+        <button @click="confirmNo()" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Cancel</button>
+        <button @click="confirmYes()" class="text-sm h-9 px-4 rounded-md bg-brand text-white">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Processing toast ══ -->
+  <div x-show="busy" x-cloak class="fixed bottom-20 md:bottom-5 right-4 md:right-5 z-[60] flex items-center gap-3 bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-3">
+    <i class="ti ti-loader-2 animate-spin text-brand text-lg"></i>
+    <span class="text-sm text-gray-700" x-text="busy ? busy.label : ''"></span>
+  </div>
+
+  <!-- ══ Snackbar ══ -->
+  <div x-show="snack" x-cloak
+    x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0"
+    class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 rounded-lg shadow-lg px-4 py-2.5 text-sm text-white max-w-[92vw]"
+    :class="snack && snack.type==='error' ? 'bg-red-500' : 'bg-gray-800'">
+    <i class="ti shrink-0" :class="snack && snack.type==='error' ? 'ti-alert-circle' : 'ti-circle-check'"></i>
+    <span class="truncate" x-text="snack ? snack.msg : ''"></span>
+  </div>
+
 </div>
 </body>
 </html>

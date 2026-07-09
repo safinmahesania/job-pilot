@@ -1,8 +1,15 @@
-httpx
-pyyaml
-python-dotenv
+# Web backend
+fastapi
+uvicorn[standard]
 pydantic
-supabase
-sentence-transformers   # local embeddings (free); swap for a hosted API if you prefer
-anthropic               # LLM rerank; swap for your provider
-playwright              # only needed once you add custom scrapers
+
+# Config & HTTP
+pyyaml
+httpx
+python-dotenv
+
+# Scraping / parsing
+beautifulsoup4
+
+# Local LLM scoring (requires Ollama running separately)
+ollama

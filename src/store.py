@@ -1,7 +1,7 @@
 """SQLite persistence: seen-log dedup + kept jobs."""
 import sqlite3
 
-DB = "jobpilot.db"
+from src.paths import DB_PATH as DB
 
 
 def connect():

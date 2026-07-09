@@ -1,0 +1,52 @@
+# Copy this file to profile.yaml and edit it with your details.
+# The scorer reads profile.yaml on every run; profile.yaml is gitignored.
+
+identity:
+  name: Your Name
+  seniority: junior                     # intern | junior | entry | mid | senior
+  titles: [Software Engineer, Backend Developer]
+
+summary: |
+  One short paragraph describing who you are and what you're looking for.
+  The scorer uses this as context when rating fit.
+
+constraints:
+  locations: [Remote, Toronto, Montreal, Canada]
+  salary_floor: 60000
+  currency: CAD
+  needs_sponsorship: false
+
+search:
+  role_levels: [intern, junior, entry, associate, new-grad, graduate]
+  exclude_levels: [senior, staff, principal, lead, manager, director, architect]
+  domains: [software, developer, engineer, backend, frontend, data, qa, devops]
+  exclude_keywords: [php, wordpress, freelance, salesforce admin]
+  job_types: []
+  posted_within_days: 45
+
+skills:
+  expert: [Python, JavaScript]
+  proficient: [React, PostgreSQL, Docker]
+  familiar: [AWS, TypeScript]
+
+experience:
+  - role: Software Developer Intern
+    company: Example Corp
+    start: 2024-05
+    end: 2024-08
+    highlights:
+      - Built X that did Y, improving Z by N%.
+
+projects:
+  - name: Example Project
+    tech: [Python, FastAPI]
+    description: One line on what it does.
+    highlights:
+      - Notable outcome or scale.
+
+education:
+  - degree: MSc
+    field: Computer Science
+    institution: Your University
+    end: 2026
+    gpa: ""

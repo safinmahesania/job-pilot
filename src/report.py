@@ -1,7 +1,7 @@
 """Show top kept jobs, ranked by score — the Phase 1 result."""
 import sqlite3
 
-DB = "jobpilot.db"
+from src.paths import DB_PATH as DB
 
 
 def top_jobs(limit: int = 10):

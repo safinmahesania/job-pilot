@@ -6,6 +6,8 @@ function jobpilot() {
     busy: null, snack: null, blocking: null, confirmBox: null,
     cover: null,   // { loading, text, provider, title, company }
     llm: { providers: [], available: 0, total: 0, combined_tokens: 0, combined_limit: 0 },
+    ai: { scoring: true, generation: true },
+    cfgFiles: [],
     clearDays: 30, mobileNav: false,
     modelState: { active: 'qwen2.5:14b', fallback_active: false, preferred: 'qwen2.5:14b' },
     selectedModel: 'qwen2.5:14b',
@@ -46,7 +48,7 @@ function jobpilot() {
       this.mobileNav = false;
       if (tab === 'sourcesTab') await this.loadSources();
       if (tab === 'profile') await this.loadProfile();
-      if (tab === 'settings') await this.loadLLM();
+      if (tab === 'settings') { await this.loadLLM(); await this.loadAI(); }
       await this.load();
     },
 
@@ -305,6 +307,47 @@ function jobpilot() {
     fmtNum(n) {
       if (n === null || n === undefined) return '—';
       return n.toLocaleString('en-US');
+    },
+
+    // ── AI features ──
+    async loadAI() {
+      try {
+        this.ai = await (await fetch('/api/ai-features')).json();
+        const cfg = await (await fetch('/api/config/files')).json();
+        this.cfgFiles = cfg.files;
+      } catch { /* leave defaults */ }
+    },
+
+    async toggleFeature(feature) {
+      const enabled = !this.ai[feature];
+      this.ai[feature] = enabled;                   // optimistic
+      await fetch('/api/ai-features', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ feature, enabled }),
+      });
+      const label = feature === 'scoring' ? 'Scrape-time AI' : 'On-demand AI';
+      this.showSnack(`${label} ${enabled ? 'on' : 'off'}`);
+    },
+
+    // ── Connection tests ──
+    async testAI() {
+      this.busy = { label: 'Testing AI…' };
+      try {
+        const r = await fetch('/api/llm/test', { method: 'POST' });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+        this.showSnack(`AI OK — answered by ${data.provider}`);
+        await this.loadLLM();
+      } catch (e) {
+        this.showSnack('AI test failed: ' + e.message, 'error');
+      } finally { this.busy = null; }
+    },
+
+    async copyPath(path) {
+      try {
+        await navigator.clipboard.writeText(path);
+        this.showSnack('Path copied');
+      } catch { this.showSnack('Copy failed', 'error'); }
     },
 
     async setStatus(job, status) {

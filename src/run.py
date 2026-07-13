@@ -33,6 +33,10 @@ def run():
         set_preferred(saved_model)
     reset_model_state()
 
+    # Scrape-time AI: when off, jobs are still fetched, filtered and stored —
+    # they just aren't scored (they land unscored instead of in the ranked feed).
+    scoring_on = store.get_setting(conn, "scoring_enabled", "1") == "1"
+
     stats = {"fetched": 0, "seen": 0, "dropped": 0, "trashed": 0, "kept": 0, "errors": 0}
     seen_this_run = set()           # guards against duplicates within one pass
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -74,7 +78,16 @@ def run():
                 stats["dropped"] += 1
                 continue
 
-            # Expensive step: score fit with the local LLM.
+            # Expensive step: score fit with the local LLM (skipped if AI is off).
+            if not scoring_on:
+                job.update(score=None, skills_score=None, seniority_score=None,
+                           domain_score=None, rationale=None, flags=None)
+                store.save_job(conn, job)
+                store.mark_seen(conn, h, "kept")
+                stats["kept"] += 1
+                src_stat["kept"] += 1
+                continue
+
             result = score_job(job, profile)
             if result is None:
                 stats["errors"] += 1

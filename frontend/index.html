@@ -500,8 +500,7 @@
             :class="notify.enabled ? 'on' : 'off'" :disabled="!notify.configured"><span></span></button>
         </div>
         <div class="text-xs text-gray-400 mb-3" x-show="notify.configured">Sends a run summary to Telegram after each run.</div>
-        <div class="text-xs text-red-500 mb-3" x-show="!notify.configured">Not configured — add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to .env.</div>
-        <button @click="testNotify()" :disabled="!notify.configured" class="text-[13px] h-8 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40">Send test message</button>
+        <div class="text-xs text-red-500" x-show="!notify.configured">Not configured — add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to .env.</div>
       </div>
 
       <div class="card p-4 max-w-2xl">
@@ -512,6 +511,74 @@
         <div class="text-xs text-gray-400 mb-3">Feed shows only jobs scoring at or above this.</div>
         <input type="range" min="0" max="100" step="1" x-model.number="threshold" @change="saveThreshold()" class="w-full accent-[#B4791A]">
         <div class="flex justify-between text-[11px] text-gray-400 mt-1"><span>0</span><span>50</span><span>100</span></div>
+      </div>
+
+      <!-- ─── AI features ─── -->
+      <div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">AI features</h3>
+        <div class="card divide-y divide-gray-100">
+          <div class="flex items-start justify-between gap-4 p-4">
+            <div>
+              <div class="text-sm font-medium">Scrape-time AI</div>
+              <div class="text-xs text-gray-400 mt-0.5">
+                Used during a run: scores every new job against your profile.
+                When off, jobs are still fetched and filtered — they're just stored unscored.
+              </div>
+            </div>
+            <button @click="toggleFeature('scoring')" class="sw shrink-0 mt-0.5" :class="ai.scoring ? 'on' : 'off'"><span></span></button>
+          </div>
+          <div class="flex items-start justify-between gap-4 p-4">
+            <div>
+              <div class="text-sm font-medium">On-demand AI</div>
+              <div class="text-xs text-gray-400 mt-0.5">
+                User-triggered: cover letter and resume generation.
+                When off, the Cover letter button returns an error instead of generating.
+              </div>
+            </div>
+            <button @click="toggleFeature('generation')" class="sw shrink-0 mt-0.5" :class="ai.generation ? 'on' : 'off'"><span></span></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Connection tests ─── -->
+      <div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Connection tests</h3>
+        <div class="card divide-y divide-gray-100">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div>
+              <div class="text-sm font-medium">Test Telegram</div>
+              <div class="text-xs text-gray-400 mt-0.5">Send a test message to verify the bot and chat ID.</div>
+            </div>
+            <button @click="testNotify()" :disabled="!notify.configured" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Send test</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div>
+              <div class="text-sm font-medium">Test AI</div>
+              <div class="text-xs text-gray-400 mt-0.5">Run a tiny prompt through the provider chain and report which one answered.</div>
+            </div>
+            <button @click="testAI()" :disabled="busy" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Test AI</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Configuration files ─── -->
+      <div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-1">Configuration files</h3>
+        <div class="text-xs text-gray-400 mb-3">Edit these directly in your editor. Companies and profile can also be edited from the tabs above.</div>
+        <div class="card divide-y divide-gray-100">
+          <template x-for="f in cfgFiles" :key="f.path">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+              <div class="min-w-0">
+                <div class="text-sm font-medium" x-text="f.label"></div>
+                <div class="text-xs text-gray-400 mt-0.5" x-text="f.description"></div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <span x-show="!f.exists" class="text-[11px] px-1.5 py-0.5 rounded bg-red-50 text-red-500">missing</span>
+                <code @click="copyPath(f.path)" class="cursor-pointer text-[12px] px-2 py-1 rounded bg-brand/10 text-brand hover:bg-brand/20" :title="'Click to copy'" x-text="f.path"></code>
+              </div>
+            </div>
+          </template>
+        </div>
       </div>
 
       <!-- ─── AI providers ─── -->

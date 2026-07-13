@@ -458,6 +458,64 @@ def test_notify():
     ok = notify.send("JobPilot test — notifications working ✅")
     return {"sent": ok}
 
+# ── AI features (scrape-time scoring / on-demand generation) ────────────────
+
+@app.get("/api/ai-features")
+def get_ai_features():
+    conn = _conn()
+    scoring = _get_setting(conn, "scoring_enabled", "1") == "1"
+    generation = _get_setting(conn, "generation_enabled", "1") == "1"
+    conn.close()
+    return {"scoring": scoring, "generation": generation}
+
+
+class AIFeature(BaseModel):
+    feature: str          # "scoring" | "generation"
+    enabled: bool
+
+
+@app.post("/api/ai-features")
+def set_ai_features(body: AIFeature):
+    keys = {"scoring": "scoring_enabled", "generation": "generation_enabled"}
+    if body.feature not in keys:
+        raise HTTPException(400, "unknown feature")
+    conn = _conn()
+    conn.execute("INSERT INTO settings (key,value) VALUES (?,?) "
+                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                 (keys[body.feature], "1" if body.enabled else "0"))
+    conn.commit()
+    conn.close()
+    return {"feature": body.feature, "enabled": body.enabled}
+
+
+# ── Connection tests ────────────────────────────────────────────────────────
+
+@app.post("/api/llm/test")
+def llm_test():
+    """Send a tiny prompt through the provider chain to verify it works."""
+    from src import llm
+    try:
+        text, provider = llm.generate(
+            "You are a connection test. Reply with exactly: OK",
+            "Reply with exactly: OK",
+        )
+    except Exception as e:
+        raise HTTPException(502, str(e))
+    return {"ok": True, "provider": provider, "reply": text[:80]}
+
+
+# ── Configuration files ─────────────────────────────────────────────────────
+
+@app.get("/api/config/files")
+def config_files():
+    """Paths of the files the user edits, plus whether each one exists."""
+    from src.paths import CONFIG_FILES, ROOT
+    out = []
+    for f in CONFIG_FILES:
+        out.append({**f, "exists": (ROOT / f["path"]).exists()})
+    return {"files": out, "root": str(ROOT)}
+
+
 # ── AI providers (status, enable/disable, reorder) ──────────────────────────
 
 @app.get("/api/llm/providers")
@@ -517,6 +575,11 @@ def maint_nuclear():
 def cover_letter(job_id: int):
     """Generate a grounded cover letter for one job."""
     conn = _conn()
+    if _get_setting(conn, "generation_enabled", "1") != "1":
+        conn.close()
+        raise HTTPException(
+            403, "On-demand AI is off — enable it in Settings > AI features."
+        )
     row = conn.execute(
         "SELECT title, company, description FROM jobs WHERE id=?", (job_id,)
     ).fetchone()

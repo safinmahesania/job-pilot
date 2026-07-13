@@ -55,6 +55,8 @@ INSERT OR IGNORE INTO settings (key, value) VALUES ('score_threshold', '70');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('scheduler_enabled', '0');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('run_interval_hours', '8');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('notify_enabled', '1');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('scoring_enabled', '1');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('generation_enabled', '1');
 
 CREATE TABLE IF NOT EXISTS runs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,

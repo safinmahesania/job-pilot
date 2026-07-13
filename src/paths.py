@@ -35,6 +35,28 @@ PROFILE_FILE = "profile.yaml"
 DB_PATH = str(DATA_DIR / "jobpilot.db")
 SCHEMA_PATH = str(DATA_DIR / "schema.sql")
 
+# ── Files surfaced in the Settings > Configuration files card ────────────────
+# The UI lists these so you know exactly what to edit and where it lives.
+ENV_FILE = ROOT / ".env"
+
+CONFIG_FILES = [
+    {
+        "label": "Profile (career database)",
+        "description": "Your skills, experience, projects, education.",
+        "path": "config/profile.yaml",
+    },
+    {
+        "label": "Companies & sources",
+        "description": "Which boards to fetch, filters, active toggles.",
+        "path": "config/companies.yaml",
+    },
+    {
+        "label": "Environment variables",
+        "description": "API keys (Gemini, Cerebras, Telegram).",
+        "path": ".env",
+    },
+]
+
 # ── Scoring model (Ollama) ──────────────────────────────────────────────────
 # PRIMARY is the default; the pipeline falls back to FALLBACK for any single
 # job that fails on the primary (e.g. out-of-memory), then resets next run.

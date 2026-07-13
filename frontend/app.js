@@ -5,6 +5,7 @@ function jobpilot() {
     sort: 'score', source: 'all', sources: [],
     busy: null, snack: null, blocking: null, confirmBox: null,
     cover: null,   // { loading, text, provider, title, company }
+    llm: { providers: [], available: 0, total: 0, combined_tokens: 0, combined_limit: 0 },
     clearDays: 30, mobileNav: false,
     modelState: { active: 'qwen2.5:14b', fallback_active: false, preferred: 'qwen2.5:14b' },
     selectedModel: 'qwen2.5:14b',
@@ -45,6 +46,7 @@ function jobpilot() {
       this.mobileNav = false;
       if (tab === 'sourcesTab') await this.loadSources();
       if (tab === 'profile') await this.loadProfile();
+      if (tab === 'settings') await this.loadLLM();
       await this.load();
     },
 
@@ -244,6 +246,7 @@ function jobpilot() {
         const data = await r.json();
         this.cover.text = data.text;
         this.cover.provider = data.provider;
+        this.loadLLM();                  // usage just changed
       } catch (e) {
         this.cover = null;
         this.showSnack('Cover letter failed: ' + e.message, 'error');
@@ -268,6 +271,40 @@ function jobpilot() {
       a.download = `cover_letter_${safe}.txt`;
       a.click();
       URL.revokeObjectURL(url);
+    },
+
+    // ── AI providers ──
+    async loadLLM() {
+      try {
+        this.llm = await (await fetch('/api/llm/providers')).json();
+      } catch { /* panel just stays empty */ }
+    },
+
+    async toggleProvider(p) {
+      p.enabled = !p.enabled;                       // optimistic
+      await fetch(`/api/llm/providers/${p.name}/toggle`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ enabled: p.enabled }),
+      });
+      this.showSnack(`${p.label} ${p.enabled ? 'enabled' : 'disabled'}`);
+      await this.loadLLM();
+    },
+
+    async moveProvider(i, delta) {
+      const order = this.llm.providers.map(p => p.name);
+      const j = i + delta;
+      if (j < 0 || j >= order.length) return;
+      [order[i], order[j]] = [order[j], order[i]];   // swap
+      await fetch('/api/llm/providers/order', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ order }),
+      });
+      await this.loadLLM();
+    },
+
+    fmtNum(n) {
+      if (n === null || n === undefined) return '—';
+      return n.toLocaleString('en-US');
     },
 
     async setStatus(job, status) {

@@ -458,11 +458,59 @@ def test_notify():
     ok = notify.send("JobPilot test — notifications working ✅")
     return {"sent": ok}
 
-@app.get("/api/apply/providers")
-def apply_providers():
-    """Which generation providers are configured (for the UI hint)."""
+# ── AI providers (status, enable/disable, reorder) ──────────────────────────
+
+@app.get("/api/llm/providers")
+def llm_providers():
+    """Status of every generation provider: config, quota usage, enabled."""
     from src import llm
-    return {"providers": llm.available_providers()}
+    providers = llm.provider_status()
+    tracked = [p for p in providers if p["daily_tokens"]]
+    return {
+        "providers": providers,
+        "available": sum(1 for p in providers if p["configured"] and p["enabled"]),
+        "total": len(providers),
+        "combined_tokens": sum(p["tokens_used"] for p in tracked),
+        "combined_limit": sum(p["daily_tokens"] for p in tracked),
+    }
+
+
+class ProviderToggle(BaseModel):
+    enabled: bool
+
+
+@app.post("/api/llm/providers/{name}/toggle")
+def llm_provider_toggle(name: str, body: ProviderToggle):
+    from src import llm
+    from src.paths import LLM_PROVIDERS
+    if name not in LLM_PROVIDERS:
+        raise HTTPException(404, "unknown provider")
+    llm.set_enabled(name, body.enabled)
+    return {"name": name, "enabled": body.enabled}
+
+
+class ProviderOrder(BaseModel):
+    order: list[str]
+
+
+@app.post("/api/llm/providers/order")
+def llm_provider_order(body: ProviderOrder):
+    """Reorder the fallback chain (first = tried first)."""
+    from src import llm
+    llm.set_order(body.order)
+    return {"order": llm.get_order()}
+
+
+# ── Storage & cleanup ───────────────────────────────────────────────────────
+
+@app.post("/api/maint/clear-runs")
+def maint_clear_runs():
+    return maintenance.clear_run_history()
+
+
+@app.post("/api/maint/nuclear")
+def maint_nuclear():
+    return maintenance.nuclear_reset()
 
 
 @app.post("/api/jobs/{job_id}/cover-letter")

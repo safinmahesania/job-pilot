@@ -514,6 +514,83 @@
         <div class="flex justify-between text-[11px] text-gray-400 mt-1"><span>0</span><span>50</span><span>100</span></div>
       </div>
 
+      <!-- ─── AI providers ─── -->
+      <div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-1">AI providers</h3>
+        <div class="text-xs text-gray-400 mb-3">Used for cover letters and resumes. Automatic failover — when one hits its rate limit, the next is tried. Keys live in your <code class="text-brand">.env</code>.</div>
+
+        <!-- summary -->
+        <div class="card p-4 mb-3 flex flex-wrap gap-6">
+          <div>
+            <div class="text-[11px] uppercase tracking-wide text-gray-400">Available</div>
+            <div class="text-lg font-semibold"><span class="text-green-600" x-text="llm.available"></span><span class="text-gray-400"> / </span><span x-text="llm.total"></span></div>
+          </div>
+          <div class="min-w-[180px]">
+            <div class="text-[11px] uppercase tracking-wide text-gray-400">Combined daily usage</div>
+            <div class="text-lg font-semibold tabular-nums">
+              <span x-text="fmtNum(llm.combined_tokens)"></span><span class="text-gray-400"> / </span><span x-text="fmtNum(llm.combined_limit)"></span>
+            </div>
+            <div class="text-xs text-gray-400">tokens across hosted keys</div>
+          </div>
+        </div>
+
+        <!-- per provider -->
+        <div class="space-y-3">
+          <template x-for="(p, i) in llm.providers" :key="p.name">
+            <div class="card p-4">
+              <div class="flex items-start gap-2">
+                <span class="w-2 h-2 rounded-full mt-2 shrink-0" :class="p.enabled && p.configured ? 'bg-green-500' : 'bg-gray-300'"></span>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-semibold text-sm" x-text="p.label"></span>
+                    <span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500" x-text="i === 0 ? 'primary' : 'fallback ' + i"></span>
+                  </div>
+                  <div class="text-xs text-gray-400 mt-0.5" x-text="p.note"></div>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button @click="moveProvider(i, -1)" :disabled="i === 0" class="text-gray-400 hover:text-brand disabled:opacity-25" title="Try earlier"><i class="ti ti-arrow-up"></i></button>
+                  <button @click="moveProvider(i, 1)" :disabled="i === llm.providers.length - 1" class="text-gray-400 hover:text-brand disabled:opacity-25" title="Try later"><i class="ti ti-arrow-down"></i></button>
+                  <button @click="toggleProvider(p)" class="sw ml-1" :class="p.enabled ? 'on' : 'off'"><span></span></button>
+                </div>
+              </div>
+
+              <!-- key status -->
+              <div class="flex items-center gap-2 mt-3 text-xs flex-wrap" x-show="p.env">
+                <span class="text-gray-400">Env var</span>
+                <code class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600" x-text="p.env"></code>
+                <span x-show="p.configured" class="px-1.5 py-0.5 rounded bg-green-50 text-green-600 font-medium">✓ set</span>
+                <span x-show="!p.configured" class="px-1.5 py-0.5 rounded bg-red-50 text-red-500 font-medium">missing</span>
+                <template x-if="p.key_preview">
+                  <code class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-400" x-text="p.key_preview"></code>
+                </template>
+              </div>
+
+              <!-- usage bar (hosted providers only) -->
+              <template x-if="p.daily_tokens">
+                <div class="mt-3">
+                  <div class="flex items-center justify-between text-xs mb-1">
+                    <span class="text-gray-400">Daily usage (UTC)</span>
+                    <span class="text-gray-500 tabular-nums">
+                      <span x-text="fmtNum(p.tokens_used)"></span> / <span x-text="fmtNum(p.daily_tokens)"></span>
+                      (<span x-text="p.percent"></span>%)
+                    </span>
+                  </div>
+                  <div class="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                    <div class="h-full rounded-full transition-all"
+                         :class="p.percent >= 90 ? 'bg-red-500' : (p.percent >= 70 ? 'bg-amber-500' : 'bg-brand')"
+                         :style="`width:${Math.min(p.percent || 0, 100)}%`"></div>
+                  </div>
+                  <div class="text-xs text-gray-400 mt-1"><span x-text="p.requests_today"></span> requests today</div>
+                </div>
+              </template>
+              <div x-show="!p.daily_tokens" class="mt-3 text-xs text-gray-400">
+                Local — no quota. <span x-text="p.requests_today"></span> requests today.
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
       <div class="mt-6 max-w-2xl">
         <h3 class="text-sm font-semibold text-gray-700 mb-3">Maintenance</h3>
         <div class="card divide-y divide-gray-100">
@@ -541,13 +618,43 @@
             <div><div class="text-sm font-medium">Reload config</div><div class="text-xs text-gray-400 mt-0.5">Re-read profile.yaml + companies.yaml.</div></div>
             <button @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Reload</button>
           </div>
+        </div>
+      </div>
+
+      <!-- ─── Storage & cleanup ─── -->
+      <div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Storage &amp; cleanup</h3>
+        <div class="card divide-y divide-gray-100">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Clean cache</div><div class="text-xs text-gray-400 mt-0.5">Delete Python cache. Jobs preserved.</div></div>
+            <div>
+              <div class="text-sm font-medium flex items-center gap-1.5"><i class="ti ti-brush text-gray-400"></i> Clean cache &amp; logs</div>
+              <div class="text-xs text-gray-400 mt-0.5">Delete Python cache and log files. Safe — jobs preserved.</div>
+            </div>
             <button @click="maint('cache',{url:'/api/maint/clean-cache',label:'Cleaned'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Clean</button>
           </div>
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium text-red-600">Reset all jobs</div><div class="text-xs text-gray-400 mt-0.5">Wipe all jobs from the DB. Cannot be undone.</div></div>
-            <button @click="maint('reset',{url:'/api/maint/reset',label:'Reset',confirm:'This deletes ALL jobs permanently. Continue?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md bg-red-500 text-white self-start">Reset jobs</button>
+            <div>
+              <div class="text-sm font-medium flex items-center gap-1.5"><i class="ti ti-history text-gray-400"></i> Clear run history</div>
+              <div class="text-xs text-gray-400 mt-0.5">Wipe the run list on the Admin tab. Jobs are safe.</div>
+            </div>
+            <button @click="maint('clear-runs',{url:'/api/maint/clear-runs',label:'Cleared',confirm:'Clear the run history?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Clear logs</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div>
+              <div class="text-sm font-medium text-red-600 flex items-center gap-1.5"><i class="ti ti-skull"></i> Reset all jobs <span class="text-xs font-normal">(destructive)</span></div>
+              <div class="text-xs text-gray-400 mt-0.5">Wipe all jobs from the DB. Use for a fresh start after a bad scrape. Cannot be undone.</div>
+            </div>
+            <button @click="maint('reset',{url:'/api/maint/reset',label:'Reset',confirm:'This deletes ALL jobs permanently. Continue?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-red-300 text-red-600 hover:bg-red-50 self-start">Reset jobs</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-red-50/40">
+            <div>
+              <div class="text-sm font-semibold text-red-600 flex items-center gap-1.5"><i class="ti ti-radioactive"></i> Nuclear reset — wipe everything</div>
+              <div class="text-xs text-gray-500 mt-0.5">
+                Wipes all application data in one shot: jobs, dedupe log, source health, run history, AI quota tracking, backups and cache.
+                <span class="text-gray-400">Preserves your config files (profile.yaml, companies.yaml), your .env and your settings.</span>
+              </div>
+            </div>
+            <button @click="maint('nuclear',{url:'/api/maint/nuclear',label:'Wiped',heavy:true,busyLabel:'Wiping everything…',confirm:'NUCLEAR RESET — this wipes all jobs, history, quota tracking and backups. Your config and settings are kept. Continue?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md bg-red-600 text-white self-start">☢ Reset everything</button>
           </div>
         </div>
       </div>

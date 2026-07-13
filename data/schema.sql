@@ -67,3 +67,13 @@ CREATE TABLE IF NOT EXISTS runs (
     kept        INTEGER DEFAULT 0,
     errors      INTEGER DEFAULT 0
 );
+
+-- Per-day, per-provider token/request usage for the generation providers.
+-- Used by the AI Providers panel to show quota consumption.
+CREATE TABLE IF NOT EXISTS llm_usage (
+    day       TEXT NOT NULL,          -- UTC date, YYYY-MM-DD
+    provider  TEXT NOT NULL,          -- gemini | cerebras | ollama
+    tokens    INTEGER DEFAULT 0,
+    requests  INTEGER DEFAULT 0,
+    PRIMARY KEY (day, provider)
+);

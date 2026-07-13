@@ -57,25 +57,45 @@ SCORE_WEIGHT_DOMAIN = 0.2
 
 
 # ── Application-document generation (cover letter / resume tailoring) ─────────
-# The generator tries these providers in order and uses the first one that is
-# configured (API key present) and responds successfully; Ollama is the always-
-# available local fallback. See src/llm.py.
+# The generator walks LLM_PROVIDER_ORDER and uses the first provider that is
+# enabled, configured (API key present) and responds successfully. Ollama is the
+# always-available local fallback, so the feature works with no keys at all.
 #
-# Free tiers (as of mid-2026, subject to change — check each provider):
-#   Gemini   : no credit card, ~1500 req/day, 1M-token context  (best quality)
-#   Cerebras : no credit card, 1M tokens/day, very fast, 8k-token context cap
-#
-# Keys are read from the environment (.env): GEMINI_API_KEY, CEREBRAS_API_KEY.
+# The order and the enabled/disabled state can be changed from the UI (they are
+# stored in the settings table); the values here are the defaults.
 LLM_PROVIDER_ORDER = ["gemini", "cerebras", "ollama"]
 
-GEMINI_MODEL = "gemini-2.5-flash"
-GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
-
-CEREBRAS_MODEL = "llama-3.3-70b"
-CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1"
-
-# Local fallback model for generation (Ollama). Reuses the scoring models.
-LLM_OLLAMA_MODEL = MODEL_PRIMARY
+# Registry: everything the UI needs to render a provider, and the client needs
+# to call it. Add a provider here and it appears in the panel automatically.
+#   env            : environment variable holding the key (None = local, no key)
+#   daily_tokens   : free-tier daily token allowance, for the usage bar
+#                    (None = no quota to track, i.e. local)
+LLM_PROVIDERS = {
+    "gemini": {
+        "label": "Google Gemini",
+        "model": "gemini-2.5-flash",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "env": "GEMINI_API_KEY",
+        "daily_tokens": 1_000_000,
+        "note": "Gemini 2.5 Flash · free tier · 1M token context",
+    },
+    "cerebras": {
+        "label": "Cerebras",
+        "model": "llama-3.3-70b",
+        "base_url": "https://api.cerebras.ai/v1",
+        "env": "CEREBRAS_API_KEY",
+        "daily_tokens": 1_000_000,
+        "note": "Llama 3.3 70B · 1M tokens/day free · ultra-fast",
+    },
+    "ollama": {
+        "label": "Ollama (local)",
+        "model": MODEL_PRIMARY,
+        "base_url": None,
+        "env": None,
+        "daily_tokens": None,          # local — no quota
+        "note": "Runs on your machine · unlimited · always the last resort",
+    },
+}
 
 LLM_TEMPERATURE = 0.3          # small amount of phrasing variety, still grounded
 LLM_TIMEOUT_SECONDS = 60

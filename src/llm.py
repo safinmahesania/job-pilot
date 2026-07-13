@@ -20,6 +20,7 @@ from src import store
 from src.paths import (
     LLM_PROVIDER_ORDER, LLM_PROVIDERS,
     LLM_TEMPERATURE, LLM_TIMEOUT_SECONDS,
+    PRIVACY_MODE,
 )
 
 load_dotenv()
@@ -180,15 +181,58 @@ def _call_ollama(system: str, user: str) -> tuple[str, int]:
     return text, tokens
 
 
-def generate(system: str, user: str) -> tuple[str, str]:
+def privacy_mode() -> str:
+    """"redacted" | "local" | "full" — the setting overrides the default."""
+    try:
+        conn = store.connect()
+        val = store.get_setting(conn, "privacy_mode", None)
+        conn.close()
+        if val in ("redacted", "local", "full"):
+            return val
+    except Exception:
+        pass
+    return PRIVACY_MODE
+
+
+def generate(system: str, user: str, personal: bool = False) -> tuple[str, str]:
     """Run the prompt through the provider chain.
 
-    Skips providers that are disabled or missing a key; moves on when a call
-    fails (rate limit, timeout, network). Returns (text, provider_name) from the
-    first success. Raises LLMError only if every eligible provider fails.
+    `personal=True` marks a prompt built from your profile. What happens then
+    depends on the privacy mode:
+
+      local     — Ollama only. A hard boundary, not a preference: there is no
+                  fallback, so if the local model is down the call fails. Failing
+                  is the correct outcome; quietly sending the data to a hosted
+                  model would not be.
+
+      redacted  — the normal chain. The caller is responsible for having built a
+                  prompt with your direct identifiers left out (see
+                  apply.redacted_profile) — this function trusts that, it cannot
+                  verify it.
+
+      full      — the normal chain, with whatever the caller put in the prompt.
+
+    Prompts that carry no personal data (reading a public job description) always
+    use the full chain.
     """
     disabled = get_disabled()
     errors = []
+
+    if personal and privacy_mode() == "local":
+        try:
+            text, tokens = _call_ollama(system, user)
+            if text:
+                record_usage("ollama", tokens)
+                return text, "ollama"
+            raise LLMError("local model returned nothing")
+        except LLMError:
+            raise
+        except Exception as e:
+            raise LLMError(
+                f"Privacy mode is set to local-only and Ollama failed ({e}). "
+                "Personal data is never sent to a hosted provider in this mode — "
+                "start Ollama, or switch to Redacted in Settings."
+            )
 
     for name in get_order():
         if name in disabled:

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --brand: #B4791A; --brand-tint: #F7EDD8; --navy: #1F2D4D;
+      --line: #E5E7EB; --muted: #6B7280; --ok: #1D9E75; --bad: #DC2626;
+    }
+    * { box-sizing: border-box; }
+    body { width: 320px; margin: 0; padding: 16px; color: var(--navy);
+           font-family: system-ui, -apple-system, sans-serif; }
+    header { display: flex; align-items: center; gap: 8px; }
+    header svg { width: 22px; height: 22px; }
+    h1 { font-size: 15px; margin: 0; font-weight: 600; }
+    .status { font-size: 12px; color: var(--muted); margin: 4px 0 14px;
+              display: flex; align-items: center; gap: 6px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #D1D5DB; }
+    .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); }
+
+    /* the bound job — the thing you must be able to trust */
+    .job {
+      border: 1px solid var(--line); border-radius: 9px;
+      padding: 10px 12px; margin-bottom: 12px; background: #FAFAFA;
+    }
+    .job.bound { border-color: var(--brand); background: var(--brand-tint); }
+    .job.none  { border-color: #FCA5A5; background: #FEF2F2; }
+    .job .cap { font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+                color: var(--muted); margin-bottom: 3px; }
+    .job .title { font-size: 13px; font-weight: 600; line-height: 1.3; }
+    .job .co { font-size: 12px; color: var(--muted); margin-top: 1px; }
+    .job .why { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
+    .link { font-size: 11px; color: var(--brand); cursor: pointer;
+            background: none; border: 0; padding: 0; margin-top: 6px; }
+
+    /* manual picker */
+    #picker { display: none; margin-bottom: 12px; }
+    #search { width: 100%; height: 32px; padding: 0 9px; font-size: 12px;
+              border: 1px solid var(--line); border-radius: 7px; outline: none; }
+    #search:focus { border-color: var(--brand); }
+    #results { max-height: 150px; overflow-y: auto; margin-top: 6px; }
+    .result { padding: 7px 9px; border-radius: 6px; cursor: pointer; }
+    .result:hover { background: var(--brand-tint); }
+    .result .t { font-size: 12px; font-weight: 500; }
+    .result .c { font-size: 11px; color: var(--muted); }
+
+    button.primary, button.ghost {
+      width: 100%; height: 36px; border-radius: 8px; font-size: 13px;
+      font-weight: 500; cursor: pointer; margin-bottom: 7px;
+    }
+    button.primary { border: 0; background: var(--brand); color: #fff; }
+    button.primary:hover:not(:disabled) { background: #9A660F; }
+    button.ghost { border: 1px solid var(--line); background: #fff; color: var(--navy); }
+    button.ghost:hover:not(:disabled) { background: #F9FAFB; }
+    button:disabled { opacity: .45; cursor: default; }
+
+    .row { display: flex; align-items: flex-start; justify-content: space-between;
+           gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+    .label { font-size: 12.5px; font-weight: 500; }
+    .hint { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+    .sw { flex: 0 0 auto; width: 34px; height: 20px; border-radius: 999px; border: 0;
+          background: #D1D5DB; position: relative; cursor: pointer; margin-top: 1px; }
+    .sw.on { background: var(--brand); }
+    .sw span { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+               border-radius: 50%; background: #fff; transition: transform .15s; }
+    .sw.on span { transform: translateX(14px); }
+
+    footer { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line);
+             font-size: 11px; color: var(--muted); line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <header>
+    <svg viewBox="0 0 48 48">
+      <rect width="48" height="48" rx="12" fill="#B4791A"/>
+      <circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity=".9"/>
+      <path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/>
+      <path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/>
+      <path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/>
+      <path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/>
+      <circle cx="24" cy="24" r="1.8" fill="#fff"/>
+    </svg>
+    <h1>JobPilot Autofill</h1>
+  </header>
+
+  <div class="status">
+    <span class="dot" id="dot"></span>
+    <span id="statusText">Checking JobPilot…</span>
+  </div>
+
+  <!-- Which job is this page? Always shown, so you can catch a wrong binding
+       before anything is attached. -->
+  <div class="job" id="jobBox">
+    <div class="cap">Applying to</div>
+    <div class="title" id="jobTitle">Checking…</div>
+    <div class="co" id="jobCompany"></div>
+    <div class="why" id="jobWhy"></div>
+    <button class="link" id="changeJob">Change job</button>
+  </div>
+
+  <div id="picker">
+    <input id="search" type="text" placeholder="Search your jobs by title or company…" autocomplete="off">
+    <div id="results"></div>
+  </div>
+
+  <button class="primary" id="fillBtn" disabled>Fill this page</button>
+  <button class="ghost" id="attachBtn" disabled>Attach resume &amp; cover letter</button>
+
+  <div class="row">
+    <div>
+      <div class="label">Auto-fill</div>
+      <div class="hint">Fill each step as it appears — for multi-step applications.</div>
+    </div>
+    <button class="sw" id="autoFill"><span></span></button>
+  </div>
+
+  <div class="row">
+    <div>
+      <div class="label">AI for unknown fields</div>
+      <div class="hint">Leaves a field blank rather than guessing at it.</div>
+    </div>
+    <button class="sw" id="useAI"><span></span></button>
+  </div>
+
+  <footer id="foot">
+    Runs only when you press a button here — it is not present on any page otherwise.
+    Existing answers and uploads are never overwritten.
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

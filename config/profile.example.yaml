@@ -3,8 +3,68 @@
 
 identity:
   name: Your Name
+  first_name: Your
+  last_name: Name
   seniority: junior                     # intern | junior | entry | mid | senior
   titles: [Software Engineer, Backend Developer]
+
+# Used by the browser extension to fill application forms.
+contact:
+  email: you@example.com
+  phone: "+1 555 123 4567"
+  address: 123 Example Street
+  city: Montreal
+  province: Quebec                      # state / province
+  country: Canada
+  postal_code: H3A 0G4
+  linkedin: https://linkedin.com/in/yourhandle
+  github: https://github.com/yourhandle
+  website: ""                           # portfolio, optional
+
+# Standard application questions. The extension answers these automatically;
+# anything left blank is skipped rather than guessed.
+application:
+  work_authorized: true                 # legally allowed to work in the country
+  needs_sponsorship: false
+  willing_to_relocate: true
+  requires_visa: false
+  notice_period: Immediately
+  salary_expectation: ""                # leave blank to skip the question
+  years_of_experience: 1
+  how_did_you_hear: Company website
+
+  # Work arrangement. Employers ask this in many shapes — "can you commit to
+  # three days a week in-office?", "are you able to commute to our Toronto
+  # office?", "this role is onsite 5 days". The generator compares what the job
+  # asks for against these values and answers Yes or No accordingly.
+  work_arrangement: hybrid              # onsite | hybrid | remote | any
+  willing_to_work_onsite: true
+  max_days_onsite_per_week: 3           # the most you will commit to
+  willing_to_commute: true
+  commute_locations: [Montreal, Toronto]   # offices you can realistically reach
+  # Voluntary EEO questions — leave blank and the extension will not answer them.
+  gender: ""
+  ethnicity: ""
+  veteran_status: ""
+  disability_status: ""
+
+# Your own answers to questions that keep coming up. These are checked BEFORE the
+# AI, so they are exact and free. `match` is a list of keywords — if all of them
+# appear in the form field's label (case-insensitive), the answer is used.
+#
+# Add to this list whenever you meet a question you want a fixed answer for.
+custom_answers:
+  - match: [why, work, here]
+    answer: ""                          # leave blank to let the AI write it
+
+  - match: [criminal, record]
+    answer: "No"
+
+  - match: [18, years, age]
+    answer: "Yes"
+
+  - match: [previously, employed]
+    answer: "No"
 
 summary: |
   One short paragraph describing who you are and what you're looking for.

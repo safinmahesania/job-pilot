@@ -8,6 +8,16 @@ function jobpilot() {
     llm: { providers: [], available: 0, total: 0, combined_tokens: 0, combined_limit: 0 },
     ai: { scoring: true, generation: true },
     cfgFiles: [],
+    imp: { text: '', busy: false, result: null },
+    privacy: { mode: 'redacted', follow_job_links: true },
+    privacyModes: [
+      { key:'redacted', label:'Redacted (hosted models, no identifiers)',
+        desc:"Your skills, projects and work history go to the model — it can't write about you otherwise. Your name, email, phone, address and profile links never appear in a prompt: the model writes around placeholders and JobPilot fills them in here, on this machine." },
+      { key:'local', label:'Local only',
+        desc:'Nothing personal leaves this machine. Ollama writes everything, with no cloud fallback — if Ollama is down the request fails rather than quietly going elsewhere. Strongest privacy, weaker writing.' },
+      { key:'full', label:'Full (everything goes to the hosted model)',
+        desc:'Contact details included. There is no quality gained by this over Redacted — it exists so the choice is visibly yours.' },
+    ],
     clearDays: 30, mobileNav: false,
     modelState: { active: 'qwen2.5:14b', fallback_active: false, preferred: 'qwen2.5:14b' },
     selectedModel: 'qwen2.5:14b',
@@ -25,6 +35,7 @@ function jobpilot() {
     statuses: ['surfaced','saved','applied','interview','offer','rejected','dismissed'],
     jobsNav: [
       { k:'feed', label:'Feed', icon:'ti-inbox' },
+      { k:'unscored', label:'Unscored', icon:'ti-help-circle' },
       { k:'saved', label:'Saved', icon:'ti-bookmark' },
       { k:'applied', label:'Applied', icon:'ti-send' },
       { k:'dismissed', label:'Dismissed', icon:'ti-archive' },
@@ -48,7 +59,7 @@ function jobpilot() {
       this.mobileNav = false;
       if (tab === 'sourcesTab') await this.loadSources();
       if (tab === 'profile') await this.loadProfile();
-      if (tab === 'settings') { await this.loadLLM(); await this.loadAI(); }
+      if (tab === 'settings') { await this.loadLLM(); await this.loadAI(); await this.loadPrivacy(); }
       await this.load();
     },
 
@@ -235,12 +246,19 @@ function jobpilot() {
 
     openDetail(job) { this.detail = job; },
 
-    async genCoverLetter(job) {
-      // Open the modal in a loading state, then fill it when the API returns.
-      this.cover = { loading: true, text: '', provider: '',
-                     title: job.title, company: job.company };
+    // Generates either document — kind is 'cover' or 'resume'.
+    async genDoc(job, kind = 'cover') {
+      const meta = {
+        cover:  { url: 'cover-letter', label: 'Cover letter', ext: 'txt', file: 'cover_letter' },
+        resume: { url: 'resume',       label: 'Resume',       ext: 'md',  file: 'resume' },
+      }[kind];
+
+      this.cover = { loading: true, kind, text: '', provider: '',
+                     label: meta.label, ext: meta.ext, file: meta.file,
+                     jobId: job.id, title: job.title, company: job.company,
+                     requirements: [], projects_used: [] };
       try {
-        const r = await fetch(`/api/jobs/${job.id}/cover-letter`, { method: 'POST' });
+        const r = await fetch(`/api/jobs/${job.id}/${meta.url}`, { method: 'POST' });
         if (!r.ok) {
           const err = await r.json().catch(() => ({}));
           throw new Error(err.detail || `HTTP ${r.status}`);
@@ -248,12 +266,37 @@ function jobpilot() {
         const data = await r.json();
         this.cover.text = data.text;
         this.cover.provider = data.provider;
+        this.cover.requirements = data.requirements || [];
+        this.cover.projects_used = data.projects_used || [];
+        this.cover.saved = false;
         this.loadLLM();                  // usage just changed
+        this.saveMaterial();             // bind it to this job for the extension
       } catch (e) {
         this.cover = null;
-        this.showSnack('Cover letter failed: ' + e.message, 'error');
+        this.showSnack(`${meta.label} failed: ${e.message}`, 'error');
       } finally {
         if (this.cover) this.cover.loading = false;
+      }
+    },
+
+    // Persist the document against its job. The browser extension attaches by
+    // job id, so saving is what makes auto-attach possible — and what guarantees
+    // the right company gets the right letter.
+    async saveMaterial() {
+      if (!this.cover?.text) return;
+      try {
+        await fetch(`/api/jobs/${this.cover.jobId}/materials`, {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            kind: this.cover.kind === 'resume' ? 'resume' : 'cover',
+            content: this.cover.text,
+            provider: this.cover.provider || '',
+          }),
+        });
+        this.cover.saved = true;
+        this.load();                     // refresh cards so the badge appears
+      } catch {
+        this.showSnack('Could not save to the job', 'error');
       }
     },
 
@@ -270,7 +313,7 @@ function jobpilot() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `cover_letter_${safe}.txt`;
+      a.download = `${this.cover.file}_${safe}.${this.cover.ext}`;
       a.click();
       URL.revokeObjectURL(url);
     },
@@ -341,6 +384,120 @@ function jobpilot() {
       } catch (e) {
         this.showSnack('AI test failed: ' + e.message, 'error');
       } finally { this.busy = null; }
+    },
+
+    // ── Importing jobs ──
+    async importFile(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      this.imp.busy = true; this.imp.result = null;
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const r = await fetch('/api/import/file', { method: 'POST', body: form });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+        this.imp.result = data;
+        this.showSnack(`Imported ${data.imported} of ${data.rows} rows`);
+        await this.load();
+      } catch (e) {
+        this.showSnack('Import failed: ' + e.message, 'error');
+      } finally {
+        this.imp.busy = false;
+        event.target.value = '';        // let the same file be picked again
+      }
+    },
+
+    async importText() {
+      if (!this.imp.text.trim()) return;
+      this.imp.busy = true; this.imp.result = null;
+      this.blocking = { label: 'Reading the posting…' };
+      try {
+        const r = await fetch('/api/import/text', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ text: this.imp.text }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+        this.imp.result = data;
+        this.imp.text = '';
+        this.showSnack(`Added: ${data.job.title} · ${data.job.company}`);
+        await this.load();
+      } catch (e) {
+        this.showSnack('Could not read that posting: ' + e.message, 'error');
+      } finally {
+        this.imp.busy = false; this.blocking = null;
+      }
+    },
+
+    async importEmailFile(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      this.imp.busy = true; this.imp.result = null;
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const r = await fetch('/api/import/email-file', { method: 'POST', body: form });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+        this.imp.result = data;
+        this.showSnack(`Imported ${data.imported} of ${data.found} jobs in that email`);
+        await this.load();
+      } catch (e) {
+        this.showSnack('Import failed: ' + e.message, 'error');
+      } finally {
+        this.imp.busy = false;
+        event.target.value = '';
+      }
+    },
+
+    async importMailDrop() {
+      this.imp.busy = true; this.imp.result = null;
+      this.blocking = { label: 'Reading data/mail_drop/…' };
+      try {
+        const r = await fetch('/api/import/mail-drop', { method: 'POST' });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+        this.imp.result = data;
+        this.showSnack(data.files
+          ? `Read ${data.files} file(s) — imported ${data.imported}`
+          : 'No emails in data/mail_drop/');
+        await this.load();
+      } catch (e) {
+        this.showSnack('Mail drop failed: ' + e.message, 'error');
+      } finally {
+        this.imp.busy = false; this.blocking = null;
+      }
+    },
+
+    // ── Privacy ──
+    async loadPrivacy() {
+      try {
+        this.privacy = await (await fetch('/api/privacy')).json();
+      } catch { /* keep the safe default */ }
+    },
+
+    async savePrivacy() {
+      try {
+        const r = await fetch('/api/privacy', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            mode: this.privacy.mode,
+            follow_job_links: this.privacy.follow_job_links,
+          }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+        this.privacy = { ...this.privacy, ...data };
+        this.showSnack(
+          this.privacy.mode === 'full'
+            ? 'Contact details will now be sent to hosted models'
+            : 'Privacy settings saved',
+          this.privacy.mode === 'full' ? 'error' : 'success'
+        );
+      } catch (e) {
+        this.showSnack('Could not save: ' + e.message, 'error');
+      }
     },
 
     async copyPath(path) {
@@ -435,6 +592,10 @@ function jobpilot() {
       this._snackT = setTimeout(() => { this.snack = null; }, 3500);
     },
     tier(score) {
+      // Unscored (imported without a description): neutral, never a fake colour.
+      if (score === null || score === undefined) {
+        return { bg:'#F3F4F6', fg:'#9CA3AF', stripe:'#D1D5DB' };
+      }
       if (score >= 80) return { bg:'#1D9E75', fg:'#fff', stripe:'#1D9E75' };
       if (score >= 70) return { bg:'#EDDCB8', fg:'#7A4E0C', stripe:'#B4791A' };
       return { bg:'#E5E7EB', fg:'#374151', stripe:'#E5E7EB' };

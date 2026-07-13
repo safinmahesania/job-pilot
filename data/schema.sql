@@ -79,3 +79,17 @@ CREATE TABLE IF NOT EXISTS llm_usage (
     requests  INTEGER DEFAULT 0,
     PRIMARY KEY (day, provider)
 );
+
+-- Generated application documents, bound to the job they were written for.
+-- One row per (job, kind): regenerating replaces the previous version, so the
+-- material attached to an application is always the current one for THAT job.
+CREATE TABLE IF NOT EXISTS materials (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id      INTEGER NOT NULL,
+    kind        TEXT NOT NULL,           -- 'resume' | 'cover'
+    content     TEXT NOT NULL,           -- markdown / plain text
+    provider    TEXT,                    -- which model wrote it
+    created_at  TEXT DEFAULT (datetime('now')),
+    UNIQUE (job_id, kind),
+    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+);

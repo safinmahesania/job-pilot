@@ -11,5 +11,12 @@ python-dotenv
 # Scraping / parsing
 beautifulsoup4
 
+# File uploads (CSV / Excel import)
+python-multipart
+openpyxl
+
+# PDF export for generated resumes / cover letters
+fpdf2
+
 # Local LLM scoring (requires Ollama running separately)
 ollama

@@ -122,10 +122,14 @@
       </div>
 
       <div class="flex flex-col gap-3">
+        <div x-show="tab==='unscored'" class="text-xs rounded-md px-3 py-2.5 mb-3 flex gap-2" style="background:#F7EDD8; color:#7A4E0C;">
+          <i class="ti ti-info-circle mt-0.5 shrink-0"></i>
+          <span>These came from an import whose job description couldn't be read — usually a LinkedIn or Indeed listing behind a login wall. They were deliberately <b>not scored</b>: a number from a title alone would be meaningless. Open the posting to judge it yourself.</span>
+        </div>
         <template x-for="job in filtered()" :key="job.id">
           <div class="flex gap-3 sm:gap-3.5 card p-3 sm:p-4" :style="`border-left:3px solid ${tier(job.score).stripe}`">
             <div class="shrink-0 w-11 h-11 sm:w-14 sm:h-14 rounded-full flex flex-col items-center justify-center" :style="`background:${tier(job.score).bg}`">
-              <span class="text-base sm:text-xl font-semibold leading-none" :style="`color:${tier(job.score).fg}`" x-text="Math.round(job.score)"></span>
+              <span class="text-base sm:text-xl font-semibold leading-none" :style="`color:${tier(job.score).fg}`" x-text="job.score === null ? '?' : Math.round(job.score)"></span>
               <span class="text-[9px] sm:text-[10px]" :style="`color:${tier(job.score).fg}`">match</span>
             </div>
             <div class="flex-1 min-w-0">
@@ -513,6 +517,46 @@
         <div class="flex justify-between text-[11px] text-gray-400 mt-1"><span>0</span><span>50</span><span>100</span></div>
       </div>
 
+      <!-- ─── Privacy ─── -->
+      <div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-1">Privacy</h3>
+        <div class="text-xs text-gray-400 mb-3">
+          Writing a cover letter genuinely needs your background — that's the point of it.
+          It does not need your phone number.
+        </div>
+
+        <div class="card divide-y divide-gray-100">
+          <template x-for="m in privacyModes" :key="m.key">
+            <label class="flex items-start gap-3 p-4 cursor-pointer hover:bg-gray-50">
+              <input type="radio" :value="m.key" x-model="privacy.mode" @change="savePrivacy()"
+                class="mt-1 accent-[#B4791A]">
+              <div>
+                <div class="text-sm font-medium flex items-center gap-1.5">
+                  <span x-text="m.label"></span>
+                  <span x-show="m.key==='redacted'" class="text-[10px] px-1.5 py-0.5 rounded"
+                    style="background:#F7EDD8; color:#7A4E0C;">Recommended</span>
+                </div>
+                <div class="text-xs text-gray-400 mt-1 leading-relaxed" x-text="m.desc"></div>
+              </div>
+            </label>
+          </template>
+
+          <div class="flex items-start justify-between gap-4 p-4">
+            <div>
+              <div class="text-sm font-medium">Follow job links to recover descriptions</div>
+              <div class="text-xs text-gray-400 mt-1 leading-relaxed">
+                Alert-email links are tracking redirects. Following one lets LinkedIn or Indeed
+                know the message was engaged with — but you were going to click it yourself
+                anyway, from this same machine. Turn it off and every alert-email job stays
+                <b>unscored</b>, because scoring needs a description.
+              </div>
+            </div>
+            <button @click="privacy.follow_job_links = !privacy.follow_job_links; savePrivacy()"
+              class="sw shrink-0 mt-0.5" :class="privacy.follow_job_links ? 'on' : 'off'"><span></span></button>
+          </div>
+        </div>
+      </div>
+
       <!-- ─── AI features ─── -->
       <div class="mt-6 max-w-2xl">
         <h3 class="text-sm font-semibold text-gray-700 mb-3">AI features</h3>
@@ -688,6 +732,103 @@
         </div>
       </div>
 
+      <!-- ─── Import jobs ─── -->
+      <div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-1">Import jobs</h3>
+        <div class="text-xs text-gray-400 mb-3">
+          Bring in postings the fetch pipeline doesn't cover. Jobs whose description
+          can be recovered are scored as usual; the rest land in
+          <span class="font-medium text-gray-500">Unscored</span> for you to triage by hand —
+          never given a number the model had no basis for.
+        </div>
+
+        <div class="card divide-y divide-gray-100">
+          <!-- CSV / Excel -->
+          <div class="p-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-medium">CSV or Excel file</div>
+                <div class="text-xs text-gray-400 mt-0.5">
+                  Column names are matched by alias — "Job Title", "position" and "role"
+                  all work. Title and company are the only required columns.
+                </div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <a href="/api/import/template" class="text-[13px] h-9 px-3 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1 text-gray-600"><i class="ti ti-download"></i> Template</a>
+                <label class="text-[13px] h-9 px-4 rounded-md bg-brand text-white flex items-center gap-1 cursor-pointer">
+                  <i class="ti ti-upload"></i> Choose file
+                  <input type="file" accept=".csv,.xlsx,.xls,.xlsm" class="hidden" @change="importFile($event)">
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pasted posting -->
+          <div class="p-4">
+            <div class="text-sm font-medium">Paste a job posting</div>
+            <div class="text-xs text-gray-400 mt-0.5 mb-2">
+              Paste the whole page — the model pulls out the title, company, location and
+              description. Anything it can't find is left blank rather than guessed.
+            </div>
+            <textarea x-model="imp.text" rows="5"
+              placeholder="Paste the full job posting here…"
+              class="w-full text-[13px] px-3 py-2 border border-gray-200 rounded-md outline-none focus:border-brand resize-y"></textarea>
+            <button @click="importText()" :disabled="imp.busy || !imp.text.trim()"
+              class="mt-2 text-[13px] h-9 px-4 rounded-md bg-brand text-white disabled:opacity-40 flex items-center gap-1">
+              <i class="ti ti-sparkles"></i> Read &amp; add job
+            </button>
+          </div>
+
+          <!-- Job-alert emails -->
+          <div class="p-4">
+            <div class="text-sm font-medium">Job-alert emails</div>
+            <div class="text-xs text-gray-400 mt-0.5">
+              Set up a saved search on LinkedIn and Indeed — they email you the results.
+              Export the email and hand it over.
+            </div>
+
+            <div class="text-xs rounded-md px-3 py-2 mt-2.5 flex gap-1.5" style="background:#F7EDD8; color:#7A4E0C;">
+              <i class="ti ti-lock mt-0.5 shrink-0"></i>
+              <span>
+                <b>JobPilot has no mail credentials and no IMAP client.</b> There is no path
+                from this app to your mailbox. An app password can read an entire account, and
+                no amount of careful code makes that safe to hold — so it isn't held. JobPilot
+                reads the file you give it, and nothing else.
+              </span>
+            </div>
+
+            <div class="text-xs text-gray-500 mt-2.5">
+              In your mail client: open the alert → <b>Save as</b> / <b>Download message</b>
+              (<code class="text-brand">.eml</code> or <code class="text-brand">.html</code>).
+              Then upload it here, or drop several into
+              <code class="text-brand">data/mail_drop/</code> and read them in one go.
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 mt-3">
+              <label class="text-[13px] h-9 px-4 rounded-md bg-brand text-white flex items-center gap-1 cursor-pointer">
+                <i class="ti ti-mail-up"></i> Upload an email
+                <input type="file" accept=".eml,.html,.htm,.txt" class="hidden" @change="importEmailFile($event)">
+              </label>
+              <button @click="importMailDrop()" :disabled="imp.busy"
+                class="text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 flex items-center gap-1">
+                <i class="ti ti-folder"></i> Read data/mail_drop/
+              </button>
+            </div>
+          </div>
+
+          <!-- Last result -->
+          <template x-if="imp.result">
+            <div class="p-4 bg-gray-50 text-xs text-gray-600 flex flex-wrap gap-x-4 gap-y-1">
+              <span><span class="font-semibold text-gray-800" x-text="imp.result.imported"></span> imported</span>
+              <span><span class="font-semibold text-green-600" x-text="imp.result.scored"></span> scored</span>
+              <span><span class="font-semibold text-gray-500" x-text="imp.result.unscored"></span> unscored</span>
+              <span><span class="font-semibold text-gray-500" x-text="imp.result.duplicates"></span> already seen</span>
+              <span x-show="imp.result.errors"><span class="font-semibold text-red-500" x-text="imp.result.errors"></span> errors</span>
+            </div>
+          </template>
+        </div>
+      </div>
+
       <!-- ─── Storage & cleanup ─── -->
       <div class="mt-6 max-w-2xl">
         <h3 class="text-sm font-semibold text-gray-700 mb-3">Storage &amp; cleanup</h3>
@@ -758,7 +899,8 @@
           </div>
           <div class="flex flex-wrap items-center gap-2 p-4 sm:p-5 border-t border-gray-100">
             <a :href="detail.apply_url" target="_blank" class="text-sm h-9 px-5 rounded-md bg-brand text-white flex items-center gap-1"><i class="ti ti-external-link"></i> Apply</a>
-            <button @click="genCoverLetter(detail)" class="text-sm h-9 px-4 rounded-md border border-brand text-brand hover:bg-brand/5 flex items-center gap-1"><i class="ti ti-file-text"></i> Cover letter</button>
+            <button @click="genDoc(detail,'cover')" class="text-sm h-9 px-4 rounded-md border border-brand text-brand hover:bg-brand/5 flex items-center gap-1"><i class="ti ti-file-text"></i> Cover letter</button>
+            <button @click="genDoc(detail,'resume')" class="text-sm h-9 px-4 rounded-md border border-brand text-brand hover:bg-brand/5 flex items-center gap-1"><i class="ti ti-file-cv"></i> Resume</button>
             <button @click="setStatus(detail,'saved'); detail=null" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Save</button>
             <a :href="detail.source_url" target="_blank" class="text-sm h-9 px-4 rounded-md text-gray-500 hover:bg-gray-50 flex items-center sm:ml-auto">View posting <i class="ti ti-external-link ml-1"></i></a>
           </div>
@@ -774,7 +916,7 @@
         <div>
           <div class="flex items-start justify-between gap-3 p-4 sm:p-5 border-b border-gray-100">
             <div class="min-w-0">
-              <div class="font-semibold text-base flex items-center gap-2"><i class="ti ti-file-text text-brand"></i> Cover letter</div>
+              <div class="font-semibold text-base flex items-center gap-2"><i class="ti ti-file-text text-brand"></i> <span x-text="cover.label"></span></div>
               <div class="text-[13px] text-gray-500 mt-0.5 truncate"><span x-text="cover.title"></span> · <span x-text="cover.company"></span></div>
             </div>
             <button @click="cover=null" class="text-gray-400 hover:text-gray-700 shrink-0"><i class="ti ti-x text-xl"></i></button>
@@ -782,23 +924,42 @@
           <div class="p-4 sm:p-5">
             <!-- loading -->
             <div x-show="cover.loading" class="flex items-center gap-2 text-sm text-gray-500 py-10 justify-center">
-              <i class="ti ti-loader-2 animate-spin text-lg"></i> Generating — grounded in your profile…
+              <i class="ti ti-loader-2 animate-spin text-lg"></i> Generating <span x-text="cover.label.toLowerCase()"></span> — grounded in your profile…
             </div>
             <!-- result -->
             <template x-if="!cover.loading">
               <div>
-                <textarea x-model="cover.text" rows="16"
+                <textarea x-model="cover.text" @blur="saveMaterial()" rows="16"
                   class="w-full text-[13px] leading-relaxed px-3 py-2.5 border border-gray-200 rounded-md outline-none focus:border-brand resize-y font-mono bg-gray-50"></textarea>
-                <div class="text-xs text-gray-400 mt-2 flex items-center gap-1">
-                  <i class="ti ti-sparkles"></i> Generated by <span class="font-medium" x-text="cover.provider"></span> · review before sending — edit freely above.
+                <div class="text-xs text-gray-400 mt-2 flex items-center gap-1 flex-wrap">
+                  <i class="ti ti-sparkles"></i> Generated by <span class="font-medium" x-text="cover.provider"></span> · edit freely — it saves to this job, and the browser extension attaches exactly this version.
+                </div>
+                <div class="mt-3 space-y-1.5" x-show="cover.projects_used && cover.projects_used.length">
+                  <div class="text-xs text-gray-500">
+                    <span class="text-gray-400">Projects used:</span>
+                    <template x-for="p in cover.projects_used" :key="p">
+                      <span class="inline-block ml-1 px-1.5 py-0.5 rounded bg-brand/10 text-brand" x-text="p"></span>
+                    </template>
+                  </div>
+                  <div class="text-xs text-gray-500" x-show="cover.requirements && cover.requirements.length">
+                    <span class="text-gray-400">Matched requirements:</span>
+                    <template x-for="r in cover.requirements" :key="r">
+                      <span class="inline-block ml-1 px-1.5 py-0.5 rounded bg-gray-100 text-gray-600" x-text="r"></span>
+                    </template>
+                  </div>
                 </div>
               </div>
             </template>
           </div>
           <div x-show="!cover.loading" class="flex flex-wrap items-center gap-2 p-4 sm:p-5 border-t border-gray-100">
-            <button @click="copyCover()" class="text-sm h-9 px-4 rounded-md bg-brand text-white flex items-center gap-1"><i class="ti ti-copy"></i> Copy</button>
-            <button @click="downloadCover()" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1"><i class="ti ti-download"></i> Download .txt</button>
-            <button @click="genCoverLetter({id: detail.id, title: cover.title, company: cover.company})" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1 sm:ml-auto"><i class="ti ti-refresh"></i> Regenerate</button>
+            <button @click="saveMaterial()" class="text-sm h-9 px-4 rounded-md flex items-center gap-1"
+              :class="cover.saved ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-brand text-white'">
+              <i class="ti" :class="cover.saved ? 'ti-check' : 'ti-device-floppy'"></i>
+              <span x-text="cover.saved ? 'Saved to job' : 'Save to job'"></span>
+            </button>
+            <button @click="copyCover()" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1"><i class="ti ti-copy"></i> Copy</button>
+            <button @click="downloadCover()" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1"><i class="ti ti-download"></i> Download .<span x-text="cover.ext"></span></button>
+            <button @click="genDoc({id: cover.jobId, title: cover.title, company: cover.company}, cover.kind)" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1 sm:ml-auto"><i class="ti ti-refresh"></i> Regenerate</button>
           </div>
         </div>
       </template>

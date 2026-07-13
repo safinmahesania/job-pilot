@@ -148,6 +148,35 @@ Generation tries, in order: **Gemini** (free tier, best quality) → **Cerebras*
 `CEREBRAS_API_KEY` to `.env` for the hosted options; with no keys it runs fully
 local. All provider defaults live in `src/paths.py`.
 
+## Autofill browser extension
+
+`extension/` is a Chrome/Edge extension that fills job application forms from
+your profile — including multi-step applications (Workday, Oracle, Phenom), which
+swap the form in place instead of loading a new page.
+
+Install (unpacked, no store needed):
+
+1. Open `chrome://extensions`, turn on **Developer mode**.
+2. **Load unpacked** → select the `extension/` folder.
+3. Make sure JobPilot is running (`uvicorn src.api:app`) — the extension reads
+   your profile from `http://localhost:8000`.
+
+On an application page, click the extension and hit **Fill this page**. Turn on
+**Auto-fill** to have each step filled as it appears.
+
+How it decides what to type:
+
+- Local rules match most fields (name, email, phone, address, work authorisation,
+  relocation…) against `config/profile.yaml` — instant, no AI.
+- Anything the rules can't place is sent in one batch to your provider chain,
+  which maps it to the profile. If the profile has no answer, the field is left
+  blank rather than guessed at.
+- Existing answers are never overwritten, and voluntary demographic questions are
+  never answered unless you put a value in `profile.yaml`.
+
+Fill in the `contact:` and `application:` sections of `config/profile.yaml` —
+that's what the extension draws on.
+
 ## License
 
 [MIT](LICENSE).

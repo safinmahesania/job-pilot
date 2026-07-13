@@ -1,16 +1,28 @@
 """FastAPI backend for JobPilot — serves jobs, status updates, and the frontend."""
+import re
 import sqlite3
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import threading
 from datetime import datetime
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, PlainTextResponse
 from src import maintenance, scheduler, configio
 from src.paths import DB_PATH as DB
 app = FastAPI(title="JobPilot")
+
+# The browser extension runs on ATS pages and calls this API from a
+# chrome-extension:// origin, so those requests must be allowed through.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"chrome-extension://.*|moz-extension://.*",
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 COLS = ("id, title, company, location, remote, job_type, source, source_url, "
         "apply_url, description, posted_date, deadline, score, skills_score, "
@@ -22,6 +34,10 @@ TAB_WHERE = {
     "saved": "status = 'saved'",
     "applied": "status = 'applied'",
     "dismissed": "status = 'dismissed'",
+    # Imported jobs whose description couldn't be recovered, so they were never
+    # scored. They are shown here for manual triage rather than given a number
+    # the model had no basis for.
+    "unscored": "score IS NULL AND status = 'surfaced'",
 }
 
 ALLOWED_STATUS = {"surfaced", "saved", "applied", "dismissed",
@@ -62,6 +78,9 @@ def counts():
         "saved": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='saved'").fetchone()[0],
         "applied": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='applied'").fetchone()[0],
         "dismissed": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='dismissed'").fetchone()[0],
+        "unscored": conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE score IS NULL AND status='surfaced'"
+        ).fetchone()[0],
     }
     conn.close()
     return out
@@ -190,7 +209,7 @@ def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all"):
     conn = _conn()
     threshold = int(_get_setting(conn, "score_threshold", 70))
 
-    where = (f"status='surfaced' AND score >= {threshold}"
+    where = (f"status='surfaced' AND score IS NOT NULL AND score >= {threshold}"
              if tab == "feed" else TAB_WHERE.get(tab, TAB_WHERE["feed"]))
 
     params = []
@@ -200,6 +219,8 @@ def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all"):
 
     order = {"score": "score DESC", "newest": "posted_date DESC",
              "company": "company ASC"}.get(sort, "score DESC")   # whitelist, safe
+    if tab == "unscored" and sort == "score":
+        order = "id DESC"          # nothing to rank by; show the newest first
 
     rows = conn.execute(f"SELECT {COLS} FROM jobs WHERE {where} ORDER BY {order}",
                         params).fetchall()
@@ -586,12 +607,400 @@ def cover_letter(job_id: int):
     conn.close()
     if not row:
         raise HTTPException(404, "job not found")
-    from src import apply
     try:
+        from src import apply          # imported here so import errors surface
         result = apply.generate_cover_letter(dict(row))
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(502, f"generation failed: {e}")
+        import traceback
+        traceback.print_exc()          # full trace in the uvicorn console
+        raise HTTPException(502, f"{type(e).__name__}: {e}")
     return result
+
+
+@app.post("/api/jobs/{job_id}/resume")
+def tailored_resume(job_id: int):
+    """Tailor the resume template to one job."""
+    conn = _conn()
+    if _get_setting(conn, "generation_enabled", "1") != "1":
+        conn.close()
+        raise HTTPException(
+            403, "On-demand AI is off — enable it in Settings > AI features."
+        )
+    row = conn.execute(
+        "SELECT title, company, description FROM jobs WHERE id=?", (job_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "job not found")
+    try:
+        from src import apply
+        result = apply.generate_resume(dict(row))
+    except FileNotFoundError as e:
+        raise HTTPException(400, str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(502, f"{type(e).__name__}: {e}")
+    return result
+
+
+# ── Autofill (browser extension) ────────────────────────────────────────────
+
+@app.get("/api/autofill/data")
+def autofill_data():
+    """Canonical answers plus the user's own custom rules — no AI, instant."""
+    from src import autofill
+    return {"answers": autofill.answers(),
+            "custom": autofill.custom_answers()}
+
+
+class ResolveField(BaseModel):
+    id: str
+    label: str = ""
+    type: str = "text"
+    options: list[str] = []
+
+
+class ResolveRequest(BaseModel):
+    fields: list[ResolveField]
+    job_id: int | None = None
+
+
+@app.post("/api/autofill/resolve")
+def autofill_resolve(body: ResolveRequest):
+    """AI-map the fields local heuristics couldn't place. Blank if unknown."""
+    conn = _conn()
+    if _get_setting(conn, "generation_enabled", "1") != "1":
+        conn.close()
+        raise HTTPException(403, "On-demand AI is off — enable it in Settings.")
+
+    job = None
+    if body.job_id:
+        row = conn.execute(
+            "SELECT title, company FROM jobs WHERE id=?", (body.job_id,)
+        ).fetchone()
+        job = dict(row) if row else None
+    conn.close()
+
+    try:
+        from src import autofill
+        mapped = autofill.resolve([f.model_dump() for f in body.fields], job)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(502, f"{type(e).__name__}: {e}")
+    return {"answers": mapped}
+
+
+# ── Materials (generated documents, bound to a job) ─────────────────────────
+
+class MaterialSave(BaseModel):
+    kind: str                 # "resume" | "cover"
+    content: str
+    provider: str = ""
+
+
+@app.post("/api/jobs/{job_id}/materials")
+def save_material(job_id: int, body: MaterialSave):
+    """Store a generated document against this job."""
+    from src import materials
+    conn = _conn()
+    exists = conn.execute("SELECT 1 FROM jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+    if not exists:
+        raise HTTPException(404, "job not found")
+    try:
+        return materials.save(job_id, body.kind, body.content, body.provider)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/jobs/{job_id}/materials")
+def list_materials(job_id: int):
+    """What has been saved for this job (kinds + timestamps, not the bodies)."""
+    from src import materials
+    return {"job_id": job_id, "materials": materials.list_for(job_id)}
+
+
+@app.delete("/api/jobs/{job_id}/materials/{kind}")
+def delete_material(job_id: int, kind: str):
+    from src import materials
+    return {"deleted": materials.delete(job_id, kind)}
+
+
+@app.get("/api/jobs/{job_id}/materials/{kind}/file")
+def material_file(job_id: int, kind: str, format: str = "pdf"):
+    """Download a saved document. This is what the extension attaches.
+
+    The document is looked up by job_id, so the file returned always belongs to
+    the job it is requested for — there is no way to serve one company's letter
+    for another company's application.
+    """
+    from src import materials
+
+    conn = _conn()
+    job = conn.execute(
+        "SELECT id, title, company FROM jobs WHERE id=?", (job_id,)
+    ).fetchone()
+    conn.close()
+    if not job:
+        raise HTTPException(404, "job not found")
+
+    doc = materials.get(job_id, kind)
+    if not doc:
+        raise HTTPException(
+            404, f"no {kind} saved for this job — generate and save it first"
+        )
+
+    job = dict(job)
+    if format == "pdf":
+        try:
+            data = materials.to_pdf(doc["content"], kind)
+        except RuntimeError as e:
+            raise HTTPException(500, str(e))
+        media = "application/pdf"
+        ext = "pdf"
+    else:
+        data = doc["content"].encode("utf-8")
+        media = "text/plain; charset=utf-8"
+        ext = "md" if kind == "resume" else "txt"
+
+    name = materials.filename(job, kind, ext)
+    return Response(
+        content=data,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
+# ── Matching a browser page to a job ────────────────────────────────────────
+
+def _normalize_url(url: str) -> str:
+    """Host + path, lowercased, no scheme/query/fragment/trailing slash.
+
+    Application URLs pick up tracking parameters and vary between http/https and
+    with/without www, but the host+path is stable — that is what we compare.
+    """
+    if not url:
+        return ""
+    url = re.sub(r"^https?://", "", url.strip().lower())
+    url = url.split("?")[0].split("#")[0]
+    url = re.sub(r"^www\.", "", url)
+    return url.rstrip("/")
+
+
+@app.get("/api/jobs/match")
+def match_job(url: str):
+    """Find the job this browser page belongs to.
+
+    Confidence is deliberately conservative: a wrong match would attach the wrong
+    company's cover letter, which is far worse than attaching nothing. Anything
+    below an exact host+path match is returned as a *suggestion* for the user to
+    confirm, never as an automatic binding.
+    """
+    target = _normalize_url(url)
+    if not target:
+        return {"match": None, "candidates": []}
+
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT id, title, company, apply_url, source_url, status FROM jobs "
+        "WHERE apply_url IS NOT NULL OR source_url IS NOT NULL"
+    ).fetchall()
+    conn.close()
+
+    exact, partial = [], []
+    for r in rows:
+        job = dict(r)
+        for field in ("apply_url", "source_url"):
+            stored = _normalize_url(job.get(field) or "")
+            if not stored:
+                continue
+            if stored == target:
+                exact.append(job)
+                break
+            # The ATS often redirects to a longer path (…/apply, …/application).
+            if target.startswith(stored + "/") or stored.startswith(target + "/"):
+                partial.append(job)
+                break
+
+    def slim(j):
+        return {"id": j["id"], "title": j["title"],
+                "company": j["company"], "status": j["status"]}
+
+    if len(exact) == 1:
+        return {"match": slim(exact[0]), "confidence": "exact", "candidates": []}
+    if not exact and len(partial) == 1:
+        return {"match": slim(partial[0]), "confidence": "path", "candidates": []}
+
+    # Ambiguous or nothing found — let the user choose rather than guessing.
+    candidates = [slim(j) for j in (exact + partial)][:10]
+    return {"match": None, "confidence": "none", "candidates": candidates}
+
+
+@app.get("/api/jobs/search")
+def search_jobs(q: str = "", limit: int = 10):
+    """Free-text search over title/company, for the extension's manual picker."""
+    conn = _conn()
+    like = f"%{q.strip()}%"
+    rows = conn.execute(
+        "SELECT id, title, company, status FROM jobs "
+        "WHERE title LIKE ? OR company LIKE ? "
+        "ORDER BY CASE status WHEN 'saved' THEN 0 WHEN 'applied' THEN 1 ELSE 2 END, "
+        "score DESC LIMIT ?",
+        (like, like, limit),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ── Importing jobs from outside the fetch pipeline ──────────────────────────
+
+@app.post("/api/import/file")
+async def import_file(file: UploadFile = File(...)):
+    """Import jobs from a CSV or Excel file."""
+    from src import importers
+    data = await file.read()
+    try:
+        rows = importers.parse_tabular(data, file.filename or "")
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(400, f"couldn't read that file: {e}")
+
+    if not rows:
+        raise HTTPException(
+            400, "no usable rows — the file needs at least a title and a company column"
+        )
+    stats = importers.import_jobs(rows, source="import")
+    return {"rows": len(rows), **stats}
+
+
+class PastedJob(BaseModel):
+    text: str
+
+
+@app.post("/api/import/text")
+def import_text(body: PastedJob):
+    """Paste a whole job posting; the model pulls the fields out of it."""
+    conn = _conn()
+    if _get_setting(conn, "generation_enabled", "1") != "1":
+        conn.close()
+        raise HTTPException(403, "On-demand AI is off — enable it in Settings.")
+    conn.close()
+
+    from src import importers
+    try:
+        job = importers.parse_text(body.text)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(502, f"{type(e).__name__}: {e}")
+
+    stats = importers.import_jobs([job], source="pasted", fetch_missing=False)
+    return {"job": {"title": job["title"], "company": job["company"]}, **stats}
+
+
+@app.post("/api/import/email-file")
+async def import_email_file(file: UploadFile = File(...)):
+    """Import jobs from a job-alert email you exported (.eml or .html).
+
+    JobPilot has no mail credentials and no IMAP client. It reads the file you
+    hand it and nothing else — there is no path from this app to your mailbox.
+    """
+    from src import importers
+    data = await file.read()
+    try:
+        jobs = importers.parse_email_file(data, file.filename or "")
+    except Exception as e:
+        raise HTTPException(400, f"couldn't read that email: {e}")
+
+    if not jobs:
+        raise HTTPException(
+            400, "no job links found in that email — is it a job-alert email?"
+        )
+    stats = importers.import_jobs(jobs)
+    return {"found": len(jobs), **stats}
+
+
+@app.post("/api/import/mail-drop")
+def import_mail_drop():
+    """Ingest every alert email sitting in data/mail_drop/.
+
+    Drag your exported emails in there and press the button. Files are read and
+    left alone.
+    """
+    from src import importers
+    try:
+        jobs, files = importers.read_mail_drop()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(502, f"{type(e).__name__}: {e}")
+
+    if not jobs:
+        return {"files": len(files), "found": 0, "seen": 0, "imported": 0,
+                "scored": 0, "unscored": 0, "duplicates": 0, "errors": 0}
+
+    stats = importers.import_jobs(jobs)
+    return {"files": len(files), "found": len(jobs), **stats}
+
+
+# ── Privacy ─────────────────────────────────────────────────────────────────
+
+@app.get("/api/privacy")
+def get_privacy():
+    from src import llm, importers
+    from src.paths import PRIVACY_MODE
+    return {"mode": llm.privacy_mode(),
+            "default": PRIVACY_MODE,
+            "follow_job_links": importers.follow_links_enabled()}
+
+
+class PrivacyUpdate(BaseModel):
+    mode: str | None = None                 # "redacted" | "local" | "full"
+    follow_job_links: bool | None = None
+
+
+@app.post("/api/privacy")
+def set_privacy(body: PrivacyUpdate):
+    conn = _conn()
+    if body.mode is not None:
+        if body.mode not in ("redacted", "local", "full"):
+            conn.close()
+            raise HTTPException(400, f"unknown privacy mode: {body.mode}")
+        conn.execute("INSERT INTO settings (key,value) VALUES ('privacy_mode',?) "
+                     "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                     (body.mode,))
+    if body.follow_job_links is not None:
+        conn.execute("INSERT INTO settings (key,value) VALUES ('follow_job_links',?) "
+                     "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                     ("1" if body.follow_job_links else "0",))
+    conn.commit()
+    conn.close()
+
+    from src import llm, importers
+    return {"mode": llm.privacy_mode(),
+            "follow_job_links": importers.follow_links_enabled()}
+
+
+@app.get("/api/import/template")
+def import_template():
+    """A starter CSV with the columns the importer understands."""
+    header = "title,company,location,apply_url,description,posted_date,job_type,salary\n"
+    example = ('Junior Backend Developer,Shopify,"Toronto, Canada",'
+               'https://example.com/jobs/1,"We are looking for...",2026-07-01,Full-time,\n')
+    return Response(
+        content=header + example,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="jobpilot_import_template.csv"'},
+    )
 
 
 app.mount("/", StaticFiles(

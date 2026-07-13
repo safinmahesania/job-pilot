@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "JobPilot Autofill",
+  "version": "1.2.0",
+  "description": "Fills job application forms from your JobPilot profile and attaches the documents written for that job. Runs only on the page you point it at.",
+
+  "//": "There is no content_scripts block on purpose. The extension is not present on any page until you click its icon: nothing is injected, nothing watches, nothing runs. activeTab grants access to one tab, on your click, and only for that page.",
+
+  "permissions": ["storage", "activeTab", "scripting"],
+
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "JobPilot Autofill"
+  },
+
+  "background": {
+    "service_worker": "background.js"
+  }
+}

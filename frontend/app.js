@@ -4,6 +4,7 @@ function jobpilot() {
     running: false, lastRun: null, nextRun: null, threshold: 70,
     sort: 'score', source: 'all', sources: [],
     busy: null, snack: null, blocking: null, confirmBox: null,
+    cover: null,   // { loading, text, provider, title, company }
     clearDays: 30, mobileNav: false,
     modelState: { active: 'qwen2.5:14b', fallback_active: false, preferred: 'qwen2.5:14b' },
     selectedModel: 'qwen2.5:14b',
@@ -229,6 +230,45 @@ function jobpilot() {
     },
 
     openDetail(job) { this.detail = job; },
+
+    async genCoverLetter(job) {
+      // Open the modal in a loading state, then fill it when the API returns.
+      this.cover = { loading: true, text: '', provider: '',
+                     title: job.title, company: job.company };
+      try {
+        const r = await fetch(`/api/jobs/${job.id}/cover-letter`, { method: 'POST' });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.detail || `HTTP ${r.status}`);
+        }
+        const data = await r.json();
+        this.cover.text = data.text;
+        this.cover.provider = data.provider;
+      } catch (e) {
+        this.cover = null;
+        this.showSnack('Cover letter failed: ' + e.message, 'error');
+      } finally {
+        if (this.cover) this.cover.loading = false;
+      }
+    },
+
+    async copyCover() {
+      try {
+        await navigator.clipboard.writeText(this.cover.text);
+        this.showSnack('Copied to clipboard');
+      } catch { this.showSnack('Copy failed', 'error'); }
+    },
+
+    downloadCover() {
+      const safe = (this.cover.company || 'company').replace(/[^a-z0-9]+/gi, '_');
+      const blob = new Blob([this.cover.text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cover_letter_${safe}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
 
     async setStatus(job, status) {
       await fetch(`/api/jobs/${job.id}/status`, {

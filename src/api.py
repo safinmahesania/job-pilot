@@ -458,6 +458,31 @@ def test_notify():
     ok = notify.send("JobPilot test — notifications working ✅")
     return {"sent": ok}
 
+@app.get("/api/apply/providers")
+def apply_providers():
+    """Which generation providers are configured (for the UI hint)."""
+    from src import llm
+    return {"providers": llm.available_providers()}
+
+
+@app.post("/api/jobs/{job_id}/cover-letter")
+def cover_letter(job_id: int):
+    """Generate a grounded cover letter for one job."""
+    conn = _conn()
+    row = conn.execute(
+        "SELECT title, company, description FROM jobs WHERE id=?", (job_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "job not found")
+    from src import apply
+    try:
+        result = apply.generate_cover_letter(dict(row))
+    except Exception as e:
+        raise HTTPException(502, f"generation failed: {e}")
+    return result
+
+
 app.mount("/", StaticFiles(
     directory=str(Path(__file__).parent.parent / "frontend"),
     html=True,

@@ -49,8 +49,8 @@ pip install -r requirements.txt
 
 # 2. configure
 cp .env.example .env                        # optional: Telegram notifications
-cp config/profile.example.yaml config/profile.yaml   # then edit with your details
-#    edit config/companies.yaml to choose which boards to fetch
+cp config/profile.example.yaml config/profile.yaml     # then edit with your details
+cp config/companies.example.yaml config/companies.yaml # then choose your boards
 
 # 3. create the database
 python data/init_db.py
@@ -74,7 +74,8 @@ Everything tunable lives in two places:
   this on every run; it's also editable from the **Profile** tab in the UI.
 - **`config/companies.yaml`** — the boards to fetch. Each entry has an `ats` and
   an identifier (a board token, or tenant/host/site for Workday). Toggle boards
-  on and off from the **Sources** tab.
+  on and off from the **Sources** tab. This file is gitignored (it's your personal
+  source list); `companies.example.yaml` documents the format for every ATS.
 
 Code-level defaults (model names, score weights, the feed threshold, scheduler
 cadence, file locations) all live in a single file: **`src/paths.py`**. Change a
@@ -84,10 +85,11 @@ codebase.
 ## Project layout
 
 ```
-config/                user-editable YAML
-  companies.yaml        boards to fetch
-  profile.yaml          your profile (gitignored)
-  profile.example.yaml  template
+config/                 user-editable YAML
+  companies.yaml         boards to fetch (gitignored)
+  companies.example.yaml boards template
+  profile.yaml           your profile (gitignored)
+  profile.example.yaml   profile template
 
 data/
   schema.sql            database schema
@@ -133,6 +135,18 @@ Run from the project root:
 - Scoring is the only step that needs the GPU. If a job runs out of memory on the
   primary model, that single job falls back to the smaller model and the run
   continues.
+
+## Cover letters
+
+Open any job (click its title) and hit **Cover letter**. JobPilot generates a
+grounded draft using your profile and the job description, following one fixed
+professional structure — only the content changes per application. It picks the
+most relevant of your projects for the role and does not invent facts.
+
+Generation tries, in order: **Gemini** (free tier, best quality) → **Cerebras**
+(free, fast) → **local Ollama** (always available). Add `GEMINI_API_KEY` and/or
+`CEREBRAS_API_KEY` to `.env` for the hosted options; with no keys it runs fully
+local. All provider defaults live in `src/paths.py`.
 
 ## License
 

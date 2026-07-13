@@ -54,3 +54,30 @@ SCHEDULER_POLL_SECONDS = 60    # how often the scheduler checks if a run is due
 SCORE_WEIGHT_SKILLS = 0.5
 SCORE_WEIGHT_SENIORITY = 0.3
 SCORE_WEIGHT_DOMAIN = 0.2
+
+
+# ── Application-document generation (cover letter / resume tailoring) ─────────
+# The generator tries these providers in order and uses the first one that is
+# configured (API key present) and responds successfully; Ollama is the always-
+# available local fallback. See src/llm.py.
+#
+# Free tiers (as of mid-2026, subject to change — check each provider):
+#   Gemini   : no credit card, ~1500 req/day, 1M-token context  (best quality)
+#   Cerebras : no credit card, 1M tokens/day, very fast, 8k-token context cap
+#
+# Keys are read from the environment (.env): GEMINI_API_KEY, CEREBRAS_API_KEY.
+LLM_PROVIDER_ORDER = ["gemini", "cerebras", "ollama"]
+
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+
+CEREBRAS_MODEL = "llama-3.3-70b"
+CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1"
+
+# Local fallback model for generation (Ollama). Reuses the scoring models.
+LLM_OLLAMA_MODEL = MODEL_PRIMARY
+
+LLM_TEMPERATURE = 0.3          # small amount of phrasing variety, still grounded
+LLM_TIMEOUT_SECONDS = 60
+
+COVER_LETTER_WORDS = 250       # target length; the model aims for ~this

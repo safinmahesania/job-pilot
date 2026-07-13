@@ -148,6 +148,53 @@ Generation tries, in order: **Gemini** (free tier, best quality) → **Cerebras*
 `CEREBRAS_API_KEY` to `.env` for the hosted options; with no keys it runs fully
 local. All provider defaults live in `src/paths.py`.
 
+## Importing jobs
+
+Not every posting comes from the fetch pipeline. Three ways in, all under
+**Settings → Import jobs**:
+
+- **CSV / Excel** — column names are matched by alias, so "Job Title", "position"
+  and "role" all work. Only title and company are required. A template is
+  downloadable from the same card.
+- **Paste a posting** — paste the page; the model pulls out title, company,
+  location and description. Anything it can't find is left blank, not guessed.
+- **Job-alert emails** — set up a saved search on LinkedIn and Indeed and they
+  email you the results. Export the email (`.eml` / `.html`) and hand it over, or
+  drop several into `data/mail_drop/`.
+
+A job is scored only when a real description can be recovered. When it can't —
+LinkedIn's and Indeed's own pages are behind a login wall — the job is stored
+**unscored** and shown in its own tab for you to judge by hand. It is never given
+a number the model had no basis for.
+
+## Scoring
+
+Scoring runs through the provider chain (Cerebras / Gemini / Ollama). Two things
+make it trustworthy rather than merely plausible:
+
+- The model's own `overall` is discarded — it clusters around 65-75 whatever the
+  input. The real score is a weighted composite of skills, seniority and domain.
+- **Your own decisions calibrate it.** Every job you save or dismiss is shown to
+  the model as ground truth, and the ones it scored highly that you dismissed
+  anyway are shown to it as its mistakes. Run **Rescore all** to apply what it has
+  learned to everything already in the database.
+
+## Privacy
+
+Writing a cover letter genuinely needs your background. It does not need your
+phone number. **Settings → Privacy** has three modes:
+
+- **Redacted** (default) — hosted models get your skills, projects and work
+  history; they never receive your name, email, phone, address or profile links.
+  The model writes around placeholders and JobPilot fills them in locally.
+- **Local only** — nothing personal leaves the machine. A hard boundary: if Ollama
+  is down the call fails rather than quietly going to the cloud.
+- **Full** — everything, including contact details, goes to the hosted model.
+
+JobPilot has no mail credentials and no IMAP client. An app password can read an
+entire mail account, and no amount of careful code makes that safe to hold — so it
+isn't held.
+
 ## Autofill browser extension
 
 `extension/` is a Chrome/Edge extension that fills job application forms from

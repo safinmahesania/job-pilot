@@ -155,6 +155,40 @@ Return ONLY a JSON object mapping each field's "id" to its answer string.
 No prose, no markdown, no explanation."""
 
 
+def _is_voluntary(label: str) -> bool:
+    """Is this an optional demographic question?
+
+    Race, gender, disability and veteran status are voluntary by law, and the
+    decision to disclose is yours — not a tool's, and certainly not a language
+    model's. Once it's submitted you can't take it back.
+
+    The extension already declines to send these. This is the second lock: the
+    backend does not trust its client, and it does not trust the model to obey an
+    instruction in a prompt. A field matching these patterns is blanked no matter
+    what comes back.
+    """
+    text = (label or "").lower()
+    return bool(_VOLUNTARY_PATTERN.search(text))
+
+
+_VOLUNTARY_PATTERN = re.compile(
+    r"\b(gender|ethnicity|race|racial|hispanic|latino|veteran|disability|"
+    r"disabled|sexual orientation|transgender|pronoun|"
+    r"self[- ]identif\w*|demographic)\b",
+    re.I,
+)
+
+
+def _custom_answer_for(label: str, rules: list[dict]) -> str | None:
+    """Your own fixed answer, if one matches. Checked before the model is asked —
+    a question you have already settled should never be re-invented."""
+    text = (label or "").lower()
+    for rule in rules:
+        if all(keyword in text for keyword in rule["match"]):
+            return rule["answer"]
+    return None
+
+
 def resolve(fields: list[dict], job: dict | None = None) -> dict:
     """Map unknown form fields to grounded answers.
 
@@ -167,6 +201,34 @@ def resolve(fields: list[dict], job: dict | None = None) -> dict:
     if not fields:
         return {}
 
+    resolved: dict[str, str] = {}
+    to_ask: list[dict] = []
+    rules = custom_answers()
+
+    for field in fields:
+        label = field.get("label", "")
+
+        # Never, under any circumstances, and without asking a model.
+        if _is_voluntary(label):
+            continue
+
+        # Already answered by you, once, on purpose.
+        answer = _custom_answer_for(label, rules)
+        if answer is not None:
+            resolved[field.get("id")] = answer
+            continue
+
+        to_ask.append(field)
+
+    if not to_ask:
+        return resolved
+
+    resolved.update(_resolve_with_ai(to_ask, job))
+    return resolved
+
+
+def _resolve_with_ai(fields: list[dict], job: dict | None = None) -> dict:
+    """The AI fallback, for fields no rule and no saved answer could place."""
     p = load_profile()
     ident = p.get("identity", {}) or {}
     skills = p.get("skills", {}) or {}
@@ -224,7 +286,12 @@ def resolve(fields: list[dict], job: dict | None = None) -> dict:
     except json.JSONDecodeError:
         return {}
 
-    # Only return answers for fields we actually asked about, as strings.
-    wanted = {f.get("id") for f in fields}
-    return {k: ("" if v is None else str(v))
-            for k, v in data.items() if k in wanted}
+    # Only answers to fields we actually asked about, as strings — and a final
+    # pass on voluntary questions. The model was told not to answer them; this is
+    # what makes it true rather than merely requested.
+    wanted = {f.get("id"): f.get("label", "") for f in fields}
+    return {
+        k: ("" if v is None else str(v))
+        for k, v in data.items()
+        if k in wanted and not _is_voluntary(wanted[k])
+    }

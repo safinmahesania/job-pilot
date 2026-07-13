@@ -63,6 +63,17 @@ FEEDBACK_SAVED_EXAMPLES = 8
 FEEDBACK_DISMISSED_EXAMPLES = 8
 FEEDBACK_MIN_EXAMPLES = 3        # below this there is nothing to learn from
 
+# ── Follow-ups ──────────────────────────────────────────────────────────────
+# An unanswered application is usually an email in a queue, not a rejection. A
+# polite nudge after a week is the cheapest thing a candidate can do — and the
+# thing everyone forgets, because nothing reminds them.
+FOLLOWUP_FIRST_DAYS = 7        # applied this long ago, never followed up -> due
+FOLLOWUP_SECOND_DAYS = 10      # this long after a follow-up with no reply -> one more
+FOLLOWUP_STALE_DAYS = 30       # past this, stop pretending; close it out
+
+# Telegram reminder, at most once a day (the scheduler polls far more often).
+FOLLOWUP_NOTIFY = True
+
 # ── Privacy ─────────────────────────────────────────────────────────────────
 # Writing a cover letter genuinely requires your background — that is the point of
 # it. But it does NOT require your phone number, your home address or your email:

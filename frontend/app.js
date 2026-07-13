@@ -10,6 +10,7 @@ function jobpilot() {
     cfgFiles: [],
     imp: { text: '', busy: false, result: null },
     privacy: { mode: 'redacted', follow_job_links: true },
+    fu: { items: [], total: 0, first: 0, second: 0, stale: 0 },
     fb: { saved: 0, applied: 0, dismissed: 0, high_scored_but_dismissed: 0,
           active: false, needed: 3, scoring_via_chain: true },
     privacyModes: [
@@ -70,9 +71,10 @@ function jobpilot() {
       const jobsP = this.isJobView()
         ? fetch(`/api/jobs?tab=${this.tab}&sort=${this.sort}&source=${this.source}`).then(r=>r.json()).catch(()=>[])
         : Promise.resolve(this.jobs);
-      const [jobs, counts, health, runs, settings, stats, sources, sched, model, notifyState] = await Promise.all([
+      const [jobs, counts, followups, health, runs, settings, stats, sources, sched, model, notifyState] = await Promise.all([
         jobsP,
         fetch('/api/counts').then(r=>r.json()).catch(()=>({})),
+        fetch('/api/followups').then(r=>r.json()).catch(()=>({items:[],total:0})),
         fetch('/api/health').then(r=>r.json()).catch(()=>[]),
         fetch('/api/runs').then(r=>r.json()).catch(()=>[]),
         fetch('/api/settings').then(r=>r.json()).catch(()=>({score_threshold:70})),
@@ -84,6 +86,7 @@ function jobpilot() {
       ]);
       this.jobs = jobs;
       this.counts = { ...counts };
+      this.fu = followups;
       this.health = health;
       this.runs = runs || [];
       this.threshold = settings.score_threshold ?? 70;
@@ -477,6 +480,25 @@ function jobpilot() {
       try {
         this.privacy = await (await fetch('/api/privacy')).json();
       } catch { /* keep the safe default */ }
+    },
+
+    // ── Follow-ups ──
+    async loadFollowups() {
+      try { this.fu = await (await fetch('/api/followups')).json(); } catch {}
+    },
+
+    async followup(id, action, days = 7) {
+      try {
+        const r = await fetch(`/api/jobs/${id}/followup`, {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ action, days }),
+        });
+        if (!r.ok) throw new Error((await r.json()).detail || `HTTP ${r.status}`);
+        this.showSnack(action === 'done' ? 'Follow-up logged' : `Snoozed for ${days} days`);
+        await this.load();              // refreshes the list, counts and follow-ups
+      } catch (e) {
+        this.showSnack('Could not update: ' + e.message, 'error');
+      }
     },
 
     async loadFeedback() {

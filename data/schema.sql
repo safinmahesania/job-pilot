@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     job_type        TEXT,
     deadline        TEXT,
     applied_on      TEXT,                 -- date stamped when status -> 'applied'
-    notes           TEXT                  -- free-text notes from the Applied tab
+    notes           TEXT,                 -- free-text notes from the Applied tab
+    followed_up_on  TEXT,                 -- date of the last follow-up you sent
+    followup_snooze TEXT                  -- don't nag about this until after this date
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_score ON jobs(score DESC);

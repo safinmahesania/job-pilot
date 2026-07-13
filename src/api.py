@@ -83,6 +83,8 @@ def counts():
             "SELECT COUNT(*) FROM jobs WHERE score IS NULL AND status='surfaced'"
         ).fetchone()[0],
     }
+    from src import followups
+    out["followups"] = followups.summary(conn)["total"]
     conn.close()
     return out
 
@@ -1032,6 +1034,43 @@ def set_scoring_chain(body: ScoringUpdate):
     conn.commit()
     conn.close()
     return {"scoring_via_chain": body.scoring_via_chain}
+
+
+# ── Follow-ups ──────────────────────────────────────────────────────────────
+
+@app.get("/api/followups")
+def list_followups():
+    """Applications that need a nudge today."""
+    from src import followups
+    conn = _conn()
+    items = followups.due(conn)
+    counts = followups.summary(conn)
+    conn.close()
+    return {"items": items, **counts}
+
+
+class FollowupAction(BaseModel):
+    action: str                # "done" | "snooze"
+    days: int = 7              # for snooze
+
+
+@app.post("/api/jobs/{job_id}/followup")
+def set_followup(job_id: int, body: FollowupAction):
+    from src import followups
+    conn = _conn()
+    try:
+        if body.action == "done":
+            ok = followups.mark_followed_up(conn, job_id)
+        elif body.action == "snooze":
+            ok = followups.snooze(conn, job_id, body.days)
+        else:
+            raise HTTPException(400, f"unknown action: {body.action}")
+    finally:
+        conn.close()
+
+    if not ok:
+        raise HTTPException(404, "job not found, or it isn't an applied job")
+    return {"id": job_id, "action": body.action}
 
 
 app.mount("/", StaticFiles(

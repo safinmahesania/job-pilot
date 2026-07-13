@@ -68,6 +68,33 @@ def trigger_async() -> bool:
     return True
 
 
+def _followup_check():
+    """Once a day, tell you what needs a nudge.
+
+    Guarded by a stored date rather than a timer, so restarting the server does
+    not re-send today's reminder — and a machine that was off for three days gets
+    one message when it comes back, not three.
+    """
+    from src import followups, notify
+    from src.paths import FOLLOWUP_NOTIFY
+
+    if not FOLLOWUP_NOTIFY:
+        return
+
+    today = datetime.now().date().isoformat()
+    conn = store.connect()
+    try:
+        if store.get_setting(conn, "followup_notified_on", None) == today:
+            return
+        message = followups.notification(conn)
+        store.set_setting(conn, "followup_notified_on", today)
+    finally:
+        conn.close()
+
+    if message and notify.enabled():
+        notify.send(message)
+
+
 def _loop():
     # On first ever boot there is no last_run_ts. Stamp it now rather than
     # kicking off a long run the moment the server starts.
@@ -91,6 +118,8 @@ def _loop():
             if enabled and due and not _state["running"]:
                 print("[scheduler] interval elapsed — starting run")
                 _run_once()
+
+            _followup_check()
         except Exception as e:
             print(f"[scheduler] loop error: {e}")
 

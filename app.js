@@ -10,8 +10,6 @@ function jobpilot() {
     cfgFiles: [],
     imp: { text: '', busy: false, result: null },
     privacy: { mode: 'redacted', follow_job_links: true },
-    fb: { saved: 0, applied: 0, dismissed: 0, high_scored_but_dismissed: 0,
-          active: false, needed: 3, scoring_via_chain: true },
     privacyModes: [
       { key:'redacted', label:'Redacted (hosted models, no identifiers)',
         desc:"Your skills, projects and work history go to the model — it can't write about you otherwise. Your name, email, phone, address and profile links never appear in a prompt: the model writes around placeholders and JobPilot fills them in here, on this machine." },
@@ -61,7 +59,7 @@ function jobpilot() {
       this.mobileNav = false;
       if (tab === 'sourcesTab') await this.loadSources();
       if (tab === 'profile') await this.loadProfile();
-      if (tab === 'settings') { await this.loadLLM(); await this.loadAI(); await this.loadPrivacy(); await this.loadFeedback(); }
+      if (tab === 'settings') { await this.loadLLM(); await this.loadAI(); await this.loadPrivacy(); }
       await this.load();
     },
 
@@ -477,22 +475,6 @@ function jobpilot() {
       try {
         this.privacy = await (await fetch('/api/privacy')).json();
       } catch { /* keep the safe default */ }
-    },
-
-    async loadFeedback() {
-      try { this.fb = await (await fetch('/api/feedback')).json(); } catch {}
-    },
-
-    async saveScoring() {
-      try {
-        await fetch('/api/feedback/scoring', {
-          method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ scoring_via_chain: this.fb.scoring_via_chain }),
-        });
-        this.showSnack(this.fb.scoring_via_chain
-          ? 'Scoring now uses the provider chain'
-          : 'Scoring pinned to local Ollama');
-      } catch (e) { this.showSnack('Could not save: ' + e.message, 'error'); }
     },
 
     async savePrivacy() {

@@ -23,15 +23,21 @@ def mark_seen(conn, dedupe_hash: str, decision: str, score: float | None = None)
 
 
 def save_job(conn, job: dict):
+    # job_type, deadline and the salary pair used to be missing from this list, so
+    # adapters filled them and the columns stayed NULL — which quietly disabled
+    # profile.yaml's `salary_floor` filter. Anything the schema stores must be
+    # named here.
     conn.execute(
         """INSERT OR IGNORE INTO jobs
            (dedupe_hash, source, source_url, apply_url, title, company,
             location, remote, description, posted_date, score, skills_score,
-            seniority_score, domain_score, rationale, flags)
+            seniority_score, domain_score, rationale, flags,
+            job_type, deadline, salary_min, salary_max)
            VALUES (:dedupe_hash, :source, :source_url, :apply_url, :title,
                    :company, :location, :remote, :description, :posted_date,
                    :score, :skills_score, :seniority_score, :domain_score,
-                   :rationale, :flags)""",
+                   :rationale, :flags,
+                   :job_type, :deadline, :salary_min, :salary_max)""",
         job,
     )
 

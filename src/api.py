@@ -25,8 +25,9 @@ app.add_middleware(
 )
 
 COLS = ("id, title, company, location, remote, job_type, source, source_url, "
-        "apply_url, description, posted_date, deadline, score, skills_score, "
-        "seniority_score, domain_score, rationale, status, applied_on, notes")
+        "apply_url, description, posted_date, deadline, salary_min, salary_max, "
+        "score, skills_score, seniority_score, domain_score, rationale, status, "
+        "applied_on, notes")
 
 # feed = naye/undecided | saved | applied ; dismissed kahin nahi dikhta
 TAB_WHERE = {
@@ -1001,6 +1002,36 @@ def import_template():
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="jobpilot_import_template.csv"'},
     )
+
+
+# ── Feedback loop ───────────────────────────────────────────────────────────
+
+@app.get("/api/feedback")
+def get_feedback():
+    """What the scoring has learned from your save/dismiss decisions."""
+    from src.scoring import feedback
+    from src.scoring.rerank import scoring_via_chain
+    conn = _conn()
+    data = feedback.stats(conn)
+    conn.close()
+    data["scoring_via_chain"] = scoring_via_chain()
+    return data
+
+
+class ScoringUpdate(BaseModel):
+    scoring_via_chain: bool
+
+
+@app.post("/api/feedback/scoring")
+def set_scoring_chain(body: ScoringUpdate):
+    """Score through the provider chain, or pin scoring to local Ollama."""
+    conn = _conn()
+    conn.execute("INSERT INTO settings (key,value) VALUES ('scoring_via_chain',?) "
+                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                 ("1" if body.scoring_via_chain else "0",))
+    conn.commit()
+    conn.close()
+    return {"scoring_via_chain": body.scoring_via_chain}
 
 
 app.mount("/", StaticFiles(

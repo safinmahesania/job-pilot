@@ -517,58 +517,6 @@
         <div class="flex justify-between text-[11px] text-gray-400 mt-1"><span>0</span><span>50</span><span>100</span></div>
       </div>
 
-      <!-- ─── Scoring & feedback ─── -->
-      <div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Scoring</h3>
-        <div class="card divide-y divide-gray-100">
-
-          <div class="flex items-start justify-between gap-4 p-4">
-            <div>
-              <div class="text-sm font-medium">Score through the provider chain</div>
-              <div class="text-xs text-gray-400 mt-1 leading-relaxed">
-                Uses Cerebras / Gemini instead of local Ollama — far faster, and a better
-                judgement of fit. Ollama stays at the end of the chain, so an offline machine
-                still works. Turn this off to pin scoring to local only.
-              </div>
-            </div>
-            <button @click="fb.scoring_via_chain = !fb.scoring_via_chain; saveScoring()"
-              class="sw shrink-0 mt-0.5" :class="fb.scoring_via_chain ? 'on' : 'off'"><span></span></button>
-          </div>
-
-          <div class="p-4">
-            <div class="text-sm font-medium">Learning from your decisions</div>
-            <div class="text-xs text-gray-400 mt-1 leading-relaxed">
-              Every job you save or dismiss teaches the scoring what you actually want. The
-              ones it scored highly and you dismissed anyway are the most useful of all — those
-              are its mistakes, and it is shown them.
-            </div>
-
-            <template x-if="fb.active">
-              <div class="mt-3">
-                <div class="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-600">
-                  <span><span class="font-semibold text-green-600" x-text="fb.applied"></span> applied</span>
-                  <span><span class="font-semibold text-brand" x-text="fb.saved"></span> saved</span>
-                  <span><span class="font-semibold text-gray-500" x-text="fb.dismissed"></span> dismissed</span>
-                </div>
-                <div x-show="fb.high_scored_but_dismissed" class="text-xs rounded-md px-3 py-2 mt-2.5 flex gap-1.5" style="background:#F7EDD8; color:#7A4E0C;">
-                  <i class="ti ti-bulb mt-0.5 shrink-0"></i>
-                  <span><b x-text="fb.high_scored_but_dismissed"></b> jobs were scored 70+ and you dismissed them.
-                    The scoring is being corrected against those. Run <b>Rescore all</b> below to apply it to
-                    everything already in the database.</span>
-                </div>
-              </div>
-            </template>
-
-            <template x-if="!fb.active">
-              <div class="text-xs text-gray-400 mt-3 rounded-md bg-gray-50 px-3 py-2">
-                Not enough history yet — save or dismiss <b x-text="fb.needed"></b> more job(s) and
-                the scoring will start calibrating against your choices.
-              </div>
-            </template>
-          </div>
-        </div>
-      </div>
-
       <!-- ─── Privacy ─── -->
       <div class="mt-6 max-w-2xl">
         <h3 class="text-sm font-semibold text-gray-700 mb-1">Privacy</h3>

@@ -35,6 +35,34 @@ PROFILE_FILE = "profile.yaml"
 DB_PATH = str(DATA_DIR / "jobpilot.db")
 SCHEMA_PATH = str(DATA_DIR / "schema.sql")
 
+# ── Fetching ────────────────────────────────────────────────────────────────
+# Boards are fetched in parallel. They are different hosts doing nothing but
+# serving a JSON file, so waiting for them one at a time is wasted wall-clock —
+# 70+ sources sequentially is minutes of pure network latency.
+#
+# Keep this modest: several companies share one ATS host (a dozen sit on
+# Greenhouse), and hammering it would be rude and might get us rate-limited.
+FETCH_CONCURRENCY = 8
+
+# ── Scoring ─────────────────────────────────────────────────────────────────
+# Scoring used to be pinned to local Ollama on the theory that per-run volume
+# would burn a free-tier quota. That reasoning no longer holds: once the database
+# is warm, a run scores a handful of genuinely new jobs, not hundreds. Cerebras
+# alone allows 1M tokens a day.
+#
+# So scoring now goes through the same provider chain as everything else — much
+# faster, and a materially better judgement of fit. Ollama remains in the chain
+# as the last resort, so an offline machine still works.
+SCORING_VIA_PROVIDER_CHAIN = True
+
+# How many of your own past decisions are shown to the model as calibration.
+# Your saved and dismissed jobs are the only ground truth about what you actually
+# want — a score the model assigned that you then dismissed is a labelled error,
+# and it is free to learn from.
+FEEDBACK_SAVED_EXAMPLES = 8
+FEEDBACK_DISMISSED_EXAMPLES = 8
+FEEDBACK_MIN_EXAMPLES = 3        # below this there is nothing to learn from
+
 # ── Privacy ─────────────────────────────────────────────────────────────────
 # Writing a cover letter genuinely requires your background — that is the point of
 # it. But it does NOT require your phone number, your home address or your email:

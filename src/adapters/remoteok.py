@@ -21,6 +21,9 @@ class RemoteOKAdapter(SourceAdapter):
                 continue
             url = j.get("url") or j.get("apply_url")
             out.append({
+                # RemoteOK publishes these directly when the poster gave them.
+                "salary_min": j.get("salary_min") or None,
+                "salary_max": j.get("salary_max") or None,
                 "source": "remoteok",
                 "scope": "global",
                 "company": j.get("company"),

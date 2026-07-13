@@ -12,16 +12,21 @@ from src.paths import ROOT, BACKUP_DIR
 
 def rescore_all():
     """Re-run AI scoring on all stored jobs with current profile + threshold."""
-    from src.scoring.rerank import score_job
+    from src.scoring.rerank import score_job, build_calibration
     profile = load_profile()
     conn = store.connect()
     threshold = int(store.get_setting(conn, "score_threshold", 70))
     rows = conn.execute("SELECT id, title, company, location, description, job_type FROM jobs").fetchall()
+
+    # Rescoring is where the feedback loop pays off: every job is re-judged
+    # against the decisions you have made since it was first scored.
+    calibration = build_calibration()
+
     updated = 0
     for jid, title, company, location, desc, jtype in rows:
         job = {"title": title, "company": company, "location": location,
                "description": desc, "job_type": jtype}
-        r = score_job(job, profile)
+        r = score_job(job, profile, calibration)
         if r is None:
             continue
         conn.execute(

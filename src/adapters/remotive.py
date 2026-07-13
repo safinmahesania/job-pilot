@@ -19,6 +19,8 @@ class RemotiveAdapter(SourceAdapter):
         out = []
         for j in jobs:
             out.append({
+                # Remotive gives a free-text range, e.g. "$70,000 - $90,000".
+                "salary": j.get("salary"),
                 "source": "remotive",
                 "scope": "global",
                 "company": j.get("company_name"),

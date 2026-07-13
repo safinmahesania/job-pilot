@@ -67,7 +67,7 @@ from src import llm, store
 from src.config import load_profile
 from src.normalize import normalize, clean_html
 from src.scoring.prefilter import passes
-from src.scoring.rerank import score_job
+from src.scoring.rerank import score_job, build_calibration
 from src.paths import DEFAULT_SCORE_THRESHOLD
 
 
@@ -426,6 +426,9 @@ def import_jobs(raw_jobs: list[dict], *, source: str = "import",
     threshold = int(store.get_setting(conn, "score_threshold", DEFAULT_SCORE_THRESHOLD))
     scoring_on = store.get_setting(conn, "scoring_enabled", "1") == "1"
 
+    # Imported jobs are scored against the same calibration as fetched ones.
+    calibration = build_calibration() if scoring_on else ""
+
     stats = {"seen": 0, "imported": 0, "scored": 0, "unscored": 0,
              "duplicates": 0, "errors": 0}
 
@@ -449,7 +452,7 @@ def import_jobs(raw_jobs: list[dict], *, source: str = "import",
             has_jd = bool((job.get("description") or "").strip())
 
             if has_jd and scoring_on and passes(job, profile):
-                result = score_job(job, profile)
+                result = score_job(job, profile, calibration)
                 if result is not None:
                     job.update(score=result.overall,
                                skills_score=result.skills_score,

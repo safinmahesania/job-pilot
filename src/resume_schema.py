@@ -156,8 +156,17 @@ def to_markdown(resume: dict, profile: dict, name: str,
     #
     # So it picks labels. The code fills them.
     groups = {str(g["label"]): g["skills"] for g in skill_groups(profile)}
-    ordered = [str(label) for label in (resume.get("skills") or [])
-               if str(label) in groups]
+
+    def label_of(entry):
+        """The model returns strings. An older shape returned {"label": ...}, and a
+        model given a JSON example will occasionally reach for it anyway. Reading
+        both costs one line; guessing wrong loses the ordering silently."""
+        return str(entry.get("label", "") if isinstance(entry, dict) else entry)
+
+    ordered = [label_of(e) for e in (resume.get("skills") or [])
+               if label_of(e) in groups]
+    # Anything the model left out is still yours, so it still appears. Dropping a
+    # skill category is dropping a fact.
     ordered += [label for label in groups if label not in ordered]
 
     if ordered:

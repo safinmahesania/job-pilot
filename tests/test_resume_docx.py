@@ -223,14 +223,26 @@ class TestTheProfileActuallyReachesTheModel:
         )
         facts = apply._profile_facts(example)
 
-        # No "Skill category —" prefix any more: it was an annotation for the
-        # model's benefit, and the model copied it onto the page. The label alone
-        # is what must reach the prompt.
-        for expected in ["Skills (expert)", "Programming & Markup Languages:",
-                         "Experience:", "Education:", "Certificate:", "Volunteer:"]:
+        for expected in ["Skills (expert)", "Experience:", "Education:",
+                         "Certificate:", "Volunteer:"]:
             assert expected in facts, (
                 f"'{expected}' never reaches the model — the resume cannot "
                 f"contain what the model was not told."
+            )
+
+        # The skill categories, by whatever the example profile happens to call
+        # them. Naming one here would tie this test to the example's wording and
+        # break the day someone renames a category — which is not a bug.
+        #
+        # What matters is that each label arrives WITHOUT the "Skill category —"
+        # prefix the fact sheet used to add. That prefix was an annotation for the
+        # model's benefit, and the model copied it onto the page, printing
+        # "Skill category — Databases:" on a real resume.
+        from src.config import skill_groups
+        assert "Skill category" not in facts
+        for group in skill_groups(example):
+            assert f"{group['label']}:" in facts, (
+                f"the skill category '{group['label']}' never reaches the model"
             )
 
     def test_locations_and_dates_are_included(self, monkeypatch):

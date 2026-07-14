@@ -482,3 +482,118 @@ class TestTheWordFile:
 
     def test_the_bullets_are_real_bullets(self):
         assert "ListBullet" in self._docx()
+
+
+class TestTheSkillsShape:
+    """The crash on the first real job after the skills change.
+
+        AttributeError: 'str' object has no attribute 'get'
+
+    The SHAPE moved — skills became a list of label strings, because the contents
+    come from the profile and there was never a reason to let the model retype them
+    — and the guard did not move with it. It called .get() on a string and took down
+    the request with a 502.
+
+    That is what a schema living in two places costs. So each reader takes both
+    shapes rather than trusting either, and this file holds the tests that would
+    have caught it.
+    """
+
+    PROFILE = {
+        "identity": {"name": "Safin"},
+        "contact": {"city": "Montreal"},
+        "skill_categories": [
+            {"label": "Programming & Markup Languages", "skills": ["Dart", "Python"]},
+            {"label": "Databases", "skills": ["MySQL", "SQLite"]},
+        ],
+        "experience": [{"company": "Otrack"}],
+        "education": [{"institution": "Concordia University"}],
+        "projects": [{"name": "Recipedia"}],
+        "certificates": [], "volunteer": [],
+    }
+
+    BASE = {
+        "summary": "Software developer.",
+        "experience": [{"role": "Dev", "company": "Otrack", "location": "",
+                        "dates": "2024", "bullets": ["Built an app."]}],
+        "education": [{"degree": "MSc", "institution": "Concordia University",
+                       "location": "", "dates": "2026"}],
+        "projects": [{"name": "Recipedia", "owner": "course", "tech": [],
+                      "link": "", "bullets": ["An app."]}],
+        "certificates": [], "volunteer": [],
+    }
+
+    def test_the_guard_does_not_crash_on_string_labels(self):
+        """The 502. A string has no .get()."""
+        resume = dict(self.BASE, skills=["Databases"])
+
+        problems = resume_guard.check_structured(resume, self.PROFILE)
+
+        assert problems == []
+
+    def test_the_guard_still_reads_the_older_dict_shape(self):
+        """A model shown a JSON example will occasionally reach for the old shape
+        anyway. Reading both costs one line."""
+        resume = dict(self.BASE,
+                      skills=[{"label": "Databases", "skills": ["MySQL"]}])
+
+        assert resume_guard.check_structured(resume, self.PROFILE) == []
+
+    def test_an_invented_category_is_still_caught_in_either_shape(self):
+        """Tolerance of shape must not become tolerance of lies."""
+        for skills in (["Sales Experience"],
+                       [{"label": "Sales Experience", "skills": ["SaaS"]}]):
+            resume = dict(self.BASE, skills=skills)
+
+            problems = resume_guard.check_structured(resume, self.PROFILE)
+
+            assert any("Sales Experience" in p for p in problems)
+
+    def test_the_model_chooses_the_order(self):
+        resume = dict(self.BASE,
+                      skills=["Databases", "Programming & Markup Languages"])
+
+        markdown = to_markdown(resume, self.PROFILE, "Safin")
+
+        assert markdown.index("Databases:") < markdown.index("Programming &")
+
+    def test_the_order_survives_the_dict_shape_too(self):
+        """It used to be silently lost: str({"label": ...}) matches no category, so
+        every model-chosen order fell back to the profile's."""
+        resume = dict(self.BASE, skills=[{"label": "Databases"}])
+
+        markdown = to_markdown(resume, self.PROFILE, "Safin")
+
+        assert markdown.index("Databases:") < markdown.index("Programming &")
+
+    def test_a_category_the_model_omitted_is_rendered_anyway(self):
+        """Dropping a skill category is dropping a fact."""
+        resume = dict(self.BASE, skills=["Databases"])
+
+        markdown = to_markdown(resume, self.PROFILE, "Safin")
+
+        assert "Programming & Markup Languages" in markdown
+
+    def test_no_skills_at_all_still_renders_the_profile(self):
+        resume = dict(self.BASE, skills=[])
+
+        markdown = to_markdown(resume, self.PROFILE, "Safin")
+
+        assert "Databases:" in markdown
+        assert "Programming & Markup Languages:" in markdown
+
+    def test_the_limits_check_does_not_crash_either(self):
+        for skills in (["Databases"], [{"label": "Databases"}], []):
+            resume = dict(self.BASE, skills=skills)
+            assert resume_limits.check_structured(resume) == []
+
+    def test_the_shape_the_prompt_asks_for_is_the_shape_the_guard_reads(self):
+        """The bug in one line: these two drifted apart. If the prompt starts asking
+        for dicts again, this fails before a user sees a 502."""
+        shape = resume_schema.SHAPE["skills"]
+
+        assert isinstance(shape, list)
+        assert isinstance(shape[0], str), (
+            "the prompt asks for skill objects but the renderer and the guard "
+            "expect label strings"
+        )

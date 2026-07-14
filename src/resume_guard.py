@@ -356,11 +356,22 @@ def check_structured(resume: dict, profile: dict) -> list[str]:
           "Volunteer", "in your volunteer history")
 
     # Skill category labels must be the profile's own.
+    #
+    # The model returns a list of LABELS now — plain strings, in the order it wants
+    # them shown — because the contents come from the profile and there was never a
+    # reason to let it retype them. This crashed on the first real job after the
+    # change: the shape moved and this check did not, and it called .get() on a
+    # string. That is the cost of a schema that lives in two places, so it is
+    # tolerant of both shapes rather than assuming either.
     from src.config import skill_groups
     allowed_labels = {_normalise(g["label"]) for g in skill_groups(profile)}
     if allowed_labels:
         for group in resume.get("skills") or []:
-            label = str(group.get("label", "")).strip()
+            if isinstance(group, dict):
+                label = str(group.get("label", "")).strip()
+            else:
+                label = str(group).strip()
+
             if label and not _mentions_any(label, allowed_labels):
                 problems.append(
                     f'"{label}" is not a skill category in your profile. It came '

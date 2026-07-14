@@ -21,6 +21,8 @@ import re
 
 from src import llm
 from src.config import load_profile
+from src import resume_limits, resume_guard
+from src.llm import LLMError
 from src.paths import (
     CONFIG_DIR,
     COVER_LETTER_WORDS,
@@ -94,6 +96,84 @@ def fill_contact(text: str, profile: dict) -> str:
     return text
 
 
+_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _month_year(value) -> str:
+    """"2024-05" -> "May 2024". Anything else is passed through untouched.
+
+    The profile stores dates sortably; a resume wants them readable. Doing the
+    conversion here rather than asking the model to do it removes one more thing
+    it can quietly get wrong — and a wrong date on a resume is a real problem.
+    """
+    if not value:
+        return ""
+    text = str(value).strip()
+    if text.lower() in ("present", "current", "now"):
+        return "Present"
+    parts = text.split("-")
+    if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+        month = int(parts[1])
+        if 1 <= month <= 12:
+            return f"{_MONTHS[month - 1]} {parts[0]}"
+    return text
+
+
+def _span(start, end) -> str:
+    """"Sep 2024 - Apr 2026", or just one side if that's all there is."""
+    a, b = _month_year(start), _month_year(end)
+    if a and b:
+        return f"{a} - {b}"
+    return a or b
+
+
+def skill_groups(profile: dict) -> list[dict]:
+    """The resume's skill lines: [{"label": ..., "skills": [...]}, ...].
+
+    The profile shape is a list, so the order is yours and the labels are yours:
+
+        skill_categories:
+          - label: Programming Skills
+            skills: [Dart, Java, C, ...]
+
+    A dict is still accepted, for profiles written before this changed. Either
+    way, an empty category is dropped — an empty "Deep Learning:" line on a resume
+    reads as something you failed to fill in.
+    """
+    raw = profile.get("skill_categories") or []
+    groups = []
+
+    if isinstance(raw, dict):
+        # Older shape: fixed keys, labels supplied here.
+        legacy = {
+            "programming": "Programming & Core Concepts",
+            "frameworks": "Frameworks & Development",
+            "databases": "Databases",
+            "cloud": "Cloud & Distributed Systems",
+            "ml": "Machine Learning & AI",
+            "tools": "Developer Tools & Environments",
+            "methods": "Methodologies & Practices",
+            "languages": "Languages",
+        }
+        for key, label in legacy.items():
+            skills = raw.get(key) or []
+            if skills:
+                groups.append({"label": label,
+                               "skills": [str(s) for s in skills]})
+        return groups
+
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        label = str(entry.get("label", "")).strip()
+        skills = [str(s).strip() for s in (entry.get("skills") or [])
+                  if str(s).strip()]
+        if label and skills:
+            groups.append({"label": label, "skills": skills})
+    return groups
+
+
 def _profile_facts(profile: dict) -> str:
     """The profile as a compact fact sheet. Only fields that exist are included,
     so the model has no blanks to fill in.
@@ -119,19 +199,46 @@ def _profile_facts(profile: dict) -> str:
         if skills.get(tier):
             lines.append(f"Skills ({tier}): {', '.join(skills[tier])}")
 
+    # The resume's skill groupings — labels, order and contents all come from the
+    # profile. They used to be hardcoded here, with names I picked, which meant
+    # anyone whose resume grouped skills differently had to bend to fit. It is
+    # their resume; these are their headings.
+    #
+    # A category with nothing in it is not listed, so the model is never handed an
+    # empty line it might feel obliged to fill.
+    for group in skill_groups(profile):
+        lines.append(f"Skill category — {group['label']}: "
+                     f"{' | '.join(group['skills'])}")
+
     for exp in profile.get("experience", []) or []:
-        span = f"{exp.get('start','')}–{exp.get('end','')}".strip("–")
+        where = f", {exp['location']}" if exp.get("location") else ""
         lines.append(
-            f"Experience: {exp.get('role','')} at {exp.get('company','')} ({span})".strip()
+            f"Experience: {exp.get('role','')} at {exp.get('company','')}{where} "
+            f"({_span(exp.get('start'), exp.get('end'))})".strip()
         )
         for h in exp.get("highlights", []) or []:
             lines.append(f"  - {h}")
 
     for edu in profile.get("education", []) or []:
+        where = f", {edu['location']}" if edu.get("location") else ""
+        gpa = f", GPA {edu['gpa']}" if edu.get("gpa") else ""
         lines.append(
             f"Education: {edu.get('degree','')} in {edu.get('field','')}, "
-            f"{edu.get('institution','')} ({edu.get('end','')})".strip()
+            f"{edu.get('institution','')}{where} "
+            f"({_span(edu.get('start'), edu.get('end'))}){gpa}".strip()
         )
+
+    for cert in profile.get("certificates", []) or []:
+        link = f" ({cert['link']})" if cert.get("link") else ""
+        when = f" — {cert['date']}" if cert.get("date") else ""
+        lines.append(f"Certificate: {cert.get('name','')}{when}{link}")
+
+    for vol in profile.get("volunteer", []) or []:
+        lines.append(
+            f"Volunteer: {vol.get('organization','')} / {vol.get('role','')} — "
+            f"{vol.get('description','').strip()}"
+        )
+
     return "\n".join(lines)
 
 
@@ -143,10 +250,14 @@ def _format_projects(projects: list, indices=None) -> str:
             continue
         tech = ", ".join(p.get("tech", []) or [])
         bits = [f"[{i}] {p.get('name', '')}"]
+        if p.get("owner"):
+            bits.append(f"(owner: {p['owner']})")
         if p.get("description"):
             bits.append(f"— {p['description']}")
         if tech:
             bits.append(f"(tech: {tech})")
+        if p.get("link"):
+            bits.append(f"(link: {p['link']})")
         line = " ".join(bits)
         for h in p.get("highlights", []) or []:
             line += f"\n    - {h}"
@@ -478,6 +589,41 @@ TAILORING — same facts, angled at this job:
 - Use the job's own vocabulary where it honestly matches my experience.
 - Include only the projects given to you as relevant.
 
+{{SKILLS}} — one bullet per category, in the order the profile lists them, with
+the category name in bold exactly as the profile writes it:
+
+    - **Programming Skills:** Dart | Java | C | C# | Python
+    - **Databases:** MySQL | SQL Server | Cloud Firestore | SQLite
+
+Order the skills WITHIN each line so the ones this job cares about come first.
+Never add a skill that is not in the profile, and never rename a category.
+
+THE `@@` CONVENTION — this is how dates land on the right:
+`@@` splits a line into left and right. Everything after it is pushed to the right
+margin when the resume is rendered. Use it exactly as the template shows:
+
+    ### Software Developer Intern @@ May 2024 - Aug 2024
+    Acme Corp, Toronto, ON
+    - Cut API latency 40% by putting a Redis cache in front of the pricing service.
+
+    ### Master of Science, Computer Science @@ Sep 2024 - Apr 2026
+    Concordia University, Montreal, QC
+
+    ### JobPilot - Personal (Python, FastAPI) @@ github.com/you/job-pilot
+    - Built a pipeline that fetches 70+ boards concurrently and scores each posting.
+
+    - AWS Certified Cloud Practitioner @@ credly.com/badges/abc
+
+One `@@` per line at most. No `@@` on a line that has nothing to put on the right.
+
+EMPTY SECTIONS — drop them:
+If the profile has no certificates, remove the "## Certificates and Achievements"
+heading entirely, along with its placeholder. Same for Volunteer, and for any
+skills category with nothing in it. An empty heading on a resume is worse than no
+heading — it reads as something you failed to fill in.
+
+{limits}
+
 OUTPUT:
 - Output ONLY the filled Markdown. No preamble, no explanation, no code fences."""
 
@@ -498,6 +644,18 @@ def generate_resume(job: dict) -> dict:
     template = template_path.read_text(encoding="utf-8")
 
     profile = load_profile()
+
+    # Guard 1: refuse to write a resume from a profile that cannot support one.
+    #
+    # This is not pedantry. Handed an empty fact sheet, a template full of
+    # {{EXPERIENCE}} placeholders and an instruction to "leave no placeholder
+    # behind", the model has exactly one source of facts left — the job posting —
+    # and it will use it. It will invent an employer, a degree, and a name lifted
+    # from the job title. The output is fluent and completely false.
+    missing = resume_guard.validate_profile(profile)
+    if missing:
+        raise resume_guard.ProfileIncompleteError(missing)
+
     projects = profile.get("projects", []) or []
     real_name = (profile.get("identity", {}) or {}).get("name", "")
     name = "{{NAME}}" if redacting() else real_name
@@ -513,7 +671,8 @@ def generate_resume(job: dict) -> dict:
     jd = _strip_html(job.get("description", ""))[:5000]
     reqs_block = "\n".join(f"- {r}" for r in requirements) or "(see description below)"
 
-    system = _RESUME_SYSTEM.format(name=name or "the candidate")
+    system = _RESUME_SYSTEM.format(name=name or "the candidate",
+                                   limits=resume_limits.instructions())
     user = f"""MY PROFILE — the only facts you may use:
 {_profile_facts(profile)}
 
@@ -539,9 +698,77 @@ Fill the template now. Output only the finished Markdown resume."""
 
     text, provider = llm.generate(system, user, personal=True)
     text = _clean_output(text)
+
+    # Measure what actually came back. Asking a model to keep to three lines and
+    # believing it is how resumes end up on a second page — it is counting words
+    # against a page it has never seen. One tightening pass, naming exactly what
+    # overran and by how much, fixes almost all of it.
+    overruns = resume_limits.check(text)
+    if overruns:
+        complaints = "\n".join(f"- {o.message}" for o in overruns)
+        print(f"  resume ran long — asking for a tighter pass:\n{complaints}")
+
+        retry = (
+            f"{user}\n\n"
+            f"YOUR PREVIOUS ATTEMPT WAS TOO LONG. These parts overran:\n"
+            f"{complaints}\n\n"
+            f"Produce the resume again, complete and unchanged in substance, with "
+            f"those parts within their limits. Keep every fact, every metric and "
+            f"every technology — cut words, not content."
+        )
+        try:
+            retried, provider = llm.generate(system, retry, personal=True)
+            retried = _clean_output(retried)
+            # Only keep the retry if it actually helped.
+            if len(resume_limits.check(retried)) < len(overruns):
+                text = retried
+                overruns = resume_limits.check(text)
+        except LLMError:
+            pass                                 # keep the long one; say so below
+
+    # Guard 2: is every fact on this page actually yours?
+    #
+    # A valid profile is not enough — the model can still drift, especially when
+    # the job describes a role quite unlike your background. The only way to know
+    # is to read what came back and compare it to what went in. Every employer,
+    # school, project and certificate must exist in the profile.
+    invented = resume_guard.check_grounding(text, profile)
+    if invented:
+        print("  the resume contained invented facts — regenerating:")
+        for problem in invented:
+            print(f"    - {problem}")
+
+        strict = (
+            f"{user}\n\n"
+            f"YOUR PREVIOUS ATTEMPT INVENTED FACTS THAT ARE NOT IN MY PROFILE:\n"
+            + "\n".join(f"- {p}" for p in invented)
+            + "\n\nEvery employer, school, project and certificate on this resume "
+              "must come from MY PROFILE above — not from the job description. The "
+              "job tells you what to EMPHASISE. It does not tell you who I am.\n\n"
+              "Write the resume again, using only my real background."
+        )
+        try:
+            retried, provider = llm.generate(system, strict, personal=True)
+            retried = _clean_output(retried)
+            if not resume_guard.check_grounding(retried, profile):
+                text = retried
+                invented = []
+        except LLMError:
+            pass
+
+    if invented:
+        # Not a warning, and not a draft to tidy up. A resume claiming an employer
+        # you never worked for is one careless send away from a conversation you
+        # cannot recover from. It does not reach you.
+        raise resume_guard.FabricationError(invented)
+
     text = fill_contact(text, profile)          # identifiers restored, locally
 
     return {
+        "overruns": [
+            {"where": o.where, "allowed": o.allowed, "actual": o.actual}
+            for o in overruns
+        ],
         "text": text,
         "provider": provider,
         "requirements": requirements,

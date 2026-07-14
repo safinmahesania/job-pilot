@@ -102,6 +102,46 @@ def filename(job: dict, kind: str, ext: str) -> str:
 # renderer, not a full Markdown engine — a resume only ever needs headings, bold,
 # bullets and paragraphs, and a dependency-light path matters more than fidelity.
 
+def _pdf_line_with_right(pdf, left: str, right: str, body_size: float,
+                         face: str = "Helvetica"):
+    """One line with `right` flush to the right margin — the tabbed-date line."""
+    heading = left.startswith("### ")
+    bullet = left.lstrip().startswith(("- ", "* "))
+
+    if heading:
+        left = left[4:].strip()
+        pdf.set_font(face, "B", body_size + 0.5)
+    elif bullet:
+        # A "-", not a "•". Core PDF fonts are latin-1 and U+2022 isn't in it —
+        # the rest of this renderer already made that concession, and a bullet
+        # that differs by line would look like a mistake.
+        left = "  -  " + left.lstrip()[2:]
+        pdf.set_font(face, "", body_size)
+    else:
+        pdf.set_font(face, "", body_size)
+
+    left = left.replace("**", "")
+    usable = pdf.w - pdf.l_margin - pdf.r_margin
+    right_w = pdf.get_string_width(right) + 1
+
+    pdf.cell(usable - right_w, 5, left, align="L")
+    pdf.set_font(face, "I", body_size - 0.5)
+    pdf.cell(right_w, 5, right, align="R", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font(face, "", body_size)
+
+
+def to_docx(content: str, kind: str) -> bytes:
+    """Render to a Word document.
+
+    Only the resume gets this. A cover letter is prose — it has no dates to pin to
+    a margin and nothing a .docx buys it that a PDF doesn't.
+    """
+    if kind != "resume":
+        raise ValueError("Word export is for the resume; the cover letter is a PDF.")
+    from src.resume_docx import to_docx as render
+    return render(content)
+
+
 def to_pdf(content: str, kind: str) -> bytes:
     """Render a document to PDF bytes. Raises if fpdf2 isn't installed."""
     try:
@@ -111,13 +151,26 @@ def to_pdf(content: str, kind: str) -> bytes:
             "PDF export needs fpdf2. Install it with: pip install fpdf2"
         ) from e
 
-    pdf = FPDF(format="letter", unit="mm")
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.set_margins(18, 16, 18)
-    pdf.add_page()
+    # The resume matches the Word template: Times, A4, half-inch margins. The
+    # cover letter keeps the roomier layout — it is prose on its own page, and it
+    # is not competing for space.
+    from src.resume_docx import BODY_PT, MARGIN_IN, TEXT_WIDTH_IN   # noqa: F401
 
-    # Core fonts only — no font files to ship, works everywhere.
-    body_size = 10.5 if kind == "resume" else 11
+    if kind == "resume":
+        pdf = FPDF(format="A4", unit="mm")
+        margin = MARGIN_IN * 25.4
+        pdf.set_margins(margin, margin, margin)
+        pdf.set_auto_page_break(auto=True, margin=margin)
+        body_size = BODY_PT
+        face = "Times"
+    else:
+        pdf = FPDF(format="letter", unit="mm")
+        pdf.set_margins(18, 16, 18)
+        pdf.set_auto_page_break(auto=True, margin=15)
+        body_size = 11
+        face = "Helvetica"
+
+    pdf.add_page()
 
     in_comment = False
 
@@ -142,19 +195,33 @@ def to_pdf(content: str, kind: str) -> bytes:
 
         text = _pdf_safe(line)
 
+        # The `@@` convention: everything after it belongs at the right margin.
+        # In Word this is a right tab stop; here it's a right-aligned cell on the
+        # same line. Either way the reader sees the dates on the right — and a
+        # parser sees one ordinary line of text, not a table cell.
+        right = ""
+        if "@@" in text:
+            left_part, _, right_part = text.partition("@@")
+            text = left_part.rstrip()
+            right = right_part.strip()
+
         # Always start a block at the left margin: multi_cell(0, ...) measures its
         # width from the current x, and a preceding write() leaves x mid-line.
         pdf.set_x(pdf.l_margin)
 
+        if right:
+            _pdf_line_with_right(pdf, text, right, body_size, face)
+            continue
+
         # # Name  -> title
         if text.startswith("# "):
-            pdf.set_font("Helvetica", "B", 17)
+            pdf.set_font(face, "B", 17)
             pdf.multi_cell(0, 8, text[2:].strip())
             pdf.ln(1)
         # ## Section
         elif text.startswith("## "):
             pdf.ln(2)
-            pdf.set_font("Helvetica", "B", 11.5)
+            pdf.set_font(face, "B", 11.5)
             pdf.multi_cell(0, 6, text[3:].strip().upper())
             # a rule under the section heading
             y = pdf.get_y()
@@ -164,11 +231,11 @@ def to_pdf(content: str, kind: str) -> bytes:
             pdf.ln(2)
         # ### Sub-heading (role, project name)
         elif text.startswith("### "):
-            pdf.set_font("Helvetica", "B", body_size)
+            pdf.set_font(face, "B", body_size)
             pdf.multi_cell(0, 5.5, text[4:].strip())
         # - bullet
         elif re.match(r"^[-*]\s+", text):
-            pdf.set_font("Helvetica", "", body_size)
+            pdf.set_font(face, "", body_size)
             bullet = _strip_md(re.sub(r"^[-*]\s+", "", text))
             usable = pdf.w - pdf.l_margin - pdf.r_margin
             pdf.set_x(pdf.l_margin + 3)
@@ -178,13 +245,13 @@ def to_pdf(content: str, kind: str) -> bytes:
             # **Bold label:** rest  -> bold label, regular text, on one flowing line
             m = re.match(r"^\*\*(.+?):?\*\*:?\s*(.*)$", text)
             if m:
-                pdf.set_font("Helvetica", "B", body_size)
+                pdf.set_font(face, "B", body_size)
                 pdf.write(5, f"{m.group(1)}: ")
-                pdf.set_font("Helvetica", "", body_size)
+                pdf.set_font(face, "", body_size)
                 pdf.write(5, _strip_md(m.group(2)))
                 pdf.ln(5.5)
             else:
-                pdf.set_font("Helvetica", "", body_size)
+                pdf.set_font(face, "", body_size)
                 pdf.multi_cell(0, 5.4, _strip_md(text))
 
     out = pdf.output()

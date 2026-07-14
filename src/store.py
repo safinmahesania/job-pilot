@@ -43,14 +43,59 @@ def save_job(conn, job: dict):
 
 
 def save_source_health(conn, name, ats, stat, when):
+    """Record what a board did this run, and how long it has been doing it.
+
+    The streaks are the point. A single empty fetch means nothing — a company
+    genuinely might have no openings today. Three in a row from a board that used
+    to return twenty is a broken selector, a changed API, or a company that quietly
+    left the ATS. Without a streak you cannot tell those apart, and a board that
+    returns 200-OK-and-nothing will sit in the Health tab looking green forever.
+    """
+    fetched = stat["fetched"]
+    failed = stat["status"] == "error"
+
+    prior = conn.execute(
+        "SELECT zero_streak, error_streak, last_ok, alerted FROM source_health "
+        "WHERE name = ?", (name,)
+    ).fetchone()
+    zero_streak, error_streak, last_ok, alerted = prior or (0, 0, None, 0)
+
+    if failed:
+        error_streak += 1
+    elif fetched == 0:
+        zero_streak += 1
+        error_streak = 0
+    else:
+        # It worked. Everything resets, including the alert — so if it breaks
+        # again later you get told again.
+        zero_streak = 0
+        error_streak = 0
+        last_ok = when
+        alerted = 0
+
     conn.execute(
-        """INSERT INTO source_health (name, ats, fetched, kept, status, error, last_run)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO source_health
+           (name, ats, fetched, kept, status, error, last_run,
+            zero_streak, error_streak, last_ok, alerted)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(name) DO UPDATE SET
              ats=excluded.ats, fetched=excluded.fetched, kept=excluded.kept,
-             status=excluded.status, error=excluded.error, last_run=excluded.last_run""",
-        (name, ats, stat["fetched"], stat["kept"], stat["status"], stat["error"], when),
+             status=excluded.status, error=excluded.error,
+             last_run=excluded.last_run, zero_streak=excluded.zero_streak,
+             error_streak=excluded.error_streak, last_ok=excluded.last_ok,
+             alerted=excluded.alerted""",
+        (name, ats, fetched, stat["kept"], stat["status"], stat["error"], when,
+         zero_streak, error_streak, last_ok, alerted),
     )
+    conn.commit()
+
+
+def mark_health_alerted(conn, names: list[str]):
+    """Don't report the same broken board every single run."""
+    if not names:
+        return
+    conn.executemany("UPDATE source_health SET alerted = 1 WHERE name = ?",
+                     [(n,) for n in names])
     conn.commit()
 
 

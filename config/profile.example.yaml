@@ -1,5 +1,24 @@
-# Copy this file to profile.yaml and edit it with your details.
-# The scorer reads profile.yaml on every run; profile.yaml is gitignored.
+# ═══════════════════════════════════════════════════════════════════════════
+#  JobPilot — your profile
+#
+#  Copy this to config/profile.yaml and fill it in. profile.yaml is gitignored;
+#  it is the only place your real details live.
+#
+#  Everything JobPilot writes about you comes from this file. It will never
+#  invent an employer, a date, a metric or a skill — so a field you leave blank
+#  is a blank on the page, not a guess. That is deliberate: a plausible lie on a
+#  resume is far more expensive than a gap.
+#
+#  Three things read this file:
+#    · SCORING     — how well a job fits you       (skills, summary, constraints)
+#    · RESUME      — the tailored document          (skill_categories, experience,
+#                                                    projects, education, ...)
+#    · AUTOFILL    — the browser extension          (contact, application,
+#                                                    custom_answers)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+# ── WHO YOU ARE ────────────────────────────────────────────────────────────
 
 identity:
   name: Your Name
@@ -8,7 +27,12 @@ identity:
   seniority: junior                     # intern | junior | entry | mid | senior
   titles: [Software Engineer, Backend Developer]
 
-# Used by the browser extension to fill application forms.
+# Goes on the resume header, and fills application forms.
+#
+# In the default privacy mode none of this ever reaches a hosted model — the
+# model writes around placeholders and JobPilot substitutes the real values
+# locally. Writing a cover letter needs your work history. It does not need your
+# phone number.
 contact:
   email: you@example.com
   phone: "+1 555 123 4567"
@@ -17,62 +41,24 @@ contact:
   province: Quebec                      # state / province
   country: Canada
   postal_code: H3A 0G4
-  linkedin: https://linkedin.com/in/yourhandle
-  github: https://github.com/yourhandle
+  linkedin: linkedin.com/in/yourhandle
+  github: github.com/yourhandle
   website: ""                           # portfolio, optional
 
-# Standard application questions. The extension answers these automatically;
-# anything left blank is skipped rather than guessed.
-application:
-  work_authorized: true                 # legally allowed to work in the country
-  needs_sponsorship: false
-  willing_to_relocate: true
-  requires_visa: false
-  notice_period: Immediately
-  salary_expectation: ""                # leave blank to skip the question
-  years_of_experience: 1
-  how_did_you_hear: Company website
-
-  # Work arrangement. Employers ask this in many shapes — "can you commit to
-  # three days a week in-office?", "are you able to commute to our Toronto
-  # office?", "this role is onsite 5 days". The generator compares what the job
-  # asks for against these values and answers Yes or No accordingly.
-  work_arrangement: hybrid              # onsite | hybrid | remote | any
-  willing_to_work_onsite: true
-  max_days_onsite_per_week: 3           # the most you will commit to
-  willing_to_commute: true
-  commute_locations: [Montreal, Toronto]   # offices you can realistically reach
-  # Voluntary EEO questions — leave blank and the extension will not answer them.
-  gender: ""
-  ethnicity: ""
-  veteran_status: ""
-  disability_status: ""
-
-# Your own answers to questions that keep coming up. These are checked BEFORE the
-# AI, so they are exact and free. `match` is a list of keywords — if all of them
-# appear in the form field's label (case-insensitive), the answer is used.
-#
-# Add to this list whenever you meet a question you want a fixed answer for.
-custom_answers:
-  - match: [why, work, here]
-    answer: ""                          # leave blank to let the AI write it
-
-  - match: [criminal, record]
-    answer: "No"
-
-  - match: [18, years, age]
-    answer: "Yes"
-
-  - match: [previously, employed]
-    answer: "No"
-
+# One short paragraph. Scoring reads it as context; the resume rewrites it for
+# each job, within 3 lines.
 summary: |
   One short paragraph describing who you are and what you're looking for.
-  The scorer uses this as context when rating fit.
+
+
+# ── WHAT YOU WILL AND WON'T TAKE ───────────────────────────────────────────
+#
+# These filter jobs out before a model ever sees them — cheap, and they never
+# change their mind.
 
 constraints:
   locations: [Remote, Toronto, Montreal, Canada]
-  salary_floor: 60000
+  salary_floor: 60000                   # only bites when a board publishes pay
   currency: CAD
   needs_sponsorship: false
 
@@ -84,29 +70,206 @@ search:
   job_types: []
   posted_within_days: 45
 
+
+# ── SKILLS ─────────────────────────────────────────────────────────────────
+#
+# Two blocks, because they answer two different questions. Keep both.
+
+# "How good are you at this?" — drives SCORING.
+#
+# Be honest here. This is what decides whether a job is shown to you at all, so
+# inflating it just fills your feed with roles you would struggle in — and the
+# resume generator reads it too: it will not write "expert in AWS" if you said
+# "familiar".
 skills:
-  expert: [Python, JavaScript]
-  proficient: [React, PostgreSQL, Docker]
-  familiar: [AWS, TypeScript]
+  expert: [Dart, Flutter, Python]
+  proficient: [Java, "C#", ".NET 8", SQL, JavaScript, Firebase]
+  familiar: [Azure, PyTorch, Apache Spark, C]
+
+# "Where does this go on the page?" — drives the RESUME.
+#
+# A list, not a map: the labels are yours and so is the order. These are your
+# headings, printed exactly as you write them here.
+#
+# The generator orders the skills WITHIN each line by relevance to the job. It
+# never renames a category, never reorders your categories, and never adds a
+# skill you don't have. A category with an empty list is dropped from the resume
+# entirely — an empty "Deep Learning:" line reads as something you forgot.
+skill_categories:
+  - label: Programming Skills
+    skills: [Dart, Java, C, C#, Python, HTML, CSS, JavaScript, SQL]
+
+  - label: Frameworks & Technologies
+    skills: [Flutter, .NET 8, RESTful APIs, MVC Architecture, Firebase,
+             Azure Cloud, Object-Oriented Programming, Apache Spark,
+             Azure Databricks]
+
+  - label: Data & Machine Learning
+    skills: [Pandas, NumPy, scikit-learn, Feature Engineering, Model Evaluation]
+
+  - label: Deep Learning
+    skills: [Convolutional Neural Networks, PyTorch, Torchvision,
+             Data Augmentation, Transfer Learning]
+
+  - label: Databases
+    skills: [MySQL, SQL Server, Cloud Firestore, SQLite]
+
+  - label: Developer Tools & Environments
+    skills: [Visual Studio, Visual Studio Code, IntelliJ IDEA, Android Studio,
+             PyCharm, SQL Server Management Studio, Git, GitHub, Postman]
+
+  - label: Software & Productivity Tools
+    skills: ["MS Office (Word, Excel, PowerPoint)", Slack, Jira]
+
+  - label: Methodologies & Practices
+    skills: [Agile, Scrum, Version Control, API Integration, Debugging,
+             Cross-Platform Development, Continuous Improvement]
+
+  - label: Soft Skills
+    skills: [Leadership, Critical Thinking, Communication, Problem-Solving,
+             Time Management, Collaboration, Adaptability, Attention to Detail]
+
+  - label: Languages
+    skills: ["English – Fluent", "French – Beginner", "Urdu – Fluent"]
+
+
+# ── EXPERIENCE ─────────────────────────────────────────────────────────────
+#
+# `highlights` are NOTES, not finished resume lines. The generator rewrites them
+# for each job — it will not lift one verbatim. Write down what you actually did
+# and what came of it; give it more than it needs and let it choose.
+#
+# Each bullet on the finished resume is capped at 2 lines.
 
 experience:
   - role: Software Developer Intern
     company: Example Corp
-    start: 2024-05
-    end: 2024-08
+    location: Toronto, ON               # renders under the role
+    start: 2024-05                      # -> "May 2024 - Aug 2024"
+    end: 2024-08                        # use "Present" if you're still there
     highlights:
-      - Built X that did Y, improving Z by N%.
+      - Cut API latency 40% with a Redis cache in front of the pricing service.
+      - Wrote the integration tests that caught a payment rounding bug pre-release.
+      - Migrated the deploy from manual to GitHub Actions.
+
+
+# ── PROJECTS ───────────────────────────────────────────────────────────────
+#
+# Only the 3 most relevant to each job make it onto the resume, and each gets
+# 3 bullet points: two of up to 2 lines, and one of 1 line.
+#
+# List more than three. The generator ranks them against the job and picks.
 
 projects:
+  - name: JobPilot
+    owner: Personal                     # or a course, a client, a hackathon
+    link: github.com/you/job-pilot      # shown on the right of the project line
+    tech: [Python, FastAPI, SQLite]
+    description: A personal job-hunting pipeline.
+    highlights:
+      - Fetches 70+ boards concurrently and scores each posting against my profile.
+      - Chrome extension fills application forms from a local profile.
+      - Three privacy modes; contact details never reach a hosted model.
+
   - name: Example Project
-    tech: [Python, FastAPI]
+    owner: Course
+    link: ""                            # blank -> nothing on the right
+    tech: [Python]
     description: One line on what it does.
     highlights:
       - Notable outcome or scale.
 
+
+# ── EDUCATION ──────────────────────────────────────────────────────────────
+
 education:
-  - degree: MSc
+  - degree: Master of Science
     field: Computer Science
     institution: Your University
-    end: 2026
-    gpa: ""
+    location: Montreal, QC              # renders under the degree
+    start: 2024-09                      # -> "Sep 2024 - Apr 2026"
+    end: 2026-04
+    gpa: ""                             # blank -> omitted
+
+
+# ── CERTIFICATES AND ACHIEVEMENTS ──────────────────────────────────────────
+#
+# An empty list drops the whole section from the resume. That is the right
+# outcome: an empty heading reads as something you forgot to fill in.
+
+certificates:
+  - name: AWS Certified Cloud Practitioner
+    link: credly.com/badges/your-badge  # shown on the right
+    date: 2025
+
+
+# ── VOLUNTEER AND COMMUNITY INVOLVEMENT ────────────────────────────────────
+#
+# Same rule — empty list, no section. Each description is capped at 3 lines.
+
+volunteer:
+  - organization: Example Club
+    role: Mentor
+    description: >
+      Two or three lines on what you actually did there — what you ran, who it
+      was for, and what changed because of it.
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  BROWSER EXTENSION — filling application forms
+# ═══════════════════════════════════════════════════════════════════════════
+
+# The standard questions every ATS asks. Anything left blank is SKIPPED, not
+# guessed — a wrong answer on a legal form is worse than an empty field you
+# notice and fill yourself.
+application:
+  work_authorized: true                 # legally allowed to work in the country
+  needs_sponsorship: false
+  requires_visa: false
+  willing_to_relocate: true
+  notice_period: Immediately
+  salary_expectation: ""                # blank -> the question is left alone
+  years_of_experience: 1
+  how_did_you_hear: Company website
+
+  # Employers ask about arrangement in many shapes: "can you commit to three days
+  # a week in-office?", "are you able to commute to our Toronto office?", "this
+  # role is onsite 5 days". The extension compares what the job asks against
+  # these and answers accordingly.
+  work_arrangement: hybrid              # onsite | hybrid | remote | any
+  willing_to_work_onsite: true
+  max_days_onsite_per_week: 3           # the most you will actually commit to
+  willing_to_commute: true
+  commute_locations: [Montreal, Toronto]
+
+  # Voluntary EEO questions. Leave these blank.
+  #
+  # They are optional by law, and the decision to disclose is yours — not a
+  # tool's, and not a language model's. JobPilot refuses to answer them even if
+  # you fill these in and even if the model offers an answer; filling them in
+  # here does nothing. They are listed only so you know they were considered and
+  # deliberately left alone.
+  gender: ""
+  ethnicity: ""
+  veteran_status: ""
+  disability_status: ""
+
+# Your own answers to questions that keep coming up. Checked BEFORE the AI, so
+# they are exact, instant and free.
+#
+# `match` is a list of keywords. If ALL of them appear in the field's label
+# (case-insensitive), your answer is used verbatim and no model is called.
+#
+# Add to this list every time you meet a question you want to settle once.
+custom_answers:
+  - match: [criminal, record]
+    answer: "No"
+
+  - match: [18, years, age]
+    answer: "Yes"
+
+  - match: [previously, employed]
+    answer: "No"
+
+  - match: [why, work, here]
+    answer: ""                          # blank -> let the AI write it per job

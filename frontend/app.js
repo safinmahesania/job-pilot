@@ -11,6 +11,8 @@ function jobpilot() {
     imp: { text: '', busy: false, result: null },
     privacy: { mode: 'redacted', follow_job_links: true },
     fu: { items: [], total: 0, first: 0, second: 0, stale: 0 },
+    digestPreview: '',
+    guardError: null,
     fb: { saved: 0, applied: 0, dismissed: 0, high_scored_but_dismissed: 0,
           active: false, needed: 3, scoring_via_chain: true },
     privacyModes: [
@@ -75,7 +77,7 @@ function jobpilot() {
         jobsP,
         fetch('/api/counts').then(r=>r.json()).catch(()=>({})),
         fetch('/api/followups').then(r=>r.json()).catch(()=>({items:[],total:0})),
-        fetch('/api/health').then(r=>r.json()).catch(()=>[]),
+        fetch('/api/health/assess').then(r=>r.json()).catch(()=>({boards:[]})),
         fetch('/api/runs').then(r=>r.json()).catch(()=>[]),
         fetch('/api/settings').then(r=>r.json()).catch(()=>({score_threshold:70})),
         fetch('/api/stats').then(r=>r.json()).catch(()=>null),
@@ -87,7 +89,7 @@ function jobpilot() {
       this.jobs = jobs;
       this.counts = { ...counts };
       this.fu = followups;
-      this.health = health;
+      this.health = health.boards || [];
       this.runs = runs || [];
       this.threshold = settings.score_threshold ?? 70;
       this.stats = stats;
@@ -261,18 +263,48 @@ function jobpilot() {
       this.cover = { loading: true, kind, text: '', provider: '',
                      label: meta.label, ext: meta.ext, file: meta.file,
                      jobId: job.id, title: job.title, company: job.company,
-                     requirements: [], projects_used: [] };
+                     requirements: [], projects_used: [], overruns: [] };
       try {
         const r = await fetch(`/api/jobs/${job.id}/${meta.url}`, { method: 'POST' });
         if (!r.ok) {
           const err = await r.json().catch(() => ({}));
-          throw new Error(err.detail || `HTTP ${r.status}`);
+          const d = err.detail;
+
+          // Two failures deserve more than a red toast, because both mean the
+          // document you were about to send would have been false.
+          if (d && d.error === 'profile_incomplete') {
+            this.cover = null;
+            this.guardError = {
+              title: 'Your profile is too empty to write a resume from',
+              why: 'With these missing, the model has only the job posting to ' +
+                   'write from — and it will write from it, inventing an employer, ' +
+                   'a degree, and a name taken from the job title.',
+              items: d.missing,
+              fix: 'Fill these into config/profile.yaml, then try again.',
+            };
+            return;
+          }
+          if (d && d.error === 'fabricated') {
+            this.cover = null;
+            this.guardError = {
+              title: 'The model invented facts — the resume was refused',
+              why: 'Nothing was returned to you. A resume claiming an employer ' +
+                   'you never worked for is one careless send away from a ' +
+                   'conversation you cannot recover from.',
+              items: d.problems,
+              fix: 'This usually means config/profile.yaml is thin. The fuller it ' +
+                   'is, the less room there is for the model to invent.',
+            };
+            return;
+          }
+          throw new Error((typeof d === 'string' ? d : d?.message) || `HTTP ${r.status}`);
         }
         const data = await r.json();
         this.cover.text = data.text;
         this.cover.provider = data.provider;
         this.cover.requirements = data.requirements || [];
         this.cover.projects_used = data.projects_used || [];
+        this.cover.overruns = data.overruns || [];
         this.cover.saved = false;
         this.loadLLM();                  // usage just changed
         this.saveMaterial();             // bind it to this job for the extension
@@ -312,15 +344,15 @@ function jobpilot() {
       } catch { this.showSnack('Copy failed', 'error'); }
     },
 
-    downloadCover() {
-      const safe = (this.cover.company || 'company').replace(/[^a-z0-9]+/gi, '_');
-      const blob = new Blob([this.cover.text], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
+    async downloadCover(format = 'pdf') {
+      // Save first. The textarea is editable, and the file you download must be
+      // the version you are looking at — not the one the model first produced.
+      await this.saveMaterial();
+      const url = `/api/jobs/${this.cover.jobId}/materials/${this.cover.kind}/file?format=${format}`;
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${this.cover.file}_${safe}.${this.cover.ext}`;
+      a.download = '';                 // the server sets the real filename
       a.click();
-      URL.revokeObjectURL(url);
     },
 
     // ── AI providers ──
@@ -482,6 +514,19 @@ function jobpilot() {
       } catch { /* keep the safe default */ }
     },
 
+    async testDigest() {
+      this.busy = 'digest';
+      try {
+        const r = await (await fetch('/api/notify/test-digest', { method: 'POST' })).json();
+        this.digestPreview = r.preview;
+        this.showSnack(r.sent ? 'Digest sent to Telegram'
+                              : (r.reason || 'Not sent — preview below'),
+                       r.sent ? 'ok' : 'error');
+      } catch (e) {
+        this.showSnack('Failed: ' + e.message, 'error');
+      } finally { this.busy = null; }
+    },
+
     // ── Follow-ups ──
     async loadFollowups() {
       try { this.fu = await (await fetch('/api/followups')).json(); } catch {}
@@ -638,6 +683,12 @@ function jobpilot() {
         return `$${k(job.salary_min)}–${k(job.salary_max)}`;
       }
       return `$${k(job.salary_max || job.salary_min)}`;
+    },
+
+    // A board that returns nothing but reports success is not "ok".
+    brokenBoards() {
+      return this.health.filter(b =>
+        ['silent', 'erroring', 'never_worked'].includes(b.verdict));
     },
 
     tier(score) {

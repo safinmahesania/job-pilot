@@ -74,6 +74,21 @@ FOLLOWUP_STALE_DAYS = 30       # past this, stop pretending; close it out
 # Telegram reminder, at most once a day (the scheduler polls far more often).
 FOLLOWUP_NOTIFY = True
 
+# ── Source health ───────────────────────────────────────────────────────────
+# A board that returns HTTP 200 and zero jobs is the failure that costs you most,
+# because nothing reports it. One empty run means nothing — a company may simply
+# have no openings today. A streak means the adapter is broken.
+HEALTH_ZERO_STREAK = 3         # empty runs in a row before we call it dead
+HEALTH_ERROR_STREAK = 2        # outright failures in a row before we say so
+HEALTH_ALERTS = True           # tell you the moment a working board goes dark
+
+# ── Weekly digest ───────────────────────────────────────────────────────────
+# Once a week: what you owe, what's waiting, what broke. Monday morning, because
+# a digest that arrives on Friday evening gets read on Monday anyway.
+WEEKLY_DIGEST = True
+WEEKLY_DIGEST_WEEKDAY = 0      # 0 = Monday
+WEEKLY_DIGEST_HOUR = 9
+
 # ── Privacy ─────────────────────────────────────────────────────────────────
 # Writing a cover letter genuinely requires your background — that is the point of
 # it. But it does NOT require your phone number, your home address or your email:
@@ -226,6 +241,23 @@ COVER_LETTER_REVISE = True
 RESUME_TEMPLATE_FILE = "resume_template.md"     # lives in config/
 RESUME_PROJECT_POOL = 4      # how many recent projects are ranked
 RESUME_PROJECTS_USED = 3     # how many make it into the resume
+
+# ── Resume length ───────────────────────────────────────────────────────────
+# Measured in rendered lines, not characters — src/resume_limits.py converts these
+# into character budgets using the real font metrics of the real page, because a
+# model can count characters and cannot count lines it has never seen.
+#
+# These exist to keep the resume to one page. A recruiter spends seconds on it;
+# a bullet that runs one line long to say nothing extra costs more than it earns.
+RESUME_SUMMARY_LINES = 3            # the whole summary
+RESUME_EXPERIENCE_BULLET_LINES = 2  # each bullet, not the section
+
+# The bullets INSIDE each project, in order. Three points per project: two that
+# get two lines, and a third that gets one — a short closing line, so the entry
+# doesn't trail off in padding. This applies to every project, not across them.
+RESUME_PROJECT_BULLET_LINES = (2, 2, 1)
+
+RESUME_VOLUNTEER_LINES = 3          # each entry's description
 
 # ── Project selection ────────────────────────────────────────────────────────
 # The profile usually lists more projects than belong on one application, and

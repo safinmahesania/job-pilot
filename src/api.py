@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, PlainTextResponse
 from src import maintenance, scheduler, configio
+from src import resume_guard
 from src.paths import DB_PATH as DB
 app = FastAPI(title="JobPilot")
 
@@ -239,7 +240,29 @@ def sources_list():
 
 
 @app.on_event("startup")
-def _start_scheduler():
+def _startup():
+    # Bring the database up to date before anything can query it.
+    #
+    # Every schema change used to need `python data/init_db.py` run by hand, and
+    # forgetting it did not produce a helpful message — it produced a 500 from
+    # deep inside a query, on whichever endpoint happened to touch the new column
+    # first. The app appeared to be broken rather than out of date.
+    #
+    # The migration is idempotent and takes milliseconds on an up-to-date
+    # database, so there is no reason not to simply do it. `init_db.py` still
+    # exists for a fresh clone.
+    try:
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from data.init_db import main as migrate
+        migrate()
+    except Exception as e:
+        # Never take the server down over this — a failed migration should be
+        # loud, not fatal. The endpoints that need the new columns will fail
+        # clearly, and the reason is right here in the log.
+        print(f"[startup] schema migration failed: {e}")
+
     scheduler.start()
 
 
@@ -642,6 +665,16 @@ def tailored_resume(job_id: int):
         result = apply.generate_resume(dict(row))
     except FileNotFoundError as e:
         raise HTTPException(400, str(e))
+    except resume_guard.ProfileIncompleteError as e:
+        # Nothing was generated. Say exactly what is missing.
+        raise HTTPException(400, {"error": "profile_incomplete",
+                                  "missing": e.missing,
+                                  "message": str(e)})
+    except resume_guard.FabricationError as e:
+        # Something was generated and then refused. Do not hand it over.
+        raise HTTPException(422, {"error": "fabricated",
+                                  "problems": e.problems,
+                                  "message": str(e)})
     except HTTPException:
         raise
     except Exception as e:
@@ -760,7 +793,17 @@ def material_file(job_id: int, kind: str, format: str = "pdf"):
         )
 
     job = dict(job)
-    if format == "pdf":
+    if format == "docx":
+        # Word, for the resume. Most ATS parse .docx at least as well as PDF, and
+        # several parse it better.
+        try:
+            data = materials.to_docx(doc["content"], kind)
+        except (RuntimeError, ValueError) as e:
+            raise HTTPException(400, str(e))
+        media = ("application/vnd.openxmlformats-officedocument"
+                 ".wordprocessingml.document")
+        ext = "docx"
+    elif format == "pdf":
         try:
             data = materials.to_pdf(doc["content"], kind)
         except RuntimeError as e:
@@ -1071,6 +1114,34 @@ def set_followup(job_id: int, body: FollowupAction):
     if not ok:
         raise HTTPException(404, "job not found, or it isn't an applied job")
     return {"id": job_id, "action": body.action}
+
+
+# ── Source health ───────────────────────────────────────────────────────────
+
+@app.get("/api/health/assess")
+def assess_health():
+    """Every board with a verdict — including the ones failing silently."""
+    from src import health
+    conn = _conn()
+    boards = health.assess(conn)
+    counts = health.summary(conn)
+    conn.close()
+    return {"boards": boards, **counts}
+
+
+@app.post("/api/notify/test-digest")
+def send_test_digest():
+    """Send this week's digest now, so you can see what it looks like."""
+    from src import health, notify
+    conn = _conn()
+    stats = health.week_stats(conn)
+    conn.close()
+
+    message = notify.weekly_digest(stats)
+    if not notify.enabled():
+        return {"sent": False, "preview": message,
+                "reason": "Telegram isn't configured, or notifications are off."}
+    return {"sent": notify.send(message), "preview": message}
 
 
 app.mount("/", StaticFiles(

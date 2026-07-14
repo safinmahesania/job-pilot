@@ -45,8 +45,16 @@ CREATE TABLE IF NOT EXISTS source_health (
     fetched     INTEGER DEFAULT 0,
     kept        INTEGER DEFAULT 0,
     status      TEXT,              -- 'ok' | 'error'
-    error       TEXT,              -- error message agar fail hua
-    last_run    TEXT
+    error       TEXT,              -- error message if it failed
+    last_run    TEXT,
+
+    -- A board that returns HTTP 200 and zero jobs is the dangerous one: it looks
+    -- healthy, and you simply stop seeing jobs from it. Counting the streak is
+    -- what turns that silence into something we can alert on.
+    zero_streak  INTEGER DEFAULT 0,   -- consecutive runs that returned no jobs
+    error_streak INTEGER DEFAULT 0,   -- consecutive runs that failed outright
+    last_ok      TEXT,                -- last time it actually returned something
+    alerted      INTEGER DEFAULT 0    -- so a broken board is reported once, not every run
 );
 
 CREATE TABLE IF NOT EXISTS settings (

@@ -68,6 +68,60 @@ def trigger_async() -> bool:
     return True
 
 
+def _board_alerts():
+    """Tell you the moment a working board goes dark.
+
+    Runs right after a pipeline pass, when the streaks are fresh. Each broken
+    board is reported once — the alert flag is cleared automatically if it starts
+    working again, so a board that breaks twice tells you twice.
+    """
+    from src import health, notify, store
+    from src.paths import HEALTH_ALERTS
+
+    if not HEALTH_ALERTS or not notify.enabled():
+        return
+
+    conn = store.connect()
+    try:
+        fresh = health.new_breakages(conn)
+        if not fresh:
+            return
+        message = notify.board_alert(fresh)
+        store.mark_health_alerted(conn, [b["name"] for b in fresh])
+    finally:
+        conn.close()
+
+    notify.send(message)
+
+
+def _weekly_digest():
+    """Once a week. Guarded by the ISO week number, so a restart doesn't resend it
+    and a machine that was off all week sends one digest when it comes back."""
+    from src import health, notify, store
+    from src.paths import WEEKLY_DIGEST, WEEKLY_DIGEST_WEEKDAY, WEEKLY_DIGEST_HOUR
+
+    if not WEEKLY_DIGEST or not notify.enabled():
+        return
+
+    now = datetime.now()
+    if now.weekday() != WEEKLY_DIGEST_WEEKDAY or now.hour < WEEKLY_DIGEST_HOUR:
+        return
+
+    year, week, _ = now.isocalendar()
+    tag = f"{year}-W{week:02d}"
+
+    conn = store.connect()
+    try:
+        if store.get_setting(conn, "digest_sent_week", None) == tag:
+            return
+        stats = health.week_stats(conn)
+        store.set_setting(conn, "digest_sent_week", tag)
+    finally:
+        conn.close()
+
+    notify.send(notify.weekly_digest(stats))
+
+
 def _followup_check():
     """Once a day, tell you what needs a nudge.
 
@@ -118,8 +172,10 @@ def _loop():
             if enabled and due and not _state["running"]:
                 print("[scheduler] interval elapsed — starting run")
                 _run_once()
+                _board_alerts()          # streaks are freshest right after a run
 
             _followup_check()
+            _weekly_digest()
         except Exception as e:
             print(f"[scheduler] loop error: {e}")
 

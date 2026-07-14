@@ -208,12 +208,16 @@ class TestRendering:
 
         assert "Volunteer" not in markdown
 
-    def test_the_project_owner_is_rendered_not_annotated(self):
-        """"(owner: course)" once reached a real resume verbatim."""
+    def test_the_project_heading_is_the_name_alone(self):
+        """It once read "Recipedia - Course - Course (Flutter, Dart, Firebase,
+        Python, SQLite, Mobile Development)" and collided with the right-aligned
+        link. The owner and the tech stack are notes for the model, not headings
+        for a reader."""
         markdown = to_markdown(HONEST, PROFILE, "Safin Mahesania")
 
-        assert "Recipedia - Course (Flutter, Dart)" in markdown
+        assert "### Recipedia @@" in markdown
         assert "owner:" not in markdown
+        assert "Course" not in markdown
 
     def test_links_go_to_the_right_of_the_at_marker(self):
         markdown = to_markdown(HONEST, PROFILE, "Safin Mahesania")
@@ -338,3 +342,143 @@ class TestEndToEnd:
         assert retries, "it gave up without telling the model what was wrong"
         assert "TechCorp Inc." in retries[0]
         assert "Do NOT delete a section" in retries[0]
+
+
+class TestTheRenderBugsFromTheFirstRealResume:
+    """Everything that was wrong with the first document that actually reached a
+    human eye. Each of these is a line that appeared on a real page."""
+
+    PROFILE = {
+        "identity": {"name": "Safin Mahesania"},
+        "contact": {"city": "Montreal", "province": "Quebec",
+                    "email": "safin.mahesania@outlook.com",
+                    "phone": "+1 437 661 5569",
+                    "linkedin": "https://www.linkedin.com/in/safinmahesania/",
+                    "github": "https://github.com/safinmahesania"},
+        "skill_categories": [
+            {"label": "Programming & Markup Languages",
+             "skills": ["Dart", "Python", "Java"]},
+            {"label": "Databases", "skills": ["MySQL", "SQLite"]},
+        ],
+        "experience": [], "education": [], "projects": [{"name": "Recipedia"}],
+    }
+
+    RESUME = {
+        "summary": "Software developer.",
+        "skills": ["Databases", "Programming & Markup Languages"],
+        "experience": [], "education": [],
+        "projects": [{"name": "Recipedia", "owner": "course",
+                      "tech": ["Flutter", "Dart", "Firebase"],
+                      "link": "https://github.com/safinmahesania/Recipedia",
+                      "bullets": ["Scans produce and suggests recipes."]}],
+        "certificates": [], "volunteer": [],
+    }
+
+    def _md(self):
+        return to_markdown(self.RESUME, self.PROFILE, "Safin Mahesania")
+
+    def test_the_project_heading_is_just_the_name(self):
+        """It read "Recipedia - Course - Course (Flutter, Dart, Firebase, Python,
+        SQLite, Mobile Development)" and ran straight into the right-aligned link,
+        overlapping it. The technologies belong in the bullets, doing work."""
+        markdown = self._md()
+
+        assert "### Recipedia @@" in markdown
+        assert "Course" not in markdown
+        assert "(Flutter" not in markdown
+
+    def test_the_skill_categories_are_not_prefixed_with_the_words_skill_category(self):
+        """The fact sheet labels them "Skill category — Databases:" for the model's
+        benefit. The model copied the label, annotation and all, onto the page —
+        the same way it once copied "(owner: course)"."""
+        markdown = self._md()
+
+        assert "Skill category" not in markdown
+        assert "- **Databases:** MySQL | SQLite" in markdown
+
+    def test_the_skills_come_from_the_profile_not_the_model(self):
+        """There was never a reason to ask. The categories are a fixed list; the
+        model's only useful contribution is the order."""
+        markdown = self._md()
+
+        # Model asked for Databases first. It got Databases first — with the
+        # profile's contents, not its own.
+        assert markdown.index("Databases:") < markdown.index("Programming & Markup")
+        assert "Dart | Python | Java" in markdown
+
+    def test_a_category_the_model_forgot_is_still_rendered(self):
+        """Dropping a skill category is dropping a fact."""
+        resume = dict(self.RESUME, skills=["Databases"])
+
+        markdown = to_markdown(resume, self.PROFILE, "Safin")
+
+        assert "Programming & Markup Languages" in markdown
+
+    def test_an_invented_category_cannot_appear_at_all(self):
+        """It cannot be rendered, because the renderer only knows the profile's."""
+        resume = dict(self.RESUME, skills=["Sales Experience", "Databases"])
+
+        markdown = to_markdown(resume, self.PROFILE, "Safin")
+
+        assert "Sales Experience" not in markdown
+
+    def test_the_profile_urls_lose_their_scheme_and_www(self):
+        """"https://www.linkedin.com/in/safinmahesania/" is a URL.
+        "linkedin.com/in/safinmahesania" is a person."""
+        markdown = self._md()
+
+        assert "linkedin.com/in/safinmahesania" in markdown
+        assert "github.com/safinmahesania" in markdown
+        assert "https://" not in markdown.split("## Summary")[0]
+        assert "www." not in markdown
+
+    def test_contact_details_are_on_one_line(self):
+        markdown = self._md()
+        line = next(l for l in markdown.splitlines() if "outlook.com" in l)
+
+        for part in ("+1 437 661 5569", "linkedin.com/in/", "github.com/"):
+            assert part in line
+
+
+class TestTheWordFile:
+    """What Word actually renders. The markdown can be perfect and the page still
+    wrong."""
+
+    def _docx(self):
+        import io
+        import zipfile
+
+        from src import materials
+
+        markdown = TestTheRenderBugsFromTheFirstRealResume()._md()
+        data = materials.to_docx(markdown, "resume")
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            return z.read("word/document.xml").decode()
+
+    def test_the_font_is_calibri_throughout(self):
+        import re
+        xml = self._docx()
+
+        assert set(re.findall(r'w:ascii="([^"]+)"', xml)) == {"Calibri"}
+
+    def test_the_name_is_20pt_and_everything_else_is_11(self):
+        import re
+        xml = self._docx()
+
+        sizes = sorted({int(s) // 2 for s in re.findall(r'<w:sz w:val="(\d+)"', xml)})
+
+        assert sizes == [11, 20]
+
+    def test_the_contact_line_is_not_justified(self):
+        """Justifying a short line stretches the spaces inside it until
+        "+1 437 661 5569" reads as four separate numbers."""
+        import re
+        xml = self._docx()
+
+        contact = next(p for p in re.findall(r"<w:p>.*?</w:p>", xml, re.S)
+                       if "outlook.com" in p)
+
+        assert 'w:jc w:val="both"' not in contact
+
+    def test_the_bullets_are_real_bullets(self):
+        assert "ListBullet" in self._docx()

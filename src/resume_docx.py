@@ -17,7 +17,7 @@ the line is just text. Same page, same look, no table.
 import re
 
 # ── The template's own styling, measured from Resume_Template.docx ──────────
-FONT = "Times New Roman"
+FONT = "Calibri"
 
 PAGE_WIDTH_IN = 8.27          # A4
 PAGE_HEIGHT_IN = 11.69
@@ -277,7 +277,10 @@ def to_docx(markdown: str) -> bytes:
 
         # ── Contact block, above the first heading ──────────────────────────
         if not header_done:
-            p = _paragraph(doc, space_after=0)
+            # LEFT, not justified. Justifying a short line stretches the spaces
+            # inside it until "+1 437 661 5569" reads as four separate numbers,
+            # which is what a phone number must never do.
+            p = _paragraph(doc, space_after=0, justify=False)
             parts = [part.strip() for part in line.split("|")]
             for i, part in enumerate(parts):
                 if i:

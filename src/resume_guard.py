@@ -257,7 +257,7 @@ def check_grounding(markdown: str, profile: dict) -> list[str]:
     # headed "Sales Experience:" for a profile that has no such category did not
     # get that from you — it got it from the job posting, which is the same failure
     # as an invented employer wearing different clothes.
-    from src.apply import skill_groups
+    from src.config import skill_groups
     allowed = {_normalise(g["label"]) for g in skill_groups(profile)}
     if allowed:
         for line in sections.get("skills", []):
@@ -356,7 +356,7 @@ def check_structured(resume: dict, profile: dict) -> list[str]:
           "Volunteer", "in your volunteer history")
 
     # Skill category labels must be the profile's own.
-    from src.apply import skill_groups
+    from src.config import skill_groups
     allowed_labels = {_normalise(g["label"]) for g in skill_groups(profile)}
     if allowed_labels:
         for group in resume.get("skills") or []:

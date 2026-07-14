@@ -40,13 +40,17 @@ inferred:
 import json
 import re
 
+from src.config import skill_groups
+
 
 #: What the model is asked to return. Every key required; empty lists allowed only
 #: where the profile is genuinely empty.
 SHAPE = {
     "summary": "string — 2-3 sentences, angled at this job",
-    "skills": [{"label": "string — copied EXACTLY from my profile",
-                "skills": ["string", "..."]}],
+    "skills": ["string — a skill category LABEL from my profile, verbatim. "
+               "Order them most relevant first. The contents are filled in from "
+               "my profile; you choose only which categories appear and in what "
+               "order. Do not write the skills themselves."],
     "experience": [{"role": "string", "company": "string",
                     "location": "string", "dates": "string — e.g. May 2024 - Aug 2024",
                     "bullets": ["string", "..."]}],
@@ -99,6 +103,16 @@ def parse(text: str) -> dict:
     return data
 
 
+def _short_url(url: str) -> str:
+    """"https://www.linkedin.com/in/safinmahesania/" is a URL. "linkedin.com/in/
+    safinmahesania" is a person. The scheme, the www and the trailing slash carry
+    no information and cost a third of the line."""
+    text = str(url or "").strip()
+    text = re.sub(r"^https?://", "", text)
+    text = re.sub(r"^www\.", "", text)
+    return text.rstrip("/")
+
+
 def _contact_line(profile: dict, redacted: bool) -> list[str]:
     if redacted:
         return ["{{LOCATION}}", "{{EMAIL}} | {{PHONE}} | {{LINKS}}"]
@@ -108,8 +122,12 @@ def _contact_line(profile: dict, redacted: bool) -> list[str]:
         part for part in (contact.get("city"), contact.get("province"),
                           contact.get("country")) if part
     )
-    rest = [contact.get("email"), contact.get("phone"),
-            contact.get("linkedin"), contact.get("github")]
+    rest = [
+        contact.get("email"),
+        contact.get("phone"),
+        _short_url(contact.get("linkedin")),
+        _short_url(contact.get("github")),
+    ]
     return [where, " | ".join(p for p in rest if p)]
 
 
@@ -127,12 +145,27 @@ def to_markdown(resume: dict, profile: dict, name: str,
     if resume.get("summary"):
         out += ["## Summary", "", resume["summary"], ""]
 
-    if resume.get("skills"):
+    # Skills come from the profile, not from the model.
+    #
+    # There was never a reason to ask for them. The categories and their contents
+    # are a fixed list in profile.yaml — the model's only useful contribution is
+    # deciding which ones this employer should see first. Asking it to reproduce
+    # the contents as well gave it the chance to get them wrong, and it did: it
+    # copied the fact sheet's own annotation and printed "Skill category —
+    # Programming & Markup Languages" on the page.
+    #
+    # So it picks labels. The code fills them.
+    groups = {str(g["label"]): g["skills"] for g in skill_groups(profile)}
+    ordered = [str(label) for label in (resume.get("skills") or [])
+               if str(label) in groups]
+    ordered += [label for label in groups if label not in ordered]
+
+    if ordered:
         out += ["## Skills", ""]
-        for group in resume["skills"]:
-            skills = " | ".join(str(s) for s in (group.get("skills") or []))
-            if group.get("label") and skills:
-                out.append(f"- **{group['label']}:** {skills}")
+        for label in ordered:
+            skills = " | ".join(str(s) for s in groups[label])
+            if skills:
+                out.append(f"- **{label}:** {skills}")
         out.append("")
 
     if resume.get("education"):
@@ -162,12 +195,12 @@ def to_markdown(resume: dict, profile: dict, name: str,
     if resume.get("projects"):
         out += ["## Projects", ""]
         for entry in resume["projects"]:
+            # The name, and nothing else. The owner and the tech stack were both
+            # printed here once — "Recipedia - Course - Course (Flutter, Dart,
+            # Firebase, Python, SQLite, Mobile Development)" — which ran into the
+            # right-aligned link and overlapped it. The technologies belong in the
+            # bullets, where they are doing work, not in a heading.
             title = entry.get("name", "")
-            if entry.get("owner"):
-                title += f" - {str(entry['owner']).title()}"
-            tech = ", ".join(str(t) for t in (entry.get("tech") or []))
-            if tech:
-                title += f" ({tech})"
             link = entry.get("link")
             out.append(f"### {title} @@ {link}" if link else f"### {title}")
             for bullet in entry.get("bullets") or []:

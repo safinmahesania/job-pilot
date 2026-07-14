@@ -20,7 +20,7 @@ import json
 import re
 
 from src import llm
-from src.config import load_profile
+from src.config import load_profile, skill_groups
 from src import resume_limits, resume_guard, resume_fit, resume_schema
 from src.llm import LLMError
 from src.paths import (
@@ -128,51 +128,6 @@ def _span(start, end) -> str:
     return a or b
 
 
-def skill_groups(profile: dict) -> list[dict]:
-    """The resume's skill lines: [{"label": ..., "skills": [...]}, ...].
-
-    The profile shape is a list, so the order is yours and the labels are yours:
-
-        skill_categories:
-          - label: Programming Skills
-            skills: [Dart, Java, C, ...]
-
-    A dict is still accepted, for profiles written before this changed. Either
-    way, an empty category is dropped — an empty "Deep Learning:" line on a resume
-    reads as something you failed to fill in.
-    """
-    raw = profile.get("skill_categories") or []
-    groups = []
-
-    if isinstance(raw, dict):
-        # Older shape: fixed keys, labels supplied here.
-        legacy = {
-            "programming": "Programming & Core Concepts",
-            "frameworks": "Frameworks & Development",
-            "databases": "Databases",
-            "cloud": "Cloud & Distributed Systems",
-            "ml": "Machine Learning & AI",
-            "tools": "Developer Tools & Environments",
-            "methods": "Methodologies & Practices",
-            "languages": "Languages",
-        }
-        for key, label in legacy.items():
-            skills = raw.get(key) or []
-            if skills:
-                groups.append({"label": label,
-                               "skills": [str(s) for s in skills]})
-        return groups
-
-    for entry in raw:
-        if not isinstance(entry, dict):
-            continue
-        label = str(entry.get("label", "")).strip()
-        skills = [str(s).strip() for s in (entry.get("skills") or [])
-                  if str(s).strip()]
-        if label and skills:
-            groups.append({"label": label, "skills": skills})
-    return groups
-
 
 def _ordinal(n: int) -> str:
     """"a 4th", "a 3rd" — not "a 3th"."""
@@ -260,7 +215,7 @@ def _profile_facts(profile: dict) -> str:
     # A category with nothing in it is not listed, so the model is never handed an
     # empty line it might feel obliged to fill.
     for group in skill_groups(profile):
-        lines.append(f"Skill category — {group['label']}: "
+        lines.append(f"{group['label']}: "
                      f"{' | '.join(group['skills'])}")
 
     for exp in profile.get("experience", []) or []:

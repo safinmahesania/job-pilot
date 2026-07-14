@@ -119,3 +119,50 @@ def load_profile() -> dict:
     for warning in warnings:
         print(f"[profile] {warning}")
     return profile
+
+
+def skill_groups(profile: dict) -> list[dict]:
+    """The resume's skill lines: [{"label": ..., "skills": [...]}, ...].
+
+    The profile shape is a list, so the order is yours and the labels are yours:
+
+        skill_categories:
+          - label: Programming Skills
+            skills: [Dart, Java, C, ...]
+
+    A dict is still accepted, for profiles written before this changed. Either
+    way, an empty category is dropped — an empty "Deep Learning:" line on a resume
+    reads as something you failed to fill in.
+    """
+    raw = profile.get("skill_categories") or []
+    groups = []
+
+    if isinstance(raw, dict):
+        # Older shape: fixed keys, labels supplied here.
+        legacy = {
+            "programming": "Programming & Core Concepts",
+            "frameworks": "Frameworks & Development",
+            "databases": "Databases",
+            "cloud": "Cloud & Distributed Systems",
+            "ml": "Machine Learning & AI",
+            "tools": "Developer Tools & Environments",
+            "methods": "Methodologies & Practices",
+            "languages": "Languages",
+        }
+        for key, label in legacy.items():
+            skills = raw.get(key) or []
+            if skills:
+                groups.append({"label": label,
+                               "skills": [str(s) for s in skills]})
+        return groups
+
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        label = str(entry.get("label", "")).strip()
+        skills = [str(s).strip() for s in (entry.get("skills") or [])
+                  if str(s).strip()]
+        if label and skills:
+            groups.append({"label": label, "skills": skills})
+    return groups
+

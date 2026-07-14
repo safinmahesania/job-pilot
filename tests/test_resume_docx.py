@@ -76,10 +76,13 @@ class TestItMatchesTheTemplate:
     quietly switches the font or the paper size, the resume stops looking like the
     one you designed — and nothing else would tell you."""
 
-    def test_it_uses_the_templates_font(self):
+    def test_it_uses_calibri(self):
+        """Times New Roman came from the original Word template. Calibri was asked
+        for after seeing it on the page."""
         from src import resume_docx
-        assert resume_docx.FONT == "Times New Roman"
-        assert "Times New Roman" in document_xml(to_docx(RESUME))
+        assert resume_docx.FONT == "Calibri"
+        assert "Calibri" in document_xml(to_docx(RESUME))
+        assert "Times New Roman" not in document_xml(to_docx(RESUME))
 
     def test_it_is_a4_with_half_inch_margins(self):
         from src import resume_docx
@@ -220,8 +223,11 @@ class TestTheProfileActuallyReachesTheModel:
         )
         facts = apply._profile_facts(example)
 
-        for expected in ["Skills (expert)", "Skill category", "Experience:",
-                         "Education:", "Certificate:", "Volunteer:"]:
+        # No "Skill category —" prefix any more: it was an annotation for the
+        # model's benefit, and the model copied it onto the page. The label alone
+        # is what must reach the prompt.
+        for expected in ["Skills (expert)", "Programming & Markup Languages:",
+                         "Experience:", "Education:", "Certificate:", "Volunteer:"]:
             assert expected in facts, (
                 f"'{expected}' never reaches the model — the resume cannot "
                 f"contain what the model was not told."

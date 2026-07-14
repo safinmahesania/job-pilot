@@ -218,69 +218,6 @@ class TestProfileValidation:
         assert validate_profile(profile) == []
 
 
-class TestGenerationRefuses:
-    """The guards have to actually stop the document, not just note a concern."""
-
-    def test_an_incomplete_profile_generates_nothing(self, conn, monkeypatch,
-                                                     capture_llm):
-        from src import apply
-        monkeypatch.setattr(apply, "load_profile", lambda: {"identity": {}})
-
-        with pytest.raises(ProfileIncompleteError):
-            apply.generate_resume({"title": "Sales", "company": "PointClickCare",
-                                   "description": "Sell things."})
-
-        assert capture_llm.calls == [], (
-            "a model was called for a profile that cannot support a resume"
-        )
-
-    def test_a_fabricated_resume_is_never_returned(self, conn, monkeypatch,
-                                                   capture_llm):
-        """Not a warning, not a draft to tidy up. It does not reach you."""
-        from src import apply
-        monkeypatch.setattr(apply, "load_profile", lambda: REAL_PROFILE)
-        monkeypatch.setattr(apply, "extract_requirements",
-                            lambda job: ["Python", "REST APIs"])
-        monkeypatch.setattr(apply, "select_relevant_projects",
-                            lambda job, **kw: [0])
-
-        # A model that keeps inventing, even after being told not to.
-        capture_llm.reply = lambda system, user: (FABRICATED, "gemini")
-
-        # A job that FITS. The sales job is now refused before a model is called
-        # at all — see test_resume_fit.py — so it cannot be used to exercise the
-        # fabrication guard. This one gets through, and then the model lies.
-        with pytest.raises(FabricationError) as caught:
-            apply.generate_resume({"title": "Backend Developer", "company": "Shopify",
-                                   "description": "Python, REST APIs, PostgreSQL."})
-
-        assert any("PointClickCare" in p for p in caught.value.problems)
-
-    def test_it_retries_once_before_refusing(self, conn, monkeypatch,
-                                             capture_llm):
-        """A single bad draft is not proof the model can't do it. Tell it exactly
-        what it invented and let it try again."""
-        from src import apply
-        monkeypatch.setattr(apply, "load_profile", lambda: REAL_PROFILE)
-        monkeypatch.setattr(apply, "extract_requirements", lambda job: ["Python"])
-        monkeypatch.setattr(apply, "select_relevant_projects",
-                            lambda job, **kw: [0])
-
-        attempts = []
-
-        def reply(system, user):
-            attempts.append("retry" if "INVENTED FACTS" in user else "first")
-            return (HONEST if "INVENTED FACTS" in user else FABRICATED, "gemini")
-
-        capture_llm.reply = reply
-
-        result = apply.generate_resume({"title": "Backend Dev", "company": "Shopify",
-                                        "description": "Python."})
-
-        assert attempts == ["first", "retry"]
-        assert "Safin Mahesania" in result["text"]
-        assert "PointClickCare" not in result["text"]
-
 
 class TestAStringWhereAListBelongs:
     """The bug that turned nine projects into several thousand bullets.
@@ -470,227 +407,6 @@ class TestPlaceholdersAreRefused:
         assert validate_profile(profile) == []
 
 
-class TestTheListsAreClosed:
-    """"Never invent an employer" did not stop the model inventing an employer.
-
-    It added "TechCorp Inc., Karachi, Pakistan" to a profile that already had three
-    real jobs. The guard caught it and the resume was refused — which is the system
-    working, but a tool that refuses every time is not a tool.
-
-    The prohibition was the problem. It says what not to do without ever saying
-    what the complete truth IS, so the model never learns the list is finished, and
-    a job asking for more experience than you have is a gap it will quietly fill.
-
-    Counting closes the world. "You have exactly three employers, here they are,
-    do not add a 4th" turns an open generative task into a fill-in-the-blanks one.
-    """
-
-    PROFILE = {
-        "experience": [{"company": "Concordia University"},
-                       {"company": "Otrack"},
-                       {"company": "Bank Alfalah"}],
-        "education": [{"institution": "Concordia University"}],
-        "certificates": [{"name": "Azure Fundamentals"}],
-        "volunteer": [],
-    }
-
-    def test_the_employers_are_counted_and_named(self):
-        from src.apply import closed_lists
-
-        text = closed_lists(self.PROFILE)
-
-        assert "EXACTLY 3" in text
-        assert "1. Concordia University" in text
-        assert "2. Otrack" in text
-        assert "3. Bank Alfalah" in text
-        assert "Do not add a 4th" in text
-
-    def test_an_empty_section_is_stated_as_empty(self):
-        """Not merely omitted. An absent section is a gap the model may fill; a
-        section explicitly declared empty is a fact."""
-        from src.apply import closed_lists
-
-        text = closed_lists(self.PROFILE)
-
-        assert "VOLUNTEER ORGANISATIONS: you have NONE" in text
-        assert "must not contain a Volunteer" in text
-
-    def test_the_ordinals_are_not_embarrassing(self):
-        from src.apply import _ordinal
-
-        assert _ordinal(2) == "a 2nd"
-        assert _ordinal(3) == "a 3rd"
-        assert _ordinal(4) == "a 4th"
-        assert _ordinal(11) == "a 11th"      # not "a 11st"
-
-    def test_the_closed_list_is_in_the_prompt(self, conn, monkeypatch,
-                                              capture_llm):
-        from src import apply
-
-        # REAL_PROFILE, with three employers so the count is worth asserting.
-        profile = dict(REAL_PROFILE, experience=[
-            {"role": "Software Developer Intern", "company": "Acme Corp"},
-            {"role": "Flutter Developer", "company": "Otrack"},
-            {"role": "Support Officer", "company": "Bank Alfalah"},
-        ])
-        monkeypatch.setattr(apply, "load_profile", lambda: profile)
-        monkeypatch.setattr(apply, "extract_requirements", lambda job: ["Python"])
-        monkeypatch.setattr(apply, "select_relevant_projects", lambda job, **kw: [0])
-        capture_llm.reply = lambda system, user: (HONEST, "gemini")
-
-        apply.generate_resume({"title": "Dev", "company": "Shopify",
-                               "description": "Python."})
-
-        prompt = "\n".join(user for _, user, _ in capture_llm.calls)
-
-        assert "EXACTLY 3" in prompt
-        assert "Do not add a 4th" in prompt
-        assert "Everything below is ME. Everything above is the job." in prompt
-
-    def test_the_retry_carries_the_closed_list_too(self, conn, monkeypatch,
-                                                   capture_llm):
-        """The model already ignored the open-ended version once. Repeating it
-        verbatim and hoping is not a strategy."""
-        from src import apply
-
-        profile = dict(REAL_PROFILE, experience=[
-            {"role": "Software Developer Intern", "company": "Acme Corp"},
-            {"role": "Flutter Developer", "company": "Otrack"},
-            {"role": "Support Officer", "company": "Bank Alfalah"},
-        ])
-        monkeypatch.setattr(apply, "load_profile", lambda: profile)
-        monkeypatch.setattr(apply, "extract_requirements", lambda job: ["Python"])
-        monkeypatch.setattr(apply, "select_relevant_projects", lambda job, **kw: [0])
-
-        def reply(system, user):
-            return (HONEST if "INVENTED FACTS" in user else FABRICATED, "gemini")
-
-        capture_llm.reply = reply
-
-        apply.generate_resume({"title": "Dev", "company": "Shopify",
-                               "description": "Python."})
-
-        retry = next(user for _, user, _ in capture_llm.calls
-                     if "INVENTED FACTS" in user)
-
-        assert "EXACTLY 3" in retry
-        assert "Do not add a 4th" in retry
-
-
-class TestTheJobIsNotWhoYouAre:
-    """A second, worse fabrication — one that wore different clothes.
-
-    Given a PointClickCare *sales* posting, the model produced a resume whose
-    summary began "Dynamic sales professional" and whose skills read "Sales
-    Experience: Healthcare, SaaS". No employer was invented, so the original guard
-    passed it. But the skills and the summary had been lifted wholesale from the
-    job description for a computer science student who has never worked in sales.
-
-    An invented skill category is an invented fact. It just isn't a proper noun.
-
-    And when told it had invented an employer, the model's correction was to delete
-    the entire Work Experience section — "(No work experience listed)", for someone
-    with three real jobs. Over-correction is not a fix. A resume that omits your
-    career is as false as one that invents one.
-    """
-
-    PROFILE = {
-        "identity": {"name": "Safin Mahesania"},
-        "skill_categories": [
-            {"label": "Programming & Markup Languages", "skills": ["Dart", "Python"]},
-            {"label": "Databases", "skills": ["MySQL"]},
-        ],
-        "experience": [{"company": "Concordia University"},
-                       {"company": "Otrack"},
-                       {"company": "Bank Alfalah"}],
-        "education": [{"institution": "Concordia University"}],
-        "projects": [{"name": "Plant Disease Detection"}],
-    }
-
-    SALES_RESUME = """# Safin Mahesania
-
-## Summary
-
-Dynamic sales professional with a background in healthcare, SaaS and enterprise software.
-
-## Skills
-
-- **Sales Experience:** Healthcare | SaaS | Enterprise Software
-- **Inside Sales Expertise:** Channel Sales | Account Management
-
-## Education
-
-### Master of Science in Computer Science @@ Jan 2025 - Aug 2026
-Concordia University, Montreal, Canada
-
-## Work Experience
-
-(No work experience listed)
-
-## Projects
-
-### Plant Disease Detection @@ github.com/x
-- Built a classifier.
-"""
-
-    def test_a_skill_category_from_the_job_is_caught(self):
-        problems = check_grounding(self.SALES_RESUME, self.PROFILE)
-
-        assert any("Sales Experience" in p and "not a skill category" in p
-                   for p in problems)
-
-    def test_deleting_your_real_work_history_is_caught(self):
-        """The model's idea of a correction."""
-        problems = check_grounding(self.SALES_RESUME, self.PROFILE)
-
-        assert any("Work Experience section is empty" in p for p in problems)
-
-    def test_your_own_skill_categories_pass(self):
-        honest = """# Safin Mahesania
-
-## Skills
-
-- **Programming & Markup Languages:** Dart | Python
-- **Databases:** MySQL
-
-## Education
-
-### MSc @@ 2025
-Concordia University
-
-## Work Experience
-
-### TA @@ 2026
-Concordia University
-- Taught Java.
-
-## Projects
-
-### Plant Disease Detection @@ github.com/x
-- Built a classifier.
-"""
-        assert check_grounding(honest, self.PROFILE) == []
-
-    def test_the_retry_forbids_deleting_sections(self, conn, monkeypatch,
-                                                 capture_llm):
-        from src import apply
-
-        profile = dict(REAL_PROFILE)
-        monkeypatch.setattr(apply, "load_profile", lambda: profile)
-        monkeypatch.setattr(apply, "extract_requirements",
-                            lambda job: ["Python", "REST APIs"])
-        monkeypatch.setattr(apply, "select_relevant_projects", lambda job, **kw: [0])
-        capture_llm.reply = lambda system, user: (
-            HONEST if "INVENTED FACTS" in user else FABRICATED, "gemini")
-
-        apply.generate_resume({"title": "Backend Developer", "company": "Shopify",
-                               "description": "Python, REST APIs, PostgreSQL."})
-
-        retry = next(user for _, user, _ in capture_llm.calls
-                     if "INVENTED FACTS" in user)
-
-        assert "Do NOT delete a section" in retry
-        assert "every real entry present, every invented one gone" in retry
 
 
 class TestTheProjectNotesDoNotLeak:
@@ -723,3 +439,172 @@ class TestTheProjectNotesDoNotLeak:
 
         assert "\n    TECH: Python" in rendered
         assert "\n    LINK: github.com/x" in rendered
+
+
+class TestGenerationRefuses:
+    """The guards, exercised through the real generation path.
+
+    These used to hand the model a markdown resume. It returns JSON now — see
+    src/resume_schema.py for why — so the fabricated fixture is the same lie in the
+    new shape, and the checks it trips are the same checks.
+    """
+
+    def _profile(self):
+        return dict(REAL_PROFILE,
+                    contact={"city": "Montreal", "email": "s@example.com"},
+                    experience=[
+                        {"role": "Intern", "company": "Acme Corp"},
+                        {"role": "Dev", "company": "Otrack"},
+                        {"role": "Support", "company": "Bank Alfalah"},
+                    ])
+
+    def _honest_json(self):
+        import json
+        return json.dumps({
+            "summary": "Software developer.",
+            "skills": [{"label": "Programming", "skills": ["Python"]}],
+            "experience": [
+                {"role": "Intern", "company": "Acme Corp", "location": "",
+                 "dates": "2024", "bullets": ["Built things."]},
+                {"role": "Dev", "company": "Otrack", "location": "",
+                 "dates": "2023", "bullets": ["Shipped an app."]},
+                {"role": "Support", "company": "Bank Alfalah", "location": "",
+                 "dates": "2021", "bullets": ["Fixed things."]},
+            ],
+            "education": [{"degree": "MSc", "institution": "Concordia University",
+                           "location": "", "dates": "2026"}],
+            "projects": [{"name": "JobPilot", "owner": "personal", "tech": ["Python"],
+                          "link": "", "bullets": ["Built a pipeline."]}],
+            "certificates": [], "volunteer": [],
+        })
+
+    def _lying_json(self):
+        import json
+        data = json.loads(self._honest_json())
+        data["experience"].append({
+            "role": "Sales Manager", "company": "TechCorp Inc.", "location": "",
+            "dates": "2020", "bullets": ["Led a sales team."]})
+        return json.dumps(data)
+
+    def _patch(self, monkeypatch, apply):
+        monkeypatch.setattr(apply, "load_profile", self._profile)
+        monkeypatch.setattr(apply, "redacting", lambda: False)
+        monkeypatch.setattr(apply, "extract_requirements",
+                            lambda job: ["Python", "REST APIs"])
+        monkeypatch.setattr(apply, "select_relevant_projects", lambda job, **kw: [0])
+
+    def test_an_incomplete_profile_generates_nothing(self, conn, monkeypatch,
+                                                     capture_llm):
+        from src import apply
+        monkeypatch.setattr(apply, "load_profile", lambda: {"identity": {}})
+
+        with pytest.raises(ProfileIncompleteError):
+            apply.generate_resume({"title": "Dev", "company": "Shopify",
+                                   "description": "Python."})
+
+        assert capture_llm.calls == [], (
+            "a model was called for a profile that cannot support a resume"
+        )
+
+    def test_a_fabricated_resume_is_never_returned(self, conn, monkeypatch,
+                                                   capture_llm):
+        from src import apply
+        self._patch(monkeypatch, apply)
+        capture_llm.reply = lambda system, user: (self._lying_json(), "gemini")
+
+        with pytest.raises(FabricationError) as caught:
+            apply.generate_resume({"title": "Backend Developer", "company": "Shopify",
+                                   "description": "Python, REST APIs."})
+
+        assert any("TechCorp Inc." in p for p in caught.value.problems)
+
+    def test_it_retries_with_the_specific_problem(self, conn, monkeypatch,
+                                                  capture_llm):
+        from src import apply
+        self._patch(monkeypatch, apply)
+
+        def reply(system, user):
+            if "YOUR PREVIOUS ATTEMPT WAS WRONG" in user:
+                return (self._honest_json(), "gemini")
+            return (self._lying_json(), "gemini")
+
+        capture_llm.reply = reply
+
+        result = apply.generate_resume({"title": "Backend Developer",
+                                        "company": "Shopify",
+                                        "description": "Python."})
+
+        assert "TechCorp" not in result["text"]
+        assert "Bank Alfalah" in result["text"]
+
+    def test_the_retry_forbids_deleting_sections(self, conn, monkeypatch,
+                                                 capture_llm):
+        """Told it had invented an employer, a previous version deleted the whole
+        work history."""
+        from src import apply
+        self._patch(monkeypatch, apply)
+
+        def reply(system, user):
+            if "YOUR PREVIOUS ATTEMPT WAS WRONG" in user:
+                return (self._honest_json(), "gemini")
+            return (self._lying_json(), "gemini")
+
+        capture_llm.reply = reply
+        apply.generate_resume({"title": "Dev", "company": "Shopify",
+                               "description": "Python."})
+
+        retry = next(u for _, u, _ in capture_llm.calls
+                     if "YOUR PREVIOUS ATTEMPT WAS WRONG" in u)
+
+        assert "Do NOT delete a section" in retry
+        assert "every real entry stays, every invented one goes" in retry
+
+    def test_the_closed_list_is_in_the_prompt(self, conn, monkeypatch,
+                                              capture_llm):
+        from src import apply
+        self._patch(monkeypatch, apply)
+        capture_llm.reply = lambda system, user: (self._honest_json(), "gemini")
+
+        apply.generate_resume({"title": "Dev", "company": "Shopify",
+                               "description": "Python."})
+
+        prompt = next(u for _, u, _ in capture_llm.calls if "JSON SHAPE" in u)
+
+        assert "EXACTLY 3" in prompt
+        assert "Do not add a 4th" in prompt
+        assert "Everything below is ME. Everything above is the job." in prompt
+
+
+class TestTheListsAreClosed:
+    def test_the_employers_are_counted_and_named(self):
+        from src.apply import closed_lists
+
+        text = closed_lists({
+            "experience": [{"company": "Concordia University"},
+                           {"company": "Otrack"},
+                           {"company": "Bank Alfalah"}],
+            "education": [{"institution": "Concordia University"}],
+            "certificates": [{"name": "Azure Fundamentals"}],
+            "volunteer": [],
+        })
+
+        assert "EXACTLY 3" in text
+        assert "1. Concordia University" in text
+        assert "Do not add a 4th" in text
+
+    def test_an_empty_section_is_stated_as_empty(self):
+        """Not merely omitted. An absent section is a gap the model may fill; a
+        section declared empty is a fact."""
+        from src.apply import closed_lists
+
+        text = closed_lists({"experience": [], "education": [], "certificates": [],
+                             "volunteer": []})
+
+        assert "VOLUNTEER ORGANISATIONS: you have NONE" in text
+
+    def test_the_ordinals_are_not_embarrassing(self):
+        from src.apply import _ordinal
+
+        assert _ordinal(3) == "a 3rd"
+        assert _ordinal(4) == "a 4th"
+        assert _ordinal(11) == "a 11th"

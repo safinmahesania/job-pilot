@@ -21,7 +21,7 @@ import re
 
 from src import llm
 from src.config import load_profile
-from src import resume_limits, resume_guard, resume_fit
+from src import resume_limits, resume_guard, resume_fit, resume_schema
 from src.llm import LLMError
 from src.paths import (
     CONFIG_DIR,
@@ -626,9 +626,29 @@ The job decides ORDER and EMPHASIS and VOCABULARY. It never decides CONTENT.
     services", use the job's phrase — it is the same thing.
   - CONTENT: comes ONLY from the profile. Always. Without exception.
 
-If the job asks for something {name} does not have, {name} does not have it. Say
-nothing. An omission is honest; an invention is not, and it is the kind of
-dishonesty that ends a career rather than a conversation.
+If the job asks for something {name} does not have, {name} does not have it. Do
+not claim it. Not claiming a skill you lack is honest; inventing one is not.
+
+BUT — and a previous attempt got this exactly backwards — that applies to CLAIMS,
+never to FACTS. Told not to invent, it deleted {name}'s entire work history and
+wrote "(No work experience listed)" for someone with three real jobs. It had
+decided the jobs weren't relevant to the posting, so it left them out.
+
+That is not honesty. That is a different lie.
+
+EVERY section of the template that the profile has content for MUST be filled, in
+full:
+  - Three employers in the profile means THREE entries under Work Experience.
+  - Two schools means TWO under Education. Two certificates means two.
+  - A job that does not value your experience does not erase your experience.
+
+A teaching assistant's job is still a job when you apply to a bank. A banking
+support role is still a role when you apply to a startup. You may choose which of
+their bullets to lead with. You may not choose whether the job existed.
+
+Nothing real is ever dropped. Nothing false is ever added. Those are two separate
+rules and you must obey both — satisfying one by breaking the other is not a
+compromise, it is a failure.
 
 You are a careful editor, not a copywriter.
 
@@ -708,68 +728,46 @@ OUTPUT:
 
 
 def generate_resume(job: dict) -> dict:
-    """Tailor the resume template to one job.
+    """Select from the profile what this job should see, and render it.
 
-    Reads config/resume_template.md, fills its placeholders from profile.yaml,
-    angled at this specific job. Returns {"text", "provider", "requirements",
-    "projects_used"}.
+    The model fills in fields. It does not write a document. It never sees a `###`
+    or an `@@`, so it cannot get them wrong — and the checks that follow read a
+    structure that is given, rather than one inferred back out of prose. Inferring
+    it is what used to refuse honest resumes for writing a heading in bold instead
+    of with three hashes.
     """
-    template_path = CONFIG_DIR / RESUME_TEMPLATE_FILE
-    if not template_path.exists():
-        raise FileNotFoundError(
-            f"Resume template not found at config/{RESUME_TEMPLATE_FILE}. "
-            "Add your template there (see the example shipped with JobPilot)."
-        )
-    template = template_path.read_text(encoding="utf-8")
-
     profile = load_profile()
 
-    # Guard 1: refuse to write a resume from a profile that cannot support one.
-    #
-    # This is not pedantry. Handed an empty fact sheet, a template full of
-    # {{EXPERIENCE}} placeholders and an instruction to "leave no placeholder
-    # behind", the model has exactly one source of facts left — the job posting —
-    # and it will use it. It will invent an employer, a degree, and a name lifted
-    # from the job title. The output is fluent and completely false.
     missing = resume_guard.validate_profile(profile)
     if missing:
         raise resume_guard.ProfileIncompleteError(missing)
 
     projects = profile.get("projects", []) or []
     real_name = (profile.get("identity", {}) or {}).get("name", "")
-    name = "{{NAME}}" if redacting() else real_name
+    redacted = redacting()
+    name = "{{NAME}}" if redacted else real_name
 
-    # Same narrowing as the cover letter: requirements first, then the most
-    # relevant of my recent projects.
     requirements = extract_requirements(job)
+
+    score, matched = resume_fit.overlap(requirements, profile, job)
+    detail = f" ({', '.join(sorted(matched)[:6])})" if matched else ""
+    print(f"  fit: {score:.0%} of what this job asks for is in your profile{detail}")
+    resume_fit.check_fit(job, requirements, profile)
+
     picked = select_relevant_projects(
         job, top_n=RESUME_PROJECTS_USED,
         requirements=requirements, pool=RESUME_PROJECT_POOL,
     )
 
-    # Refuse a job that cannot have an honest resume written for it. This runs
-    # before the model is called at all — the guards downstream catch a fabricated
-    # resume, but a refusal you understand beats one that arrives after two
-    # attempts and two lies.
-    resume_fit.check_fit(job, requirements, profile)
-
     jd = _strip_html(job.get("description", ""))[:5000]
-    reqs_block = "\n".join(f"- {r}" for r in requirements) or "(see description below)"
+    reqs_block = "\n".join(f"- {r}" for r in requirements) or "(see description)"
 
     system = _RESUME_SYSTEM.format(name=name or "the candidate",
                                    limits=resume_limits.instructions())
 
-    # ORDER MATTERS, and it was wrong.
-    #
-    # The job description used to sit at the bottom, immediately before "fill the
-    # template now" — five thousand characters of someone else's role, and the
-    # last thing the model read before it began to write. The profile was at the
-    # top, far away. Recency does the rest: a model steeped in a sales posting and
-    # then told to write writes a salesperson.
-    #
-    # So the job goes FIRST, as context, and my real background goes LAST, closest
-    # to the pen. The job is the lens; the profile is the subject. Whichever one is
-    # nearest the moment of writing is the one that shapes the output.
+    # The job first, as context. My real background last, closest to the pen.
+    # Recency does the rest: a model steeped in a posting and then told to write
+    # writes the posting.
     user = f"""THE JOB I AM APPLYING TO — this is CONTEXT, not content.
 It tells you which of my real experiences to lead with and which words to use for
 them. It does not tell you who I am, where I worked, or what I know.
@@ -787,98 +785,32 @@ Full description:
 Everything below is ME. Everything above is the job. Nothing crosses over.
 ────────────────────────────────────────────────────────────────────────
 
-THE TEMPLATE TO FILL (reproduce its structure exactly):
----
-{template}
----
-
-MY PROJECTS TO INCLUDE (these were selected as most relevant; use only these):
-{_format_projects(projects, indices=set(picked))}
-
 THE COMPLETE LISTS — closed. Nothing may be added to them.
 
 {closed_lists(profile)}
 
+MY PROJECTS TO INCLUDE (these were selected as most relevant; use only these):
+{_format_projects(projects, indices=set(picked))}
+
 MY PROFILE — the only facts you may use:
 {_profile_facts(profile)}
 
-Fill the template now, from MY PROFILE directly above. Output only the finished
-Markdown resume."""
+RETURN THIS EXACT JSON SHAPE, filled in from MY PROFILE above:
 
-    text, provider = llm.generate(system, user, personal=True)
-    text = _clean_output(text)
+{resume_schema.shape_for_prompt()}
 
-    # Measure what actually came back. Asking a model to keep to three lines and
-    # believing it is how resumes end up on a second page — it is counting words
-    # against a page it has never seen. One tightening pass, naming exactly what
-    # overran and by how much, fixes almost all of it.
-    overruns = resume_limits.check(text)
-    if overruns:
-        complaints = "\n".join(f"- {o.message}" for o in overruns)
-        print(f"  resume ran long — asking for a tighter pass:\n{complaints}")
+Every key is required. A list is empty ONLY if my profile has nothing for it —
+NEVER because you judged it irrelevant to this job.
 
-        retry = (
-            f"{user}\n\n"
-            f"YOUR PREVIOUS ATTEMPT WAS TOO LONG. These parts overran:\n"
-            f"{complaints}\n\n"
-            f"Produce the resume again, complete and unchanged in substance, with "
-            f"those parts within their limits. Keep every fact, every metric and "
-            f"every technology — cut words, not content."
-        )
-        try:
-            retried, provider = llm.generate(system, retry, personal=True)
-            retried = _clean_output(retried)
-            # Only keep the retry if it actually helped.
-            if len(resume_limits.check(retried)) < len(overruns):
-                text = retried
-                overruns = resume_limits.check(text)
-        except LLMError:
-            pass                                 # keep the long one; say so below
+Output ONLY the JSON. No prose, no markdown fences."""
 
-    # Guard 2: is every fact on this page actually yours?
-    #
-    # A valid profile is not enough — the model can still drift, especially when
-    # the job describes a role quite unlike your background. The only way to know
-    # is to read what came back and compare it to what went in. Every employer,
-    # school, project and certificate must exist in the profile.
-    invented = resume_guard.check_grounding(text, profile)
-    if invented:
-        print("  the resume contained invented facts — regenerating:")
-        for problem in invented:
-            print(f"    - {problem}")
+    resume, provider = _generate_structured(system, user, profile)
 
-        strict = (
-            f"{user}\n\n"
-            f"YOUR PREVIOUS ATTEMPT INVENTED FACTS THAT ARE NOT IN MY PROFILE:\n"
-            + "\n".join(f"- {p}" for p in invented)
-            + "\n\nFIX ONLY WHAT IS LISTED ABOVE. Do NOT delete a section to make "
-              "the problem go away — told it had invented an employer, a previous "
-              "attempt responded by deleting my entire work history and writing "
-              "\"(No work experience listed)\" for someone with three real jobs. "
-              "That is not a correction; it is a different lie.\n\n"
-              "Every employer, school, project and certificate must come from MY "
-              "PROFILE — not from the job description. The job tells you what to "
-              "EMPHASISE. It does not tell you who I am.\n\n"
-            + closed_lists(profile)
-            + "\n\nWrite the resume again: every real entry present, every "
-              "invented one gone."
-        )
-        try:
-            retried, provider = llm.generate(system, strict, personal=True)
-            retried = _clean_output(retried)
-            if not resume_guard.check_grounding(retried, profile):
-                text = retried
-                invented = []
-        except LLMError:
-            pass
+    text = resume_schema.to_markdown(resume, profile, name, redacted=redacted)
+    if redacted:
+        text = fill_contact(text, profile)
 
-    if invented:
-        # Not a warning, and not a draft to tidy up. A resume claiming an employer
-        # you never worked for is one careless send away from a conversation you
-        # cannot recover from. It does not reach you.
-        raise resume_guard.FabricationError(invented)
-
-    text = fill_contact(text, profile)          # identifiers restored, locally
+    overruns = resume_limits.check_structured(resume)
 
     return {
         "overruns": [
@@ -891,3 +823,42 @@ Markdown resume."""
         "projects_used": [projects[i].get("name", "") for i in picked
                           if i < len(projects)],
     }
+
+
+def _generate_structured(system: str, user: str, profile: dict,
+                         attempts: int = 3) -> tuple[dict, str]:
+    """Ask for the JSON, verify it, and say exactly what was wrong if it is not.
+
+    Three attempts. A model that invents an employer on the first pass usually
+    stops once it is told precisely which one and that the list is closed — what it
+    cannot do is guess what it got wrong, and it was never given a reason to.
+    """
+    complaint = ""
+    problems: list[str] = []
+
+    for attempt in range(attempts):
+        prompt = user if not complaint else (
+            f"{user}\n\n"
+            f"YOUR PREVIOUS ATTEMPT WAS WRONG:\n{complaint}\n\n"
+            f"Fix ONLY what is listed. Do NOT delete a section to make a problem go "
+            f"away — every real entry stays, every invented one goes. Return the "
+            f"corrected JSON."
+        )
+
+        text, provider = llm.generate(system, prompt, personal=True)
+
+        try:
+            resume = resume_schema.parse(text)
+        except resume_schema.MalformedResume as e:
+            complaint = f"- {e}. Return a single JSON object and nothing else."
+            problems = [str(e)]
+            continue
+
+        problems = resume_guard.check_structured(resume, profile)
+        if not problems:
+            return resume, provider
+
+        complaint = "\n".join(f"- {p}" for p in problems)
+        print(f"  attempt {attempt + 1} had problems:\n{complaint}")
+
+    raise resume_guard.FabricationError(problems)

@@ -15,10 +15,33 @@ The tests that matter here are the two boundaries. The sales job must be refused
 The junior backend job must NOT be, because a tool that refuses the jobs you should
 actually apply to is worse than one that never existed.
 """
+import json
+
 import pytest
 
 from src import resume_fit
 from src.resume_fit import JobDoesNotFitError, check_fit, overlap
+
+
+def _json_resume() -> str:
+    """The shape the model returns now. It fills fields; the code renders the page."""
+    return json.dumps({
+        "summary": "Software developer.",
+        "skills": [{"label": "Programming & Markup Languages",
+                    "skills": ["Dart", "Python"]}],
+        "experience": [{"role": "Flutter Developer", "company": "Otrack",
+                        "location": "", "dates": "2023 - 2024",
+                        "bullets": ["Built a Flutter app."]},
+                       {"role": "Application Support Officer",
+                        "company": "Bank Alfalah", "location": "",
+                        "dates": "2021 - 2022", "bullets": ["Troubleshot apps."]}],
+        "education": [{"degree": "MSc", "institution": "Concordia",
+                       "location": "", "dates": "2025 - 2026"}],
+        "projects": [{"name": "Recipedia", "owner": "course",
+                      "tech": ["Flutter"], "link": "",
+                      "bullets": ["Cross-platform app."]}],
+        "certificates": [], "volunteer": [],
+    })
 
 
 #: A software developer. Flutter, Java, Python, databases.
@@ -36,15 +59,17 @@ DEVELOPER = {
         {"label": "Databases", "skills": ["MySQL", "SQL Server", "SQLite"]},
     ],
     "experience": [
-        {"role": "Flutter Developer",
+        {"role": "Flutter Developer", "company": "Otrack",
          "highlights": ["Built a Flutter mobile app with API-driven data and MVC."]},
-        {"role": "Application Support Officer",
+        {"role": "Application Support Officer", "company": "Bank Alfalah",
          "highlights": ["Troubleshot banking applications via logs and SQL queries."]},
     ],
     "projects": [
         {"name": "Recipedia", "tech": ["Flutter", "Dart", "Firebase", "SQLite"],
          "highlights": ["Cross-platform mobile app with Firebase auth."]},
     ],
+    "education": [{"degree": "MSc", "institution": "Concordia"}],
+    "certificates": [], "volunteer": [],
 }
 
 SALES_JOB = [
@@ -111,7 +136,7 @@ class TestTheJobThatStartedThis:
                 "description": "Sell healthcare SaaS to assisted living facilities.",
             })
 
-        wrote = [u for _, u, _ in capture_llm.calls if "TEMPLATE TO FILL" in u]
+        wrote = [u for _, u, _ in capture_llm.calls if "JSON SHAPE" in u]
         assert wrote == [], "a model was asked to write an impossible resume"
 
 
@@ -191,7 +216,7 @@ class TestThePromptPutsTheProfileClosestToThePen:
         monkeypatch.setattr(apply, "load_profile", lambda: profile)
         monkeypatch.setattr(apply, "extract_requirements", lambda job: BACKEND_JOB)
         monkeypatch.setattr(apply, "select_relevant_projects", lambda job, **kw: [0])
-        capture_llm.reply = lambda system, user: ("# Safin\n", "gemini")
+        capture_llm.reply = lambda system, user: (_json_resume(), "gemini")
 
         try:
             apply.generate_resume({"title": "Backend Developer", "company": "Shopify",
@@ -199,7 +224,7 @@ class TestThePromptPutsTheProfileClosestToThePen:
         except Exception:
             pass                      # the grounding guard may object; the prompt is what we want
 
-        prompt = next(u for _, u, _ in capture_llm.calls if "TEMPLATE TO FILL" in u)
+        prompt = next(u for _, u, _ in capture_llm.calls if "JSON SHAPE" in u)
 
         job_at = prompt.index("Full description:")
         profile_at = prompt.index("MY PROFILE — the only facts")
@@ -219,7 +244,7 @@ class TestThePromptPutsTheProfileClosestToThePen:
         monkeypatch.setattr(apply, "load_profile", lambda: profile)
         monkeypatch.setattr(apply, "extract_requirements", lambda job: BACKEND_JOB)
         monkeypatch.setattr(apply, "select_relevant_projects", lambda job, **kw: [0])
-        capture_llm.reply = lambda system, user: ("# Safin\n", "gemini")
+        capture_llm.reply = lambda system, user: (_json_resume(), "gemini")
 
         try:
             apply.generate_resume({"title": "Backend Developer", "company": "Shopify",
@@ -227,7 +252,7 @@ class TestThePromptPutsTheProfileClosestToThePen:
         except Exception:
             pass
 
-        prompt = next(u for _, u, _ in capture_llm.calls if "TEMPLATE TO FILL" in u)
+        prompt = next(u for _, u, _ in capture_llm.calls if "JSON SHAPE" in u)
 
         assert "Everything below is ME. Everything above is the job." in prompt
 
@@ -245,4 +270,95 @@ class TestTheTaskIsSelectionNotTransformation:
         from src.apply import _RESUME_SYSTEM
 
         assert "It never decides CONTENT" in _RESUME_SYSTEM
-        assert "An omission is honest" in _RESUME_SYSTEM
+        # Not claiming a skill you lack is honest. Deleting a job you had is not —
+        # and the first phrasing of this rule taught the model to do exactly that.
+        assert "Not claiming a skill you lack is honest" in _RESUME_SYSTEM
+
+
+class TestAFailedExtractionIsNotAPerfectFit:
+    """The hole the sales job walked through.
+
+    `extract_requirements` is an LLM call, and it returns [] when it fails. The fit
+    check treated an empty list as "nothing was asked, so nothing can fail" and
+    returned a perfect score — which meant that whenever requirement extraction
+    failed, every job fit perfectly, and the sales posting sailed straight through
+    the check that existed to stop it.
+
+    A default that turns a failure into an approval is not a default. It is a hole.
+    """
+
+    SALES_JD = (
+        "Canada Sales - Talent Community. PointClickCare is a healthcare technology "
+        "platform. We are building a talent community for Channel Sales, Inside "
+        "Sales, Sales Operations, Account Management and Assisted Living Facility "
+        "(ALF) sales. Candidates should have experience selling SaaS or enterprise "
+        "software into healthcare. Travel to our Mississauga office required."
+    )
+
+    DEV_JD = (
+        "Junior Backend Developer. Build and maintain REST APIs in Python, work "
+        "with PostgreSQL, and ship through Git and code review in an Agile team."
+    )
+
+    def test_the_sales_job_is_still_refused_when_extraction_fails(self):
+        job = {"title": "Canada Sales - Talent Community",
+               "company": "PointClickCare",
+               "description": self.SALES_JD}
+
+        with pytest.raises(JobDoesNotFitError):
+            check_fit(job, [], DEVELOPER)          # [] = extraction failed
+
+    def test_a_real_dev_job_still_gets_through_when_extraction_fails(self):
+        """The fallback is noisier. It must not become a wall."""
+        job = {"title": "Junior Backend Developer", "company": "Shopify",
+               "description": self.DEV_JD}
+
+        check_fit(job, [], DEVELOPER)
+
+    def test_the_fallback_reads_the_posting_itself(self):
+        job = {"title": "Junior Backend Developer", "description": self.DEV_JD}
+
+        score, matched = overlap([], DEVELOPER, job)
+
+        assert "python" in matched
+        assert score > 0.2
+
+    def test_with_nothing_at_all_it_does_not_refuse(self):
+        """No requirements, no title, no description. Refusing on the strength of
+        no evidence would block a job for the crime of having a thin posting."""
+        check_fit({"title": "", "description": ""}, [], DEVELOPER)
+
+
+class TestNothingRealIsEverDropped:
+    """The other half of the failure, and the half I caused.
+
+    The system prompt said "an omission is honest; an invention is not". The model
+    applied that to entire sections: told not to invent, it deleted three real jobs
+    and wrote "(No work experience listed)" — reasoning, presumably, that a teaching
+    assistantship is not relevant to a sales posting.
+
+    It isn't. It is still a job you had. A job that does not value your experience
+    does not erase your experience, and a resume that hides your career is as false
+    as one that invents a career.
+
+    Two rules, both binding: nothing false added, nothing real dropped. Satisfying
+    one by breaking the other is not a compromise.
+    """
+
+    def test_the_prompt_says_omission_applies_to_claims_not_facts(self):
+        from src.apply import _RESUME_SYSTEM
+
+        assert "never to FACTS" in _RESUME_SYSTEM
+        assert "Nothing real is ever dropped" in _RESUME_SYSTEM
+
+    def test_the_prompt_names_the_exact_failure(self):
+        """It happened. Say so, so it is not reasoned into again."""
+        from src.apply import _RESUME_SYSTEM
+
+        assert "(No work experience listed)" in _RESUME_SYSTEM
+
+    def test_the_prompt_requires_every_populated_section(self):
+        from src.apply import _RESUME_SYSTEM
+
+        assert "MUST be filled" in _RESUME_SYSTEM
+        assert "does not erase your experience" in _RESUME_SYSTEM

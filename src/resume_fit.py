@@ -84,16 +84,33 @@ def profile_terms(profile: dict) -> set[str]:
     return _terms(" ".join(parts))
 
 
-def overlap(requirements: list[str], profile: dict) -> tuple[float, set[str]]:
+def overlap(requirements: list[str], profile: dict,
+            job: dict | None = None) -> tuple[float, set[str]]:
     """What fraction of what this job asks for can you honestly claim?
 
-    Measured against the job's *requirements*, not its whole posting — a posting is
+    Measured against the job's *requirements* where we have them — a posting is
     mostly boilerplate about culture and benefits, and matching "collaborative" is
     not evidence you can do the work.
+
+    But requirement extraction is an LLM call, and it returns [] when it fails.
+    This used to treat an empty list as "nothing asked, nothing to fail" and return
+    a perfect score — so a failed extraction meant every job fit perfectly, and the
+    sales posting sailed straight through the check built to stop it. A default
+    that turns a failure into an approval is not a default; it is a hole.
+
+    So when there are no requirements, fall back to the title and the posting
+    itself. Noisier, but a sales posting is still unmistakably a sales posting.
     """
     wanted = _terms(" ".join(requirements))
+
+    if not wanted and job:
+        raw = f"{job.get('title', '')} {job.get('description', '')}"
+        wanted = _terms(re.sub(r"<[^>]+>", " ", raw))
+
     if not wanted:
-        return 1.0, set()               # nothing asked; nothing to fail
+        # Genuinely nothing to go on: no requirements, no title, no description.
+        # Refusing here would block a job on the strength of no evidence at all.
+        return 1.0, set()
 
     mine = profile_terms(profile)
     matched = wanted & mine
@@ -137,6 +154,6 @@ def check_fit(job: dict, requirements: list[str], profile: dict) -> None:
     attempted, which is better: a refusal you understand beats a refusal that
     arrives after the model has already tried twice and produced two lies.
     """
-    score, matched = overlap(requirements, profile)
+    score, matched = overlap(requirements, profile, job)
     if score < FIT_MIN_OVERLAP:
         raise JobDoesNotFitError(job, score, matched)

@@ -243,3 +243,58 @@ A rendered line of this resume holds about {b['chars_per_line']} characters
 Cutting to length means saying the same thing in fewer words. It does not mean
 dropping the achievement, the metric, or the technology — those are the parts that
 matter. Cut the adjectives and the throat-clearing first."""
+
+
+def check_structured(resume: dict) -> list[Overrun]:
+    """Length, measured per field. No parsing, no guessing which section a line
+    belonged to."""
+    problems = []
+
+    summary = str(resume.get("summary") or "")
+    if summary:
+        actual = measure_lines(summary)
+        if actual > RESUME_SUMMARY_LINES:
+            problems.append(Overrun("Summary", RESUME_SUMMARY_LINES, actual,
+                                    summary))
+
+    n = 0
+    for entry in resume.get("experience") or []:
+        for bullet in entry.get("bullets") or []:
+            n += 1
+            actual = measure_lines(str(bullet), indented=True)
+            if actual > RESUME_EXPERIENCE_BULLET_LINES:
+                problems.append(Overrun(
+                    f"Experience bullet {n} ({entry.get('company', '')})",
+                    RESUME_EXPERIENCE_BULLET_LINES, actual, str(bullet)))
+
+    projects = resume.get("projects") or []
+    if len(projects) > RESUME_PROJECTS_USED:
+        problems.append(Overrun("Projects", RESUME_PROJECTS_USED, len(projects),
+                                f"{len(projects)} projects"))
+
+    allowed_bullets = len(RESUME_PROJECT_BULLET_LINES)
+    for i, entry in enumerate(projects):
+        bullets = entry.get("bullets") or []
+        name = entry.get("name", f"#{i + 1}")
+
+        if len(bullets) > allowed_bullets:
+            problems.append(Overrun(f"Project {name}", allowed_bullets,
+                                    len(bullets),
+                                    f"{len(bullets)} bullet points"))
+
+        for j, bullet in enumerate(bullets[:allowed_bullets]):
+            allowed = RESUME_PROJECT_BULLET_LINES[j]
+            actual = measure_lines(str(bullet), indented=True)
+            if actual > allowed:
+                problems.append(Overrun(f"Project {name}, bullet {j + 1}",
+                                        allowed, actual, str(bullet)))
+
+    for i, entry in enumerate(resume.get("volunteer") or []):
+        text = str(entry.get("description") or "")
+        actual = measure_lines(text)
+        if actual > RESUME_VOLUNTEER_LINES:
+            problems.append(Overrun(
+                f"Volunteer ({entry.get('organization', i + 1)})",
+                RESUME_VOLUNTEER_LINES, actual, text))
+
+    return problems

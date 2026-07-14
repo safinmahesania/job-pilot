@@ -318,3 +318,66 @@ class ProfileIncompleteError(Exception):
               "and it will write from it — inventing an employer, a degree and a "
               "name. Fill these in first."
         )
+
+
+# ── Grounding, on the structure rather than on prose ────────────────────────
+
+def check_structured(resume: dict, profile: dict) -> list[str]:
+    """Every fact in the resume, checked against the profile. No parsing.
+
+    The markdown version of this had to infer the structure back out of the text,
+    and it got it wrong: a model that wrote "**Teaching Assistant** | Concordia"
+    instead of "### Teaching Assistant" produced a resume the parser read as empty,
+    and an honest document was refused for a formatting difference. A check that
+    fails on formatting tells you nothing about truth.
+
+    Here the structure is given. "Is this employer mine" is a dictionary lookup.
+    """
+    known = known_entities(profile)
+    problems = []
+
+    def check(items, field, allowed, label, noun):
+        for item in items:
+            value = str(item.get(field, "")).strip()
+            if not value:
+                continue
+            if not _mentions_any(value, allowed):
+                problems.append(f'"{value}" is not {noun}.')
+
+    check(resume.get("experience") or [], "company", known["company"],
+          "Work Experience", "an employer in your profile — you never worked there")
+    check(resume.get("education") or [], "institution", known["institution"],
+          "Education", "in your education — you did not study there")
+    check(resume.get("projects") or [], "name", known["project"],
+          "Projects", "a project in your profile")
+    check(resume.get("certificates") or [], "name", known["certificate"],
+          "Certificates", "a certificate you hold")
+    check(resume.get("volunteer") or [], "organization", known["organisation"],
+          "Volunteer", "in your volunteer history")
+
+    # Skill category labels must be the profile's own.
+    from src.apply import skill_groups
+    allowed_labels = {_normalise(g["label"]) for g in skill_groups(profile)}
+    if allowed_labels:
+        for group in resume.get("skills") or []:
+            label = str(group.get("label", "")).strip()
+            if label and not _mentions_any(label, allowed_labels):
+                problems.append(
+                    f'"{label}" is not a skill category in your profile. It came '
+                    f'from the job posting, not from you.'
+                )
+
+    # Nothing real may be dropped. A missing section is now a missing KEY — plain
+    # to see — where in markdown it was indistinguishable from a heading the model
+    # had formatted its own way.
+    for key, label, have in [
+        ("experience", "Work Experience", len(profile.get("experience") or [])),
+        ("education", "Education", len(profile.get("education") or [])),
+    ]:
+        if have and not (resume.get(key) or []):
+            problems.append(
+                f"The {label} section is empty, but your profile has {have}. "
+                f"A job that does not value your experience does not erase it."
+            )
+
+    return problems

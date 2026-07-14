@@ -21,3 +21,4 @@ fpdf2
 # Local LLM scoring (requires Ollama running separately)
 ollama
 python-docx>=1.1
+pypdf>=4.0        # tests: read back the PDF we generated, without a system binary

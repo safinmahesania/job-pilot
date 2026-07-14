@@ -441,170 +441,164 @@ class TestTheProjectNotesDoNotLeak:
         assert "\n    LINK: github.com/x" in rendered
 
 
-class TestGenerationRefuses:
-    """The guards, exercised through the real generation path.
 
-    These used to hand the model a markdown resume. It returns JSON now — see
-    src/resume_schema.py for why — so the fabricated fixture is the same lie in the
-    new shape, and the checks it trips are the same checks.
+class TestTechnologiesNamedInProse:
+    """The invention moved into the prose, because that was the only place left.
+
+    The structured checks cover everything that lives in a FIELD — employers,
+    schools, projects, certificates, skill category labels. The summary is free text
+    and nothing was reading it, and so:
+
+        "Proficient in React, C# .NET, and full-stack feature delivery, with
+        hands-on experience integrating REST APIs, SQL/NoSQL databases..."
+
+    React is not in the profile. It is in the job description. The resume claimed a
+    framework its owner has never touched — which is exactly an invented employer,
+    wearing prose instead of a field, and getting through for exactly the same
+    reason: nothing was checking.
     """
 
-    def _profile(self):
-        return dict(REAL_PROFILE,
-                    contact={"city": "Montreal", "email": "s@example.com"},
-                    experience=[
-                        {"role": "Intern", "company": "Acme Corp"},
-                        {"role": "Dev", "company": "Otrack"},
-                        {"role": "Support", "company": "Bank Alfalah"},
-                    ])
+    PROFILE = {
+        "identity": {"name": "Safin"},
+        "summary": "Software developer across frontend and backend.",
+        "skills": {
+            "expert": ["Java", "Flutter", "Python", "SQL", "RESTful APIs"],
+            "proficient": ["Dart", "C#", "Firebase", "SQLite"],
+            "familiar": ["Azure Cloud", ".NET 8", "PyTorch"],
+        },
+        "skill_categories": [{"label": "Databases",
+                              "skills": ["MySQL", "SQL Server"]}],
+        "experience": [{"role": "Flutter Developer", "company": "Otrack",
+                        "highlights": ["Built a Flutter app with Firebase."]}],
+        "projects": [{"name": "Recipedia", "tech": ["Flutter", "Dart"]}],
+        "certificates": [],
+    }
 
-    def _honest_json(self):
+    THE_SUMMARY = (
+        "Software developer experienced across frontend and backend development, "
+        "adept at building clean, practical, and maintainable applications. "
+        "Proficient in React, C# .NET, and full-stack feature delivery, with "
+        "hands-on experience integrating REST APIs, SQL/NoSQL databases, and cloud "
+        "platforms like Azure. Driven to shape architecture, engineering practices, "
+        "and deliver scalable solutions."
+    )
+
+    def test_react_is_caught(self):
+        """The one that went out."""
+        problems = resume_guard.check_prose({"summary": self.THE_SUMMARY},
+                                            self.PROFILE)
+
+        assert any('"React"' in p for p in problems)
+
+    def test_nosql_is_caught_separately_from_sql(self):
+        """"SQL/NoSQL" is two claims, and only one of them is a lie."""
+        problems = resume_guard.check_prose({"summary": self.THE_SUMMARY},
+                                            self.PROFILE)
+
+        assert any('"NoSQL"' in p for p in problems)
+        assert not any('"SQL"' in p for p in problems)
+
+    def test_it_says_where_the_word_came_from(self):
+        problems = resume_guard.check_prose({"summary": self.THE_SUMMARY},
+                                            self.PROFILE)
+
+        assert any("came from the job posting" in p for p in problems)
+
+    def test_the_technologies_you_do_have_pass(self):
+        """C#, .NET, REST, Azure — all real, all differently spelled from the
+        profile, all fine. "REST" lives inside "RESTful APIs"; ".NET" inside
+        ".NET 8"."""
+        honest = ("Junior software developer across frontend and backend, with "
+                  "hands-on work in Flutter, Java and Python. Experience "
+                  "integrating REST APIs and SQL databases, with exposure to "
+                  "Azure and .NET 8.")
+
+        assert resume_guard.check_prose({"summary": honest}, self.PROFILE) == []
+
+    def test_ordinary_prose_claims_nothing(self):
+        """"Curious", "collaborative", "problem-solving" — words, not tools. A check
+        that fired on these would be useless."""
+        prose = ("Curious and collaborative developer with a strong problem-solving "
+                 "mindset and a drive to keep learning and building scalable "
+                 "solutions.")
+
+        assert resume_guard.check_prose({"summary": prose}, self.PROFILE) == []
+
+    def test_a_sentence_opening_with_a_capital_is_not_a_claim(self):
+        """"Software developer..." starts with a capital because sentences do."""
+        assert resume_guard.check_prose(
+            {"summary": "Software engineer. Driven to build well."},
+            self.PROFILE) == []
+
+    def test_stacks_you_have_never_touched(self):
+        problems = resume_guard.check_prose(
+            {"summary": "Developer skilled in Kubernetes, Terraform and Angular."},
+            self.PROFILE)
+
+        for tool in ("Kubernetes", "Terraform", "Angular"):
+            assert any(tool in p for p in problems)
+
+    def test_experience_bullets_are_checked_too(self):
+        """The summary is not the only prose on the page."""
+        resume = {"summary": "", "experience": [{
+            "company": "Otrack",
+            "bullets": ["Rebuilt the front end in React and deployed to Kubernetes."],
+        }]}
+
+        problems = resume_guard.check_prose(resume, self.PROFILE)
+
+        assert any("React" in p and "Otrack" in p for p in problems)
+
+    def test_project_bullets_are_checked_too(self):
+        resume = {"summary": "", "projects": [{
+            "name": "Recipedia",
+            "bullets": ["Built the client in Angular."],
+        }]}
+
+        problems = resume_guard.check_prose(resume, self.PROFILE)
+
+        assert any("Angular" in p and "Recipedia" in p for p in problems)
+
+    def test_generation_refuses_a_resume_claiming_a_framework_you_lack(
+            self, conn, monkeypatch, capture_llm):
         import json
-        return json.dumps({
-            "summary": "Software developer.",
-            "skills": [{"label": "Programming", "skills": ["Python"]}],
-            "experience": [
-                {"role": "Intern", "company": "Acme Corp", "location": "",
-                 "dates": "2024", "bullets": ["Built things."]},
-                {"role": "Dev", "company": "Otrack", "location": "",
-                 "dates": "2023", "bullets": ["Shipped an app."]},
-                {"role": "Support", "company": "Bank Alfalah", "location": "",
-                 "dates": "2021", "bullets": ["Fixed things."]},
-            ],
-            "education": [{"degree": "MSc", "institution": "Concordia University",
-                           "location": "", "dates": "2026"}],
-            "projects": [{"name": "JobPilot", "owner": "personal", "tech": ["Python"],
-                          "link": "", "bullets": ["Built a pipeline."]}],
-            "certificates": [], "volunteer": [],
-        })
 
-    def _lying_json(self):
-        import json
-        data = json.loads(self._honest_json())
-        data["experience"].append({
-            "role": "Sales Manager", "company": "TechCorp Inc.", "location": "",
-            "dates": "2020", "bullets": ["Led a sales team."]})
-        return json.dumps(data)
+        from src import apply
 
-    def _patch(self, monkeypatch, apply):
-        monkeypatch.setattr(apply, "load_profile", self._profile)
+        profile = dict(self.PROFILE, contact={"city": "Montreal"},
+                       education=[{"degree": "MSc",
+                                   "institution": "Concordia University"}],
+                       certificates=[], volunteer=[])
+        monkeypatch.setattr(apply, "load_profile", lambda: profile)
         monkeypatch.setattr(apply, "redacting", lambda: False)
         monkeypatch.setattr(apply, "extract_requirements",
-                            lambda job: ["Python", "REST APIs"])
-        monkeypatch.setattr(apply, "select_relevant_projects", lambda job, **kw: [0])
+                            lambda job: ["React", "C#", "SQL"])
+        monkeypatch.setattr(apply, "select_relevant_projects",
+                            lambda job, **kw: [0])
 
-    def test_an_incomplete_profile_generates_nothing(self, conn, monkeypatch,
-                                                     capture_llm):
-        from src import apply
-        monkeypatch.setattr(apply, "load_profile", lambda: {"identity": {}})
-
-        with pytest.raises(ProfileIncompleteError):
-            apply.generate_resume({"title": "Dev", "company": "Shopify",
-                                   "description": "Python."})
-
-        assert capture_llm.calls == [], (
-            "a model was called for a profile that cannot support a resume"
-        )
-
-    def test_a_fabricated_resume_is_never_returned(self, conn, monkeypatch,
-                                                   capture_llm):
-        from src import apply
-        self._patch(monkeypatch, apply)
-        capture_llm.reply = lambda system, user: (self._lying_json(), "gemini")
+        lying = json.dumps({
+            "summary": self.THE_SUMMARY,
+            "skills": ["Databases"],
+            "experience": [{"role": "Flutter Developer", "company": "Otrack",
+                            "location": "", "dates": "2024",
+                            "bullets": ["Built an app."]}],
+            "education": [{"degree": "MSc", "institution": "Concordia University",
+                           "location": "", "dates": "2026"}],
+            "projects": [{"name": "Recipedia", "link": "",
+                          "bullets": ["An app."]}],
+            "certificates": [], "volunteer": [],
+        })
+        capture_llm.reply = lambda system, user: (lying, "gemini")
 
         with pytest.raises(FabricationError) as caught:
-            apply.generate_resume({"title": "Backend Developer", "company": "Shopify",
-                                   "description": "Python, REST APIs."})
+            apply.generate_resume({"title": "Full Stack", "company": "Acme",
+                                   "description": "React, C#, SQL."})
 
-        assert any("TechCorp Inc." in p for p in caught.value.problems)
+        assert any("React" in p for p in caught.value.problems)
 
-    def test_it_retries_with_the_specific_problem(self, conn, monkeypatch,
-                                                  capture_llm):
-        from src import apply
-        self._patch(monkeypatch, apply)
+    def test_the_shape_tells_the_model_first(self):
+        """The check is the backstop. The instruction is the plan."""
+        from src import resume_schema
 
-        def reply(system, user):
-            if "YOUR PREVIOUS ATTEMPT WAS WRONG" in user:
-                return (self._honest_json(), "gemini")
-            return (self._lying_json(), "gemini")
-
-        capture_llm.reply = reply
-
-        result = apply.generate_resume({"title": "Backend Developer",
-                                        "company": "Shopify",
-                                        "description": "Python."})
-
-        assert "TechCorp" not in result["text"]
-        assert "Bank Alfalah" in result["text"]
-
-    def test_the_retry_forbids_deleting_sections(self, conn, monkeypatch,
-                                                 capture_llm):
-        """Told it had invented an employer, a previous version deleted the whole
-        work history."""
-        from src import apply
-        self._patch(monkeypatch, apply)
-
-        def reply(system, user):
-            if "YOUR PREVIOUS ATTEMPT WAS WRONG" in user:
-                return (self._honest_json(), "gemini")
-            return (self._lying_json(), "gemini")
-
-        capture_llm.reply = reply
-        apply.generate_resume({"title": "Dev", "company": "Shopify",
-                               "description": "Python."})
-
-        retry = next(u for _, u, _ in capture_llm.calls
-                     if "YOUR PREVIOUS ATTEMPT WAS WRONG" in u)
-
-        assert "Do NOT delete a section" in retry
-        assert "every real entry stays, every invented one goes" in retry
-
-    def test_the_closed_list_is_in_the_prompt(self, conn, monkeypatch,
-                                              capture_llm):
-        from src import apply
-        self._patch(monkeypatch, apply)
-        capture_llm.reply = lambda system, user: (self._honest_json(), "gemini")
-
-        apply.generate_resume({"title": "Dev", "company": "Shopify",
-                               "description": "Python."})
-
-        prompt = next(u for _, u, _ in capture_llm.calls if "JSON SHAPE" in u)
-
-        assert "EXACTLY 3" in prompt
-        assert "Do not add a 4th" in prompt
-        assert "Everything below is ME. Everything above is the job." in prompt
-
-
-class TestTheListsAreClosed:
-    def test_the_employers_are_counted_and_named(self):
-        from src.apply import closed_lists
-
-        text = closed_lists({
-            "experience": [{"company": "Concordia University"},
-                           {"company": "Otrack"},
-                           {"company": "Bank Alfalah"}],
-            "education": [{"institution": "Concordia University"}],
-            "certificates": [{"name": "Azure Fundamentals"}],
-            "volunteer": [],
-        })
-
-        assert "EXACTLY 3" in text
-        assert "1. Concordia University" in text
-        assert "Do not add a 4th" in text
-
-    def test_an_empty_section_is_stated_as_empty(self):
-        """Not merely omitted. An absent section is a gap the model may fill; a
-        section declared empty is a fact."""
-        from src.apply import closed_lists
-
-        text = closed_lists({"experience": [], "education": [], "certificates": [],
-                             "volunteer": []})
-
-        assert "VOLUNTEER ORGANISATIONS: you have NONE" in text
-
-    def test_the_ordinals_are_not_embarrassing(self):
-        from src.apply import _ordinal
-
-        assert _ordinal(3) == "a 3rd"
-        assert _ordinal(4) == "a 4th"
-        assert _ordinal(11) == "a 11th"
+        assert "Name ONLY technologies that appear in MY PROFILE" in \
+            resume_schema.SHAPE["summary"]

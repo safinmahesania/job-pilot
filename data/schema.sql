@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
-INSERT OR IGNORE INTO settings (key, value) VALUES ('score_threshold', '70');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('score_threshold', '60');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('scheduler_enabled', '0');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('run_interval_hours', '8');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('notify_enabled', '1');

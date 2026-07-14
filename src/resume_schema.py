@@ -46,7 +46,15 @@ from src.config import skill_groups
 #: What the model is asked to return. Every key required; empty lists allowed only
 #: where the profile is genuinely empty.
 SHAPE = {
-    "summary": "string — 2-3 sentences, angled at this job",
+    "summary": "string — 2-3 sentences, angled at this job. NEVER write my name, "
+               "and never write \"I\", \"he\" or \"she\". A resume summary is a "
+               "headline, not a biography: it opens with the noun. \"Junior "
+               "software developer with experience across frontend and backend...\" "
+               "— NOT \"Safin Mahesania is a junior software developer...\". My "
+               "name is already at the top of the page in 20-point type. "
+               "Name ONLY technologies that appear in MY PROFILE. If the job wants "
+               "React and I do not have React, I do not have React — do not write "
+               "it. Lead with what I DO have that this job also wants.",
     "skills": ["string — a skill category LABEL from my profile, verbatim. "
                "Order them most relevant first. The contents are filled in from "
                "my profile; you choose only which categories appear and in what "
@@ -59,8 +67,13 @@ SHAPE = {
     "projects": [{"name": "string", "owner": "string", "tech": ["string"],
                   "link": "string", "bullets": ["string", "..."]}],
     "certificates": [{"name": "string", "date": "string", "link": "string"}],
-    "volunteer": [{"organization": "string", "role": "string",
-                   "description": "string"}],
+    "volunteer": [{"organization": "string",
+                   "description": "string — 1-2 sentences. Work my ROLE into the "
+                                  "sentence rather than labelling it: write "
+                                  "\"As STEM Co-Lead, organised...\" or \"Led a "
+                                  "team that...\", not a title on its own line. "
+                                  "The role is in my profile; make it read like "
+                                  "prose, not a form."}],
 }
 
 
@@ -113,11 +126,21 @@ def _short_url(url: str) -> str:
     return text.rstrip("/")
 
 
-def _contact_line(profile: dict, redacted: bool) -> list[str]:
-    if redacted:
-        return ["{{LOCATION}}", "{{EMAIL}} | {{PHONE}} | {{LINKS}}"]
+def contact_line(profile: dict) -> list[str]:
+    """The header, built in ONE place.
 
+    It used to be built in two: here for the plain path, and again inside
+    fill_contact() for the redacted one, where a {{LINKS}} placeholder joined the
+    raw URLs with a middle dot. Only this one shortened them, only this one used
+    the pipe the renderer splits on, and only this one produced anything the link
+    labeller could recognise — so in redacted mode, which is the default, none of
+    that work ran and the LinkedIn URL quietly vanished into a string the renderer
+    could not read.
+
+    Two builders for one line is one builder too many.
+    """
     contact = profile.get("contact") or {}
+
     where = ", ".join(
         part for part in (contact.get("city"), contact.get("province"),
                           contact.get("country")) if part
@@ -127,8 +150,58 @@ def _contact_line(profile: dict, redacted: bool) -> list[str]:
         contact.get("phone"),
         _short_url(contact.get("linkedin")),
         _short_url(contact.get("github")),
+        _short_url(contact.get("website")),
     ]
     return [where, " | ".join(p for p in rest if p)]
+
+
+def _contact_line(profile: dict, redacted: bool) -> list[str]:
+    # Redacted or not, the line has the same shape. The difference is only WHERE it
+    # is filled in — before the model sees it, or after — and that is fill_contact's
+    # business, not the renderer's.
+    if redacted:
+        return ["{{LOCATION}}", "{{CONTACT}}"]
+    return contact_line(profile)
+
+
+def _headline(summary: str, name: str, profile: dict) -> str:
+    """A resume summary is a headline, not a biography.
+
+    The model wrote: "Safin Mahesania is a junior software developer with experience
+    in both frontend and backend development. With a background in Java, Flutter and
+    Python, Safin Mahesania excels at integrating APIs..." — the name twice, in the
+    third person, on a page where the name is already the largest thing on it.
+
+    It was invited to. In redacted mode the fact sheet hands the model "{{NAME}}" and
+    tells it to write that wherever a name belongs, which reads as permission to put
+    one in the prose. The substitution then turns it into a real name, and the resume
+    introduces you to yourself.
+
+    The prompt now says not to. This makes sure of it: strip the name, strip the
+    placeholder, strip the "is a" left behind, and let the sentence start with the
+    noun, where it belonged all along.
+    """
+    if not summary:
+        return ""
+
+    real = str((profile.get("identity") or {}).get("name") or "").strip()
+    for token in filter(None, [name, real, "{{NAME}}"]):
+        summary = summary.replace(token, "")
+
+    # "  is a junior software developer" -> "Junior software developer"
+    summary = re.sub(r"^\s*(?:is|was)\s+(?:an?\s+)?", "", summary.strip())
+    # "With a background in X, , excels at Y" -> "..., excels at Y"
+    summary = re.sub(r",\s*,", ",", summary)
+    # Tidy " ," and " ." left by the removal — but NOT the space before ".NET",
+    # ".js" or any other name that legitimately begins with a dot. A period is only
+    # sentence punctuation when a space or the end of the string follows it.
+    summary = re.sub(r"\s+([,;])", r"\1", summary)
+    summary = re.sub(r"\s+\.(?=\s|$)", ".", summary)
+    summary = re.sub(r"\s{2,}", " ", summary).strip()
+
+    if summary:
+        summary = summary[0].upper() + summary[1:]
+    return summary
 
 
 def to_markdown(resume: dict, profile: dict, name: str,
@@ -142,8 +215,9 @@ def to_markdown(resume: dict, profile: dict, name: str,
     out.extend(_contact_line(profile, redacted))
     out.append("")
 
-    if resume.get("summary"):
-        out += ["## Summary", "", resume["summary"], ""]
+    summary = _headline(str(resume.get("summary") or "").strip(), name, profile)
+    if summary:
+        out += ["## Summary", "", summary, ""]
 
     # Skills come from the profile, not from the model.
     #
@@ -230,11 +304,24 @@ def to_markdown(resume: dict, profile: dict, name: str,
     if resume.get("volunteer"):
         out += ["## Volunteer and Community Involvement", ""]
         for entry in resume["volunteer"]:
-            heading = " / ".join(p for p in (entry.get("organization"),
-                                             entry.get("role")) if p)
-            out.append(f"### {heading}")
-            if entry.get("description"):
-                out.append(entry["description"])
+            # The organisation, and nothing else.
+            #
+            # It used to read "Al-Azhar Garden Student's Association / STEM
+            # Co-Lead" — a slash doing the work of a sentence. The role belongs in
+            # the description, where it can be a clause rather than a label:
+            # "As STEM Co-Lead, organised STEM-focused events including..."
+            #
+            # If a model returns the role separately anyway, it still gets in — as
+            # the opening of the sentence, not as a heading.
+            out.append(f"### {entry.get('organization', '')}")
+
+            description = str(entry.get("description") or "").strip()
+            role = str(entry.get("role") or "").strip()
+            if role and description and role.lower() not in description.lower():
+                description = f"As {role}, {description[0].lower()}{description[1:]}"
+
+            if description:
+                out.append(description)
             out.append("")
 
     return "\n".join(out).rstrip() + "\n"

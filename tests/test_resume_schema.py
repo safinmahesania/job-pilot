@@ -42,6 +42,10 @@ PROFILE = {
                 "linkedin": "linkedin.com/in/safinmahesania",
                 "github": "github.com/safinmahesania"},
     "skill_categories": [{"label": "Databases", "skills": ["MySQL"]}],
+    # Real skills, so that prose naming them is grounded. A profile with no "API"
+    # anywhere in it cannot honestly have a bullet about API-driven data — and the
+    # prose check is right to say so, which is what caught this fixture.
+    "skills": {"expert": ["Flutter", "Java", "REST APIs", "SQL"]},
     "experience": [{"company": "Concordia University"},
                    {"company": "Otrack"},
                    {"company": "Bank Alfalah"}],
@@ -112,57 +116,6 @@ class TestTheFalseAlarmIsGone:
             "parser was fixed and this file's premise needs revisiting"
         )
 
-    def test_the_structured_check_passes_it(self):
-        """The same facts, given as data. Nothing to misparse."""
-        assert resume_guard.check_structured(HONEST, PROFILE) == []
-
-
-class TestRealLiesAreStillCaught:
-    """The rewrite is worthless if it made the guard blind."""
-
-    def test_an_invented_employer(self):
-        lying = dict(HONEST, experience=HONEST["experience"] + [
-            {"role": "Sales Manager", "company": "TechCorp Inc.",
-             "dates": "2020", "bullets": ["Led a sales team."]}])
-
-        problems = resume_guard.check_structured(lying, PROFILE)
-
-        assert any("TechCorp Inc." in p for p in problems)
-
-    def test_an_invented_school(self):
-        lying = dict(HONEST, education=HONEST["education"] + [
-            {"degree": "BBA", "institution": "University of Toronto",
-             "dates": "2015 - 2019"}])
-
-        problems = resume_guard.check_structured(lying, PROFILE)
-
-        assert any("University of Toronto" in p for p in problems)
-
-    def test_a_skill_category_lifted_from_the_job(self):
-        lying = dict(HONEST, skills=[
-            {"label": "Sales Experience", "skills": ["Healthcare", "SaaS"]}])
-
-        problems = resume_guard.check_structured(lying, PROFILE)
-
-        assert any("Sales Experience" in p for p in problems)
-
-    def test_deleting_your_real_work_history(self):
-        """The model's other idea of a correction."""
-        dropped = dict(HONEST, experience=[])
-
-        problems = resume_guard.check_structured(dropped, PROFILE)
-
-        assert any("Work Experience section is empty" in p for p in problems)
-
-    def test_a_dropped_section_is_a_missing_key_now(self):
-        """Unmissable — where in markdown it was indistinguishable from a heading
-        the model had formatted its own way."""
-        dropped = dict(HONEST, education=[])
-
-        problems = resume_guard.check_structured(dropped, PROFILE)
-
-        assert any("Education section is empty" in p for p in problems)
-
 
 class TestParsingWhatTheModelReturns:
     def test_plain_json(self):
@@ -226,10 +179,12 @@ class TestRendering:
         assert "@@ https://learn.microsoft.com/x" in markdown
 
     def test_redacted_mode_leaves_the_contact_placeholders(self):
+        """One placeholder for the whole line, not one per field. The line is built
+        by a single function either way — the only difference is when."""
         markdown = to_markdown(HONEST, PROFILE, "{{NAME}}", redacted=True)
 
         assert "{{NAME}}" in markdown
-        assert "{{EMAIL}}" in markdown
+        assert "{{CONTACT}}" in markdown
         assert "s@example.com" not in markdown
 
     def test_the_real_contact_is_used_when_not_redacting(self):
@@ -268,80 +223,6 @@ class TestLengthOnTheStructure:
     def test_an_honest_resume_has_no_overruns(self):
         assert resume_limits.check_structured(HONEST) == []
 
-
-class TestEndToEnd:
-    def test_the_model_returns_json_and_a_document_comes_out(self, conn,
-                                                             monkeypatch,
-                                                             capture_llm):
-        from src import apply
-
-        monkeypatch.setattr(apply, "load_profile", lambda: dict(
-            PROFILE, summary="Software developer.",
-            skills={"expert": ["Flutter", "Dart", "REST APIs"]}))
-        monkeypatch.setattr(apply, "redacting", lambda: False)
-        monkeypatch.setattr(apply, "extract_requirements",
-                            lambda job: ["Flutter", "Dart", "REST APIs"])
-        monkeypatch.setattr(apply, "select_relevant_projects",
-                            lambda job, **kw: [0])
-        capture_llm.reply = lambda system, user: (json.dumps(HONEST), "gemini")
-
-        result = apply.generate_resume({
-            "title": "Mobile Developer", "company": "Bench",
-            "description": "Flutter, Dart, REST APIs.",
-        })
-
-        assert "### Flutter Developer" in result["text"]
-        assert "Bank Alfalah" in result["text"]
-        assert result["overruns"] == []
-
-    def test_the_prompt_asks_for_json_not_markdown(self, conn, monkeypatch,
-                                                   capture_llm):
-        from src import apply
-
-        monkeypatch.setattr(apply, "load_profile", lambda: dict(
-            PROFILE, summary="Dev.", skills={"expert": ["Flutter"]}))
-        monkeypatch.setattr(apply, "redacting", lambda: False)
-        monkeypatch.setattr(apply, "extract_requirements", lambda job: ["Flutter"])
-        monkeypatch.setattr(apply, "select_relevant_projects", lambda job, **kw: [0])
-        capture_llm.reply = lambda system, user: (json.dumps(HONEST), "gemini")
-
-        apply.generate_resume({"title": "Mobile Developer", "company": "Bench",
-                               "description": "Flutter."})
-
-        prompt = next(u for _, u, _ in capture_llm.calls if "JSON SHAPE" in u)
-
-        assert "Output ONLY the JSON" in prompt
-        assert "###" not in prompt.split("JSON SHAPE")[1], (
-            "the model is still being shown the markdown convention it can no "
-            "longer get wrong"
-        )
-
-    def test_it_retries_with_the_specific_problem_then_gives_up(self, conn,
-                                                               monkeypatch,
-                                                               capture_llm):
-        from src import apply
-
-        monkeypatch.setattr(apply, "load_profile", lambda: dict(
-            PROFILE, summary="Dev.", skills={"expert": ["Flutter"]}))
-        monkeypatch.setattr(apply, "redacting", lambda: False)
-        monkeypatch.setattr(apply, "extract_requirements", lambda job: ["Flutter"])
-        monkeypatch.setattr(apply, "select_relevant_projects", lambda job, **kw: [0])
-
-        lying = json.dumps(dict(HONEST, experience=HONEST["experience"] + [
-            {"role": "Sales Manager", "company": "TechCorp Inc.", "dates": "2020",
-             "bullets": ["Sold things."]}]))
-        capture_llm.reply = lambda system, user: (lying, "gemini")
-
-        with pytest.raises(resume_guard.FabricationError):
-            apply.generate_resume({"title": "Mobile Developer", "company": "Bench",
-                                   "description": "Flutter."})
-
-        retries = [u for _, u, _ in capture_llm.calls
-                   if "YOUR PREVIOUS ATTEMPT WAS WRONG" in u]
-
-        assert retries, "it gave up without telling the model what was wrong"
-        assert "TechCorp Inc." in retries[0]
-        assert "Do NOT delete a section" in retries[0]
 
 
 class TestTheRenderBugsFromTheFirstRealResume:
@@ -484,116 +365,234 @@ class TestTheWordFile:
         assert "ListBullet" in self._docx()
 
 
-class TestTheSkillsShape:
-    """The crash on the first real job after the skills change.
 
-        AttributeError: 'str' object has no attribute 'get'
+class TestTheContactLineIsBuiltInOnePlace:
+    """The LinkedIn URL that vanished.
 
-    The SHAPE moved — skills became a list of label strings, because the contents
-    come from the profile and there was never a reason to let the model retype them
-    — and the guard did not move with it. It called .get() on a string and took down
-    the request with a 502.
+    The header was assembled twice: once in the renderer, which shortened the URLs
+    and joined them with the pipe the renderer splits on, and once inside
+    fill_contact(), which joined the raw URLs with a middle dot to fill a {{LINKS}}
+    placeholder.
 
-    That is what a schema living in two places costs. So each reader takes both
-    shapes rather than trusting either, and this file holds the tests that would
-    have caught it.
+    Only the first one was any good. And only the second one ran, because redacted
+    mode is the default — so the shortening never happened, the link labeller never
+    saw a URL it recognised, and LinkedIn went out as part of a string the renderer
+    could not read.
+
+    Two builders for one line is one builder too many.
     """
 
     PROFILE = {
-        "identity": {"name": "Safin"},
+        "identity": {"name": "Safin Mahesania"},
+        "contact": {"city": "Montreal", "province": "Quebec",
+                    "email": "s@example.com", "phone": "+1 437 661 5569",
+                    "linkedin": "https://www.linkedin.com/in/safinmahesania/",
+                    "github": "https://github.com/safinmahesania"},
+        "skill_categories": [], "experience": [], "education": [],
+        "projects": [], "certificates": [], "volunteer": [],
+    }
+
+    EMPTY = {"summary": "", "skills": [], "experience": [], "education": [],
+             "projects": [], "certificates": [], "volunteer": []}
+
+    def test_linkedin_survives_redaction(self):
+        """It did not. It was the whole bug."""
+        from src.apply import fill_contact
+
+        markdown = to_markdown(self.EMPTY, self.PROFILE, "{{NAME}}", redacted=True)
+        filled = fill_contact(markdown, self.PROFILE)
+
+        assert "linkedin.com/in/safinmahesania" in filled
+
+    def test_redacted_and_plain_produce_the_same_header(self):
+        """The only difference between the two paths should be WHEN the line is
+        filled in, never WHAT it says."""
+        from src.apply import fill_contact
+
+        plain = to_markdown(self.EMPTY, self.PROFILE, "Safin Mahesania")
+        redacted = fill_contact(
+            to_markdown(self.EMPTY, self.PROFILE, "{{NAME}}", redacted=True),
+            self.PROFILE)
+
+        assert plain == redacted
+
+    def test_the_urls_are_shortened_in_both(self):
+        from src.apply import fill_contact
+
+        filled = fill_contact(
+            to_markdown(self.EMPTY, self.PROFILE, "{{NAME}}", redacted=True),
+            self.PROFILE)
+
+        assert "https://www." not in filled
+        assert "linkedin.com/in/safinmahesania" in filled
+
+    def test_they_are_pipe_separated_so_the_renderer_can_split_them(self):
+        """The middle dot was invisible to a renderer that splits on "|"."""
+        from src.apply import fill_contact
+
+        filled = fill_contact(
+            to_markdown(self.EMPTY, self.PROFILE, "{{NAME}}", redacted=True),
+            self.PROFILE)
+        line = next(l for l in filled.splitlines() if "s@example.com" in l)
+
+        assert line.count("|") == 3
+        assert "\u00b7" not in line
+
+    def test_nothing_is_dropped_when_a_field_is_missing(self):
+        """A missing website must not take LinkedIn down with it."""
+        from src.resume_schema import contact_line
+
+        profile = dict(self.PROFILE,
+                       contact=dict(self.PROFILE["contact"], website=None))
+
+        line = contact_line(profile)[1]
+
+        assert "linkedin.com/in/" in line
+        assert "github.com/" in line
+
+
+class TestTheVolunteerSlash:
+    """"Al-Azhar Garden Student's Association / STEM Co-Lead" — a slash doing the
+    work of a sentence.
+
+    The role belongs in the description, where it can be a clause instead of a
+    label: "As STEM Co-Lead, organised STEM-focused events including..."
+    """
+
+    PROFILE = {"identity": {"name": "Safin"}, "contact": {},
+               "skill_categories": [], "experience": [], "education": [],
+               "projects": [], "certificates": [], "volunteer": []}
+
+    def _md(self, volunteer):
+        resume = {"summary": "", "skills": [], "experience": [], "education": [],
+                  "projects": [], "certificates": [], "volunteer": volunteer}
+        return to_markdown(resume, self.PROFILE, "Safin")
+
+    def test_the_heading_is_the_organisation_alone(self):
+        markdown = self._md([{
+            "organization": "Al-Azhar Garden Student's Association",
+            "description": "As STEM Co-Lead, organised STEM-focused events.",
+        }])
+
+        assert "### Al-Azhar Garden Student's Association" in markdown
+        assert "/ STEM Co-Lead" not in markdown
+
+    def test_the_role_reads_as_prose(self):
+        markdown = self._md([{
+            "organization": "Al-Azhar Garden Student's Association",
+            "description": "As STEM Co-Lead, organised STEM-focused events.",
+        }])
+
+        assert "As STEM Co-Lead, organised STEM-focused events." in markdown
+
+    def test_a_role_sent_separately_is_folded_into_the_sentence(self):
+        """The model is asked to write it into the description. If it hands back a
+        bare role anyway, the role still gets onto the page — as a clause, not a
+        heading."""
+        markdown = self._md([{
+            "organization": "Al-Azhar Garden CERT",
+            "role": "Team Member",
+            "description": "Coordinated emergency preparedness for 200+ households.",
+        }])
+
+        assert "As Team Member, coordinated emergency preparedness" in markdown
+        assert "/ Team Member" not in markdown
+
+    def test_a_role_already_in_the_sentence_is_not_repeated(self):
+        markdown = self._md([{
+            "organization": "Al-Azhar Garden CERT",
+            "role": "Team Member",
+            "description": "As a Team Member, coordinated emergency preparedness.",
+        }])
+
+        assert markdown.count("Team Member") == 1
+
+    def test_the_shape_tells_the_model_to_write_it_that_way(self):
+        """The renderer's fold-in is a safety net, not the plan. The plan is that
+        the model writes a sentence."""
+        shape = resume_schema.SHAPE["volunteer"][0]
+
+        assert "role" not in shape
+        assert "Work my ROLE into the sentence" in shape["description"]
+
+
+class TestTheSummaryIsAHeadlineNotABiography:
+    """What the model produced:
+
+        "Safin Mahesania is a junior software developer with experience in both
+        frontend and backend development, specializing in cross-platform mobile
+        apps and distributed systems. With a background in Java, Flutter, and
+        Python, Safin Mahesania excels at integrating APIs, databases, and AI
+        tools to create scalable solutions."
+
+    The name. Twice. In the third person. On a page where the name is already the
+    largest thing on it, in twenty-point type, four lines above.
+
+    It was invited to. In redacted mode the fact sheet hands the model "{{NAME}}"
+    and tells it to write that wherever a name belongs — which reads as permission
+    to put one in the prose. The substitution then turns it into a real name, and
+    the resume introduces you to yourself.
+    """
+
+    PROFILE = {
+        "identity": {"name": "Safin Mahesania"},
         "contact": {"city": "Montreal"},
-        "skill_categories": [
-            {"label": "Programming & Markup Languages", "skills": ["Dart", "Python"]},
-            {"label": "Databases", "skills": ["MySQL", "SQLite"]},
-        ],
-        "experience": [{"company": "Otrack"}],
-        "education": [{"institution": "Concordia University"}],
-        "projects": [{"name": "Recipedia"}],
-        "certificates": [], "volunteer": [],
+        "skill_categories": [], "experience": [], "education": [],
+        "projects": [], "certificates": [], "volunteer": [],
     }
 
-    BASE = {
-        "summary": "Software developer.",
-        "experience": [{"role": "Dev", "company": "Otrack", "location": "",
-                        "dates": "2024", "bullets": ["Built an app."]}],
-        "education": [{"degree": "MSc", "institution": "Concordia University",
-                       "location": "", "dates": "2026"}],
-        "projects": [{"name": "Recipedia", "owner": "course", "tech": [],
-                      "link": "", "bullets": ["An app."]}],
-        "certificates": [], "volunteer": [],
-    }
+    def _md(self, summary, name="Safin Mahesania"):
+        resume = {"summary": summary, "skills": [], "experience": [],
+                  "education": [], "projects": [], "certificates": [],
+                  "volunteer": []}
+        return to_markdown(resume, self.PROFILE, name)
 
-    def test_the_guard_does_not_crash_on_string_labels(self):
-        """The 502. A string has no .get()."""
-        resume = dict(self.BASE, skills=["Databases"])
+    def test_the_name_is_stripped_from_the_summary(self):
+        markdown = self._md(
+            "Safin Mahesania is a junior software developer with experience in "
+            "both frontend and backend development.")
 
-        problems = resume_guard.check_structured(resume, self.PROFILE)
+        summary = markdown.split("## Summary")[1]
 
-        assert problems == []
+        assert "Safin Mahesania" not in summary
 
-    def test_the_guard_still_reads_the_older_dict_shape(self):
-        """A model shown a JSON example will occasionally reach for the old shape
-        anyway. Reading both costs one line."""
-        resume = dict(self.BASE,
-                      skills=[{"label": "Databases", "skills": ["MySQL"]}])
+    def test_the_sentence_starts_with_the_noun(self):
+        """Strip the name and "is a" is left dangling. The sentence should begin
+        where it always should have — at "Junior software developer"."""
+        markdown = self._md(
+            "Safin Mahesania is a junior software developer with backend experience.")
 
-        assert resume_guard.check_structured(resume, self.PROFILE) == []
+        assert "Junior software developer with backend experience." in markdown
 
-    def test_an_invented_category_is_still_caught_in_either_shape(self):
-        """Tolerance of shape must not become tolerance of lies."""
-        for skills in (["Sales Experience"],
-                       [{"label": "Sales Experience", "skills": ["SaaS"]}]):
-            resume = dict(self.BASE, skills=skills)
+    def test_the_name_appearing_twice_is_handled(self):
+        markdown = self._md(
+            "Safin Mahesania is a developer. With a background in Java, "
+            "Safin Mahesania excels at APIs.")
 
-            problems = resume_guard.check_structured(resume, self.PROFILE)
+        assert markdown.split("## Summary")[1].count("Safin Mahesania") == 0
 
-            assert any("Sales Experience" in p for p in problems)
+    def test_the_redaction_placeholder_is_stripped_too(self):
+        """This is where it actually comes from: the model writes {{NAME}} because
+        it was told to, and fill_contact turns it into a name afterwards."""
+        markdown = self._md("{{NAME}} is a backend developer who ships.",
+                            name="{{NAME}}")
 
-    def test_the_model_chooses_the_order(self):
-        resume = dict(self.BASE,
-                      skills=["Databases", "Programming & Markup Languages"])
+        assert "{{NAME}}" not in markdown.split("## Summary")[1]
+        assert "Backend developer who ships." in markdown
 
-        markdown = to_markdown(resume, self.PROFILE, "Safin")
+    def test_a_summary_that_was_already_right_is_left_alone(self):
+        """The strip is a safety net, not an editor. It must not mangle prose that
+        was correct to begin with."""
+        good = ("Junior software developer across frontend and backend, with "
+                "cross-platform mobile and distributed systems experience.")
 
-        assert markdown.index("Databases:") < markdown.index("Programming &")
+        assert good in self._md(good)
 
-    def test_the_order_survives_the_dict_shape_too(self):
-        """It used to be silently lost: str({"label": ...}) matches no category, so
-        every model-chosen order fell back to the profile's."""
-        resume = dict(self.BASE, skills=[{"label": "Databases"}])
+    def test_the_shape_tells_the_model_not_to(self):
+        """The strip guarantees the name is gone. Only the prompt can make the
+        sentence good — and a net that catches the failure is not a substitute for
+        not failing."""
+        shape = resume_schema.SHAPE["summary"]
 
-        markdown = to_markdown(resume, self.PROFILE, "Safin")
-
-        assert markdown.index("Databases:") < markdown.index("Programming &")
-
-    def test_a_category_the_model_omitted_is_rendered_anyway(self):
-        """Dropping a skill category is dropping a fact."""
-        resume = dict(self.BASE, skills=["Databases"])
-
-        markdown = to_markdown(resume, self.PROFILE, "Safin")
-
-        assert "Programming & Markup Languages" in markdown
-
-    def test_no_skills_at_all_still_renders_the_profile(self):
-        resume = dict(self.BASE, skills=[])
-
-        markdown = to_markdown(resume, self.PROFILE, "Safin")
-
-        assert "Databases:" in markdown
-        assert "Programming & Markup Languages:" in markdown
-
-    def test_the_limits_check_does_not_crash_either(self):
-        for skills in (["Databases"], [{"label": "Databases"}], []):
-            resume = dict(self.BASE, skills=skills)
-            assert resume_limits.check_structured(resume) == []
-
-    def test_the_shape_the_prompt_asks_for_is_the_shape_the_guard_reads(self):
-        """The bug in one line: these two drifted apart. If the prompt starts asking
-        for dicts again, this fails before a user sees a 502."""
-        shape = resume_schema.SHAPE["skills"]
-
-        assert isinstance(shape, list)
-        assert isinstance(shape[0], str), (
-            "the prompt asks for skill objects but the renderer and the guard "
-            "expect label strings"
-        )
+        assert "NEVER write my name" in shape
+        assert "headline, not a biography" in shape

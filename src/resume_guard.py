@@ -322,73 +322,171 @@ class ProfileIncompleteError(Exception):
 
 # ── Grounding, on the structure rather than on prose ────────────────────────
 
-def check_structured(resume: dict, profile: dict) -> list[str]:
-    """Every fact in the resume, checked against the profile. No parsing.
 
-    The markdown version of this had to infer the structure back out of the text,
-    and it got it wrong: a model that wrote "**Teaching Assistant** | Concordia"
-    instead of "### Teaching Assistant" produced a resume the parser read as empty,
-    and an honest document was refused for a formatting difference. A check that
-    fails on formatting tells you nothing about truth.
+# check_structured() lived here.
+#
+# It verified that every employer, school, project and certificate on the resume
+# existed in the profile — because the model was writing them, and a model that
+# writes an employer can write one you never worked for. It did, twice.
+#
+# The model no longer writes them. It returns an index into a list, and an index it
+# invents is out of range and disappears. There is nothing left to verify, so there
+# is nothing left here.
+#
+# check_prose() below survives, because the summary is still written, and writing is
+# still where lies come from.
 
-    Here the structure is given. "Is this employer mine" is a dictionary lookup.
+
+# ── Technologies named in prose ─────────────────────────────────────────────
+
+def _profile_vocabulary(profile: dict) -> str:
+    """Every word the profile contains, as one lowercase blob to search.
+
+    Not a set of tokens: a blob, so that "REST" can be found inside "RESTful" and
+    ".NET" inside ".NET 8" without either of them needing to be listed twice.
     """
-    known = known_entities(profile)
-    problems = []
+    parts = [str(profile.get("summary") or "")]
 
-    def check(items, field, allowed, label, noun):
-        for item in items:
-            value = str(item.get(field, "")).strip()
-            if not value:
-                continue
-            if not _mentions_any(value, allowed):
-                problems.append(f'"{value}" is not {noun}.')
+    skills = profile.get("skills") or {}
+    if isinstance(skills, dict):
+        for tier in skills.values():
+            parts.extend(str(s) for s in (tier or []))
 
-    check(resume.get("experience") or [], "company", known["company"],
-          "Work Experience", "an employer in your profile — you never worked there")
-    check(resume.get("education") or [], "institution", known["institution"],
-          "Education", "in your education — you did not study there")
-    check(resume.get("projects") or [], "name", known["project"],
-          "Projects", "a project in your profile")
-    check(resume.get("certificates") or [], "name", known["certificate"],
-          "Certificates", "a certificate you hold")
-    check(resume.get("volunteer") or [], "organization", known["organisation"],
-          "Volunteer", "in your volunteer history")
+    for group in profile.get("skill_categories") or []:
+        if isinstance(group, dict):
+            parts.append(str(group.get("label", "")))
+            parts.extend(str(s) for s in (group.get("skills") or []))
 
-    # Skill category labels must be the profile's own.
-    #
-    # The model returns a list of LABELS now — plain strings, in the order it wants
-    # them shown — because the contents come from the profile and there was never a
-    # reason to let it retype them. This crashed on the first real job after the
-    # change: the shape moved and this check did not, and it called .get() on a
-    # string. That is the cost of a schema that lives in two places, so it is
-    # tolerant of both shapes rather than assuming either.
-    from src.config import skill_groups
-    allowed_labels = {_normalise(g["label"]) for g in skill_groups(profile)}
-    if allowed_labels:
-        for group in resume.get("skills") or []:
-            if isinstance(group, dict):
-                label = str(group.get("label", "")).strip()
-            else:
-                label = str(group).strip()
+    for entry in profile.get("experience") or []:
+        parts.append(str(entry.get("role", "")))
+        parts.extend(str(h) for h in (entry.get("highlights") or []))
 
-            if label and not _mentions_any(label, allowed_labels):
-                problems.append(
-                    f'"{label}" is not a skill category in your profile. It came '
-                    f'from the job posting, not from you.'
+    for entry in profile.get("projects") or []:
+        parts.append(str(entry.get("name", "")))
+        parts.extend(str(t) for t in (entry.get("tech") or []))
+        parts.extend(str(h) for h in (entry.get("highlights") or []))
+
+    for entry in profile.get("certificates") or []:
+        parts.append(str(entry.get("name", "")))
+
+    return " ".join(parts).lower()
+
+
+#: Words that begin a sentence and are capitalised for that reason alone. They are
+#: not claims about anything.
+_SENTENCE_STARTERS = {
+    "a", "an", "the", "software", "junior", "senior", "experienced", "proficient",
+    "skilled", "driven", "hands", "adept", "curious", "collaborative", "with",
+    "built", "builds", "building", "developer", "engineer", "strong", "passionate",
+    "motivated", "focused", "backend", "frontend", "full", "cross", "currently",
+    "specialising", "specializing", "master", "bachelor", "computer", "science",
+}
+
+
+def named_technologies(text: str, sentence_start: bool = False) -> list[str]:
+    """The technologies a piece of prose claims.
+
+    `sentence_start` decides whether a capitalised word that OPENS a sentence counts.
+
+    Reading a RESUME, it must not: "Software developer with..." begins with a capital
+    because sentences do, and treating that as a claim about a tool called "Software"
+    would fire on every honest summary ever written.
+
+    Reading a JOB POSTING, it must: postings write "Python, Kotlin, React, GraphQL,
+    Postgres, AWS." as a whole sentence, and skipping the first word threw away the
+    first technology in every such list — which is how a Faire Product Engineer role
+    came out as a 12% match for a Python developer.
+
+    Same signal, two readers, opposite defaults.
+
+    A resume sentence names a tool by capitalising it — React, Azure, PostgreSQL —
+    or by punctuating it: C#, .NET, Node.js. Ordinary prose does not do either.
+    That is enough to tell "Proficient in React" from "proficient at problem-
+    solving" without needing a list of every technology in the world, which nobody
+    has.
+
+    Words that open a sentence are skipped: they are capitalised by grammar, not by
+    claim.
+    """
+    found = []
+
+    for sentence in re.split(r"(?<=[.!?])\s+", text or ""):
+        words = sentence.split()
+        for i, word in enumerate(words):
+            # "SQL/NoSQL" is two claims, not one, and only one of them may be a
+            # lie. "API-driven" is one claim and one ordinary word, and only the
+            # claim is worth checking.
+            for part in re.split(r"[/\-]", word):
+                token = part.strip(",;:()").rstrip(".")
+                if not token:
+                    continue
+
+                punctuated = any(c in token for c in "#+") or (
+                    token.startswith(".") and len(token) > 1
+                ) or (
+                    "." in token[:-1] and not token[0].isdigit()
                 )
+                # A word after the first one in its sentence, capitalised. The "/"
+                # split means "NoSQL" in "SQL/NoSQL" counts even though it is not
+                # the first part.
+                capitalised = token[0].isupper() and (
+                    i > 0 or "/" in word or sentence_start)
 
-    # Nothing real may be dropped. A missing section is now a missing KEY — plain
-    # to see — where in markdown it was indistinguishable from a heading the model
-    # had formatted its own way.
-    for key, label, have in [
-        ("experience", "Work Experience", len(profile.get("experience") or [])),
-        ("education", "Education", len(profile.get("education") or [])),
-    ]:
-        if have and not (resume.get(key) or []):
+                if not (punctuated or capitalised):
+                    continue
+                if token.lower() in _SENTENCE_STARTERS:
+                    continue
+                if len(token) < 2:
+                    continue
+
+                found.append(token)
+
+    return found
+
+
+def check_prose(resume: dict, profile: dict) -> list[str]:
+    """Every technology named anywhere in the resume's prose must be one you have.
+
+    The structured checks cover employers, schools, projects, certificates and skill
+    labels — everything that lives in a FIELD. The prose was left alone, and so the
+    prose is where the invention moved to:
+
+        "Proficient in React, C# .NET, and full-stack feature delivery..."
+
+    React is not in the profile. It is in the job description. Nothing was checking,
+    so nothing stopped it, and a resume went out claiming a framework its owner has
+    never used — the same failure as an invented employer, wearing prose instead of
+    a field.
+    """
+    vocabulary = _profile_vocabulary(profile)
+    problems = []
+    seen = set()
+
+    prose = [("summary", str(resume.get("summary") or ""))]
+    for entry in resume.get("experience") or []:
+        for bullet in entry.get("bullets") or []:
+            prose.append((f"the {entry.get('company', 'experience')} bullets",
+                          str(bullet)))
+    for entry in resume.get("projects") or []:
+        for bullet in entry.get("bullets") or []:
+            prose.append((f"the {entry.get('name', 'project')} bullets",
+                          str(bullet)))
+
+    for where, text in prose:
+        for token in named_technologies(text):
+            key = (token.lower(), where)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            # Substring both ways: "REST" is in "RESTful APIs"; ".NET" is in
+            # ".NET 8". A tool you have does not need to be spelled identically.
+            if token.lower() in vocabulary:
+                continue
+
             problems.append(
-                f"The {label} section is empty, but your profile has {have}. "
-                f"A job that does not value your experience does not erase it."
+                f'"{token}" appears in {where}, but it is nowhere in your profile. '
+                f'It came from the job posting. You do not have it.'
             )
 
     return problems

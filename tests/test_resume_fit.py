@@ -20,6 +20,7 @@ import json
 import pytest
 
 from src import resume_fit
+from src.paths import FIT_MIN_OVERLAP
 from src.resume_fit import JobDoesNotFitError, check_fit, overlap
 
 
@@ -136,7 +137,7 @@ class TestTheJobThatStartedThis:
                 "description": "Sell healthcare SaaS to assisted living facilities.",
             })
 
-        wrote = [u for _, u, _ in capture_llm.calls if "JSON SHAPE" in u]
+        wrote = [u for _, u, _ in capture_llm.calls if "RETURN THIS JSON" in u]
         assert wrote == [], "a model was asked to write an impossible resume"
 
 
@@ -224,10 +225,10 @@ class TestThePromptPutsTheProfileClosestToThePen:
         except Exception:
             pass                      # the grounding guard may object; the prompt is what we want
 
-        prompt = next(u for _, u, _ in capture_llm.calls if "JSON SHAPE" in u)
+        prompt = next(u for _, u, _ in capture_llm.calls if "RETURN THIS JSON" in u)
 
         job_at = prompt.index("Full description:")
-        profile_at = prompt.index("MY PROFILE — the only facts")
+        profile_at = prompt.index("MY JOBS")
 
         assert profile_at > job_at, (
             "the job description is closer to the moment of writing than the "
@@ -252,7 +253,7 @@ class TestThePromptPutsTheProfileClosestToThePen:
         except Exception:
             pass
 
-        prompt = next(u for _, u, _ in capture_llm.calls if "JSON SHAPE" in u)
+        prompt = next(u for _, u, _ in capture_llm.calls if "RETURN THIS JSON" in u)
 
         assert "Everything below is ME. Everything above is the job." in prompt
 
@@ -362,3 +363,377 @@ class TestNothingRealIsEverDropped:
 
         assert "MUST be filled" in _RESUME_SYSTEM
         assert "does not erase your experience" in _RESUME_SYSTEM
+
+
+class TestTheFallbackWhenTheModelIsDown:
+    """extract_requirements is an LLM call, and an LLM call can fail. What happens
+    then is not a corner case — it is what the whole check reduces to on a bad day.
+
+    The first fallback returned a perfect score, so a failed extraction meant every
+    job fit and the sales posting sailed through. That was fixed by falling back to
+    the job's own text.
+
+    Which was also wrong, in the other direction, and quieter about it. A job
+    description is two thousand words of culture, benefits and encouragement with a
+    dozen technologies buried in it. Matched as a bag of words, a TD Bank software
+    engineering internship — Java, Python, SQL, REST, Git — came out at 11% and
+    would have been REFUSED. Its matched terms were "critical", "day", "designed",
+    "features". The noise stopped the sales job and it stopped the right job too,
+    and nobody noticed because nobody looks at the path the code takes when the
+    model is down.
+    """
+
+    PROFILE = {
+        "summary": "Software developer across frontend and backend.",
+        "skills": {
+            "expert": ["Java", "Flutter", "Python", "SQL", "RESTful APIs", "Git"],
+            "proficient": ["C#", ".NET 8", "Firebase", "MVC Architecture"],
+            "familiar": ["Azure", "PyTorch", "Apache Spark"],
+        },
+        "skill_categories": [{"label": "Databases",
+                              "skills": ["MySQL", "SQL Server"]}],
+        "experience": [{"role": "Flutter Developer", "company": "Otrack",
+                        "highlights": ["Built a Flutter app with REST APIs."]}],
+        "projects": [{"name": "Recipedia", "tech": ["Flutter", "Dart"]}],
+        "education": [{"degree": "MSc Computer Science",
+                       "institution": "Concordia"}],
+    }
+
+    #: The real posting, prose and all. The technologies are in the last sentence.
+    TD_BANK = {
+        "title": "Software Engineer Intern/Co-op (Fall 2026)",
+        "description": (
+            "As a Software Engineer Intern at TD, you will work on a collaborative, "
+            "agile team building the platforms that serve millions of customers "
+            "every day. This is a critical role. You will be designing and "
+            "implementing features in a fast-paced environment, mentored through "
+            "code review and pair programming. We value curiosity, ownership and a "
+            "growth mindset. TD is committed to an inclusive workplace where every "
+            "colleague can thrive. Fluency in English is required. Requirements: "
+            "enrolled in a Computer Science or Software Engineering program. "
+            "Experience with Java or Python. Familiarity with SQL and relational "
+            "databases. Understanding of REST APIs and version control with Git."
+        ),
+    }
+
+    SALES = {
+        "title": "Canada Sales - Talent Community",
+        "description": (
+            "Join our sales talent community. We seek Account Executives and Sales "
+            "Development Representatives to drive revenue growth, manage pipeline "
+            "in Salesforce, exceed quota and build relationships with healthcare "
+            "providers across Canada. Every day you will be closing deals in a "
+            "fast-paced, collaborative environment."
+        ),
+    }
+
+    def test_a_real_developer_job_survives_a_model_outage(self):
+        """It did not. 11%, against a floor of 15%."""
+        score, _ = resume_fit.overlap([], self.PROFILE, self.TD_BANK)
+
+        assert score >= FIT_MIN_OVERLAP, (
+            "with no model, a Java/Python/SQL/REST internship is refused"
+        )
+
+    def test_it_matches_on_technologies_not_on_the_word_day(self):
+        _, matched = resume_fit.overlap([], self.PROFILE, self.TD_BANK)
+
+        assert {"java", "python", "sql"} <= matched
+        for noise in ("day", "critical", "features", "english", "mindset"):
+            assert noise not in matched
+
+    def test_the_sales_job_is_still_refused_without_a_model(self):
+        """The fallback got quieter, not softer."""
+        score, _ = resume_fit.overlap([], self.PROFILE, self.SALES)
+
+        assert score < FIT_MIN_OVERLAP
+
+        with pytest.raises(resume_fit.JobDoesNotFitError):
+            resume_fit.check_fit(self.SALES, [], self.PROFILE)
+
+    def test_the_title_always_counts(self):
+        """"Software Developer" and "Sales Representative" are the two most honest
+        words in any posting."""
+        bare = {"title": "Sales Representative", "description": ""}
+
+        score, _ = resume_fit.overlap([], self.PROFILE, bare)
+
+        assert score < FIT_MIN_OVERLAP
+
+    def test_an_empty_extraction_is_not_a_perfect_score(self):
+        """The original hole, still closed. A default that turns a failure into an
+        approval is not a default."""
+        score, _ = resume_fit.overlap([], self.PROFILE, self.SALES)
+
+        assert score < 1.0
+
+
+class TestSoftSkillsAreNotEvidence:
+    """A "Canada Sales - Talent Community" posting came out as a 15% match for a
+    computer science student — exactly the floor — on the strength of these words:
+
+        ai, dynamic, lake, management, office, ops
+
+    None of them is a technology. They matched because the profile lists, quite
+    correctly, "Soft Skills: Leadership | Critical Thinking | Communication | Time
+    Management", "Languages: English - Fluent | French - Beginner", and "Software &
+    Productivity Tools: MS Office | Slack".
+
+    Those belong on the resume. A recruiter reads them and they mean something. They
+    are not evidence that you can write software — because everyone has them,
+    including everyone applying to the sales role.
+    """
+
+    CATEGORIES = [
+        {"label": "Programming & Markup Languages",
+         "skills": ["Dart", "Python", "Java", "C#", "SQL", "JavaScript"]},
+        {"label": "Frameworks & Architecture",
+         "skills": ["Flutter", ".NET 8", "RESTful APIs", "MVC Architecture"]},
+        {"label": "Databases", "skills": ["MySQL", "SQL Server", "SQLite"]},
+        {"label": "Developer Tools", "skills": ["Git", "GitHub", "Postman"]},
+        {"label": "Languages",
+         "skills": ["English - Fluent", "Urdu - Fluent", "French - Beginner"]},
+        {"label": "Soft Skills",
+         "skills": ["Leadership", "Critical Thinking", "Communication",
+                    "Problem-Solving", "Time Management", "Collaboration"]},
+        {"label": "Software & Productivity Tools",
+         "skills": ["MS Office (Word, Excel, PowerPoint)", "Slack", "Jira"]},
+    ]
+
+    PROFILE = {
+        "summary": "Software developer across frontend and backend.",
+        "skills": {"expert": ["Java", "Python", "Flutter", "SQL", "RESTful APIs"],
+                   "proficient": ["C#", ".NET 8", "Dart"],
+                   "familiar": ["Azure", "PyTorch"]},
+        "skill_categories": CATEGORIES,
+        "experience": [{"role": "Flutter Developer",
+                        "highlights": ["Built a Flutter app with REST APIs."]}],
+        "projects": [{"name": "Recipedia", "tech": ["Flutter", "Dart"]}],
+    }
+
+    SALES = {
+        "title": "Canada Sales - Talent Community",
+        "description": (
+            "Account Executives and Sales Development Representatives to drive "
+            "revenue growth, manage pipeline in Microsoft Dynamics and Salesforce, "
+            "exceed quota. Strong communication and time management skills. "
+            "Proficiency in MS Office. Fluent English required."
+        ),
+    }
+
+    def test_the_sales_job_matches_nothing(self):
+        """It was 15%. The floor is 15%."""
+        score, matched = resume_fit.overlap([], self.PROFILE, self.SALES)
+
+        assert score < FIT_MIN_OVERLAP
+        assert matched == set()
+
+    def test_and_is_refused(self):
+        with pytest.raises(resume_fit.JobDoesNotFitError):
+            resume_fit.check_fit(self.SALES, [], self.PROFILE)
+
+    def test_soft_skills_do_not_reach_the_comparison(self):
+        terms = resume_fit.profile_terms(self.PROFILE)
+
+        for word in ("communication", "leadership", "office", "excel",
+                     "powerpoint", "adaptability"):
+            assert word not in terms
+
+    def test_human_languages_do_not_either(self):
+        """"Fluent English" is on a nurse's resume too."""
+        terms = resume_fit.profile_terms(self.PROFILE)
+
+        assert "english" not in terms
+        assert "urdu" not in terms
+
+    def test_the_technical_categories_still_count(self):
+        """"Programming & Markup Languages" contains the word "languages" and is
+        very much evidence. The distinction is what the category is ABOUT."""
+        terms = resume_fit.profile_terms(self.PROFILE)
+
+        for word in ("java", "python", "flutter", "sql", "git", "mysql"):
+            assert word in terms
+
+    def test_a_real_developer_job_is_unharmed(self):
+        job = {"title": "Software Engineer Intern",
+               "description": ("Java or Python. SQL and relational databases. REST "
+                               "APIs, Git. Fluency in English required. Strong "
+                               "communication skills.")}
+
+        score, matched = resume_fit.overlap([], self.PROFILE, job)
+
+        assert score >= FIT_MIN_OVERLAP
+        assert {"java", "python", "sql"} <= matched
+
+
+class TestAPostingCanOpenASentenceWithATechnology:
+    """"Python, Kotlin, React, GraphQL, Postgres, AWS." is a sentence, and its first
+    word is a technology.
+
+    Reading a RESUME, a capital at the start of a sentence is grammar, not a claim —
+    "Software developer with..." must not read as a tool called Software. Reading a
+    POSTING, it is the first item of a list, and dropping it lost the first
+    technology in every such list. A Faire Product Engineer role — Python, Kotlin,
+    React, GraphQL, Postgres, AWS — came out at 12% for a Python developer.
+
+    Same signal, two readers, opposite defaults.
+    """
+
+    PROFILE = TestSoftSkillsAreNotEvidence.PROFILE
+
+    def test_the_first_technology_in_a_list_is_read(self):
+        job = {"title": "Product Engineer",
+               "description": ("Product Engineer. Backend systems and APIs. "
+                               "Python, Kotlin, React, GraphQL, Postgres, AWS.")}
+
+        score, matched = resume_fit.overlap([], self.PROFILE, job)
+
+        assert "python" in matched
+        assert score >= FIT_MIN_OVERLAP
+
+    def test_a_resume_sentence_opening_with_a_capital_is_still_not_a_claim(self):
+        """The other reader keeps its own default."""
+        from src.resume_guard import named_technologies
+
+        assert named_technologies("Software developer. Driven to build.") == []
+
+    def test_the_posting_reader_and_the_resume_reader_disagree_on_purpose(self):
+        from src.resume_guard import named_technologies
+
+        text = "Python and SQL are required."
+
+        assert named_technologies(text) == ["SQL"]
+        assert "Python" in named_technologies(text, sentence_start=True)
+
+
+class TestTheDecisionIsWhichNotHowMany:
+    """The ratio was tuned three times and never worked.
+
+    "Of everything this posting asks for, what fraction is in the profile" sounds
+    like the right question. It is not, because the denominator is a job description
+    — two thousand words of culture, benefits and section headings with a dozen
+    technologies buried in them. Real developer jobs came out at 10-18% against a
+    15% floor. The measure had no power left to discriminate; the floor was cutting
+    through the middle of the noise. Its matched terms were "what", "every", "day",
+    "best".
+
+    Counting instead of dividing removed the poisoned denominator, and got closer —
+    but a count alone still could not see the thing that matters. DoorDash's backend
+    role names Kotlin, gRPC, Postgres, Kubernetes and AWS, of which this profile has
+    none, and Java, which it has. One match. A floor of two refused it: a Java
+    backend job, refused to a Java developer. Meanwhile an IT operations role also
+    scored one — on the word "Agile" — and a network engineering role scored one on
+    "Azure".
+
+    The difference between them is not HOW MANY. It is WHICH.
+
+    A job that asks for a programming language you write is a job you can write an
+    honest resume for. You may be underqualified; that is a different question and
+    not this one's business. There is simply nothing you would have to invent.
+    """
+
+    PROFILE = {
+        "summary": "Software developer.",
+        "skills": {"expert": ["Java", "Python", "Flutter", "SQL"],
+                   "proficient": ["C#", ".NET 8"],
+                   "familiar": ["Azure", "PyTorch"]},
+        "skill_categories": [
+            {"label": "Programming & Markup Languages",
+             "skills": ["Dart", "Python", "Java", "C#", "JavaScript", "SQL"]},
+            {"label": "Cloud & Data Platforms", "skills": ["Azure", "Firebase"]},
+            {"label": "Developer Tools", "skills": ["Git", "GitHub", "Postman"]},
+            {"label": "Methodologies & Practices", "skills": ["Agile", "Scrum"]},
+            {"label": "Soft Skills", "skills": ["Communication", "Leadership"]},
+        ],
+        "experience": [{"role": "Flutter Developer",
+                        "highlights": ["Built a Flutter app."]}],
+        "projects": [{"name": "Recipedia", "tech": ["Flutter", "Dart"]}],
+    }
+
+    def _check(self, title, description):
+        resume_fit.check_fit({"title": title, "description": description},
+                             [], self.PROFILE)
+
+    def test_one_language_you_write_is_enough(self):
+        """DoorDash. Kotlin, gRPC, Postgres, Kubernetes, AWS — and Java."""
+        self._check("Software Engineer, Backend",
+                    "Backend. Kotlin, Java, gRPC, Postgres, Kubernetes, AWS.")
+
+    def test_one_language_you_write_is_enough_even_in_a_stack_you_lack(self):
+        """Faire. Python, and then nothing else of his."""
+        self._check("Product Engineer",
+                    "Backend systems and APIs. Python, Kotlin, React, GraphQL, "
+                    "Postgres, AWS.")
+
+    def test_agile_is_not_a_language(self):
+        """An IT operations role scored one, on the word every posting contains."""
+        with pytest.raises(resume_fit.JobDoesNotFitError):
+            self._check("IT Operations Administrator",
+                        "SaaS platforms, Okta, Jamf, device lifecycle. Agile. "
+                        "Strong communication.")
+
+    def test_azure_alone_is_not_a_language(self):
+        with pytest.raises(resume_fit.JobDoesNotFitError):
+            self._check("Network Engineering",
+                        "Cisco, BGP, firewalls, cloud architecture, Azure.")
+
+    def test_two_tools_without_a_language_still_pass(self):
+        """A DevOps role naming Azure and Git is in his field. One naming only
+        "Agile" is not."""
+        self._check("Cloud Operations",
+                    "Azure infrastructure, Git-based deployment, Firebase hosting.")
+
+    def test_the_sales_job(self):
+        with pytest.raises(resume_fit.JobDoesNotFitError):
+            self._check("Canada Sales - Talent Community",
+                        "Account Executives. Revenue growth, pipeline in Microsoft "
+                        "Dynamics and Salesforce, quota. MS Office. Fluent English. "
+                        "Strong communication and time management.")
+
+    def test_the_recruiter_job(self):
+        with pytest.raises(resume_fit.JobDoesNotFitError):
+            self._check("Recruiter (6 Month Contract)",
+                        "Full-cycle recruiting. Source candidates, manage pipeline, "
+                        "partner with hiring managers. Best-in-class experience.")
+
+    def test_a_qa_role_in_tools_he_does_not_have(self):
+        """Wattpad. Selenium, Cypress, Playwright, and no language of his. He can
+        apply if he likes — but a TAILORED resume for it would be reaching, and this
+        check exists to say so."""
+        with pytest.raises(resume_fit.JobDoesNotFitError):
+            self._check("Product Quality Assurance Specialist",
+                        "Test plans, regression testing. Selenium, Cypress, "
+                        "Playwright. Attention to detail.")
+
+    def test_every_real_developer_job_passes(self):
+        for title, description in [
+            ("Software Engineer Intern",
+             "Java or Python. SQL and relational databases. REST APIs. Git."),
+            ("Software Developer",
+             "C#, .NET, SQL Server, Azure, REST APIs, microservices."),
+            ("Fullstack Developer (Python)",
+             "Python, Django, JavaScript, PostgreSQL, Git, AWS."),
+            ("Data Scientist",
+             "Machine learning. Python, Pandas, NumPy, scikit-learn, PyTorch."),
+            ("Front-End Developer II",
+             "React, TypeScript, C#, .NET, Azure, GitHub."),
+        ]:
+            self._check(title, description)      # no exception
+
+    def test_the_word_c_does_not_match_critical(self):
+        """"C" is a language and a letter. Without a token boundary it matches
+        "critical", "cloud", "code" and every other word starting with c."""
+        wanted = resume_fit.technologies_wanted(
+            {"title": "Sales", "description": "Critical communication in a "
+                                              "collaborative culture."},
+            self.PROFILE)
+
+        assert "c" not in wanted
+
+    def test_human_languages_are_not_programming_languages(self):
+        """"Fluent English and French" must not read as two languages he writes."""
+        langs = resume_fit.languages_wanted(
+            {"title": "Sales", "description": "Fluent English and French required."},
+            self.PROFILE)
+
+        assert langs == set()

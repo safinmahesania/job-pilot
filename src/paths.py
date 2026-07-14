@@ -165,7 +165,28 @@ MODEL_NUM_CTX = 4096         # context window passed to Ollama
 MODEL_TEMPERATURE = 0        # deterministic scoring
 
 # ── Pipeline defaults (overridable from the Settings tab / DB) ───────────────
-DEFAULT_SCORE_THRESHOLD = 70   # feed shows jobs at or above this
+# The feed shows jobs at or above this.
+#
+# It was 70, and 70 was doing two jobs at once: ranking, and refusing. It had to,
+# because the fit check underneath it could not be trusted — a bag-of-words ratio
+# that landed every real developer job at 10-18% and matched on the words "what",
+# "every" and "day".
+#
+# The fit check is now a real gate: it refuses any job that names none of the
+# languages you write. Sales, recruiting, technical support and network engineering
+# all fall to it, cleanly, with no tuning.
+#
+# So the feed no longer has to be the gate as well, and being one was costing:
+#
+#     at 70, five real developer jobs were hidden — a DoorDash data scientist role,
+#     two Workleap developer roles, a Thinkific data engineer role — all scoring
+#     66-68, all matching languages you write, none of which you ever saw.
+#
+#     at 60, every job the fit check would accept is visible, and the sales posting
+#     is still out at 56.
+#
+# Rank generously. Refuse strictly. They are different jobs.
+DEFAULT_SCORE_THRESHOLD = 60
 NOTIFY_MIN_SCORE = 60          # jobs at/above this are listed in run summaries
 DEFAULT_RUN_INTERVAL_HOURS = 8 # auto-fetch cadence
 SCHEDULER_POLL_SECONDS = 60    # how often the scheduler checks if a run is due
@@ -242,6 +263,13 @@ RESUME_TEMPLATE_FILE = "resume_template.md"     # lives in config/
 RESUME_PROJECT_POOL = 4      # how many recent projects are ranked
 RESUME_PROJECTS_USED = 3     # how many make it into the resume
 
+# How many bullets of each job survive onto the page.
+#
+# The profile holds four per job, because that is what the person had to say about
+# it. A resume has room for fewer, and the model's job is to pick which ones this
+# employer should read — the whole of its job, now that it no longer writes them.
+RESUME_EXPERIENCE_BULLETS = 3
+
 # ── Resume length ───────────────────────────────────────────────────────────
 # Measured in rendered lines, not characters — src/resume_limits.py converts these
 # into character budgets using the real font metrics of the real page, because a
@@ -274,6 +302,22 @@ RESUME_VOLUNTEER_LINES = 3          # each entry's description
 # developer and an assisted-living-facility sales rep share almost nothing, which
 # is exactly the case this exists to catch.
 FIT_MIN_OVERLAP = 0.15
+
+# How many of YOUR technologies a posting must name before a resume for it could be
+# honest.
+#
+# Two, not one. One is a coincidence: an IT operations role mentions "Agile", a sales
+# posting mentions "Microsoft Dynamics" and half-matches "Microsoft". Two named tools
+# from your own curated list is a job in your field.
+#
+#     sales / recruiting / sales rep      0
+#     IT operations                       1
+#     QA (Selenium, Cypress, Playwright)  0
+#     TD Bank software engineering        4
+#     Geotab software developer           5
+#
+# The gap is wide enough that this number is not a tuning knob.
+FIT_MIN_TECHNOLOGIES = 2
 
 # ── Project selection ────────────────────────────────────────────────────────
 # The profile usually lists more projects than belong on one application, and

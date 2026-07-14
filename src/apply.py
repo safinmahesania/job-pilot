@@ -21,7 +21,8 @@ import re
 
 from src import llm
 from src.config import load_profile, skill_groups
-from src import resume_limits, resume_guard, resume_fit, resume_schema
+from src import (resume_limits, resume_guard, resume_fit, resume_schema,
+                 resume_select)
 from src.llm import LLMError
 from src.paths import (
     CONFIG_DIR,
@@ -86,10 +87,12 @@ def fill_contact(text: str, profile: dict) -> str:
         "{{LOCATION}}": ", ".join(
             p for p in (contact.get("city"), contact.get("province")) if p
         ),
-        "{{LINKS}}": " · ".join(
-            v for v in (contact.get("linkedin"), contact.get("github"),
-                        contact.get("website")) if v
-        ),
+        # The header line, built by the same code that builds it when nothing is
+        # redacted. It used to be assembled here, separately, joining raw URLs with
+        # a middle dot — which the renderer splits on "|" and so read as a single
+        # unrecognisable blob, and which the link labeller never saw at all.
+        "{{CONTACT}}": resume_schema.contact_line(profile)[1],
+        "{{LINKS}}": resume_schema.contact_line(profile)[1],
     }
     for token, value in values.items():
         text = text.replace(token, value)
@@ -128,58 +131,6 @@ def _span(start, end) -> str:
     return a or b
 
 
-
-def _ordinal(n: int) -> str:
-    """"a 4th", "a 3rd" — not "a 3th"."""
-    if 10 <= n % 100 <= 20:
-        suffix = "th"
-    else:
-        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
-    return f"a {n}{suffix}"
-
-
-def closed_lists(profile: dict) -> str:
-    """The exact, complete, numbered set of proper nouns the resume may contain.
-
-    "Never invent an employer" is an open-ended prohibition, and a model asked to
-    tailor a resume to a job that wants more experience than you have will quietly
-    add one — not out of malice, but because the instruction says what NOT to do
-    without ever saying what the complete truth IS. It never learns that the list
-    is finished.
-
-    Counting them closes the world. "You have exactly three employers, here they
-    are, add none" turns an open generative task into a fill-in-the-blanks one, and
-    a model that would happily invent a fourth employer will not invent a fourth
-    item in a list it has been told has three.
-    """
-    def block(label, values, noun):
-        if not values:
-            return (f"{label}: you have NONE. The resume must not contain a "
-                    f"{noun} section at all.")
-        lines = [f"{label}: you have EXACTLY {len(values)}. "
-                 f"These and no others:"]
-        lines += [f"  {i + 1}. {v}" for i, v in enumerate(values)]
-        lines.append(f"  Do not add {_ordinal(len(values) + 1)}. There isn't one.")
-        return "\n".join(lines)
-
-    employers = [e.get("company", "") for e in (profile.get("experience") or [])
-                 if e.get("company")]
-    schools = [e.get("institution", "") for e in (profile.get("education") or [])
-               if e.get("institution")]
-    certificates = [c.get("name", "") for c in (profile.get("certificates") or [])
-                    if c.get("name")]
-    organisations = [
-        f"{v.get('organization', '')} ({v.get('role', '')})"
-        for v in (profile.get("volunteer") or []) if v.get("organization")
-    ]
-
-    return "\n\n".join([
-        block("EMPLOYERS", employers, "Work Experience"),
-        block("SCHOOLS", schools, "Education"),
-        block("CERTIFICATES", certificates, "Certificates and Achievements"),
-        block("VOLUNTEER ORGANISATIONS", organisations,
-              "Volunteer and Community Involvement"),
-    ])
 
 
 def _profile_facts(profile: dict) -> str:
@@ -249,35 +200,6 @@ def _profile_facts(profile: dict) -> str:
 
     return "\n".join(lines)
 
-
-def _format_projects(projects: list, indices=None) -> str:
-    """Render projects (optionally only the selected indices) as numbered lines."""
-    out = []
-    for i, p in enumerate(projects):
-        if indices is not None and i not in indices:
-            continue
-        # Labelled fields, one per line. The old one-line format —
-        #   [0] Plant Disease Detection (owner: course) — ... (tech: ...) (link: ...)
-        # was copied onto the resume verbatim, "(owner: course)" and all. A model
-        # given a line that looks like output will treat it as output. These are
-        # notes, so they must look like notes.
-        tech = ", ".join(p.get("tech", []) or [])
-        bits = [f"[{i}] {p.get('name', '')}"]
-        if p.get("owner"):
-            bits.append(f"\n    OWNER: {p['owner']}   (write this after the "
-                        f"project name, e.g. \"Plant Disease Detection - "
-                        f"{p['owner'].title()}\")")
-        if tech:
-            bits.append(f"\n    TECH: {tech}")
-        if p.get("link"):
-            bits.append(f"\n    LINK: {p['link']}   (goes on the right, after @@)")
-        if p.get("description"):
-            bits.append(f"\n    WHAT IT IS: {p['description']}")
-        line = "".join(bits)
-        for h in p.get("highlights", []) or []:
-            line += f"\n    - {h}"
-        out.append(line)
-    return "\n".join(out) if out else "(no projects listed)"
 
 
 def _clean_output(text: str) -> str:
@@ -682,14 +604,52 @@ OUTPUT:
 - Output ONLY the filled Markdown. No preamble, no explanation, no code fences."""
 
 
-def generate_resume(job: dict) -> dict:
-    """Select from the profile what this job should see, and render it.
+def _format_projects(projects: list, indices: set | None = None) -> str:
+    """The projects, as notes for the model.
 
-    The model fills in fields. It does not write a document. It never sees a `###`
-    or an `@@`, so it cannot get them wrong — and the checks that follow read a
-    structure that is given, rather than one inferred back out of prose. Inferring
-    it is what used to refuse honest resumes for writing a heading in bold instead
-    of with three hashes.
+    Still used by the cover letter, which — unlike the resume — genuinely does write
+    prose, because a cover letter is prose. The resume no longer calls this: it
+    selects project indices and the code renders them from the profile.
+    """
+    if not projects:
+        return "(no projects listed)"
+
+    out = []
+    for i, p in enumerate(projects):
+        if indices is not None and i not in indices:
+            continue
+
+        tech = ", ".join(str(t) for t in (p.get("tech") or []))
+        bits = [f"[{i}] {p.get('name', '')}"]
+        if p.get("owner"):
+            bits.append(f"\n    OWNER: {p['owner']}")
+        if tech:
+            bits.append(f"\n    TECH: {tech}")
+        if p.get("link"):
+            bits.append(f"\n    LINK: {p['link']}")
+        if p.get("description"):
+            bits.append(f"\n    WHAT IT IS: {p['description']}")
+
+        line = "".join(bits)
+        for h in p.get("highlights", []) or []:
+            line += f"\n    - {h}"
+        out.append(line)
+
+    return "\n".join(out) if out else "(no projects listed)"
+
+
+def generate_resume(job: dict) -> dict:
+    """Select from the profile what this job should see. Do not write it.
+
+    The model returns numbers — which jobs in which order, which of their bullets,
+    which projects, which skills first — and the code assembles the page from the
+    profile using them. A bullet on the finished resume is a bullet from
+    profile.yaml, character for character, because there is no step at which it
+    could become anything else.
+
+    The summary is the one exception, and the only place the model still writes. It
+    is also, now, the only place a lie can enter, which is why it is the only thing
+    still checked.
     """
     profile = load_profile()
 
@@ -697,7 +657,6 @@ def generate_resume(job: dict) -> dict:
     if missing:
         raise resume_guard.ProfileIncompleteError(missing)
 
-    projects = profile.get("projects", []) or []
     real_name = (profile.get("identity", {}) or {}).get("name", "")
     redacted = redacting()
     name = "{{NAME}}" if redacted else real_name
@@ -709,23 +668,15 @@ def generate_resume(job: dict) -> dict:
     print(f"  fit: {score:.0%} of what this job asks for is in your profile{detail}")
     resume_fit.check_fit(job, requirements, profile)
 
-    picked = select_relevant_projects(
-        job, top_n=RESUME_PROJECTS_USED,
-        requirements=requirements, pool=RESUME_PROJECT_POOL,
-    )
-
     jd = _strip_html(job.get("description", ""))[:5000]
     reqs_block = "\n".join(f"- {r}" for r in requirements) or "(see description)"
 
     system = _RESUME_SYSTEM.format(name=name or "the candidate",
-                                   limits=resume_limits.instructions())
+                                   limits=resume_limits.instructions(profile))
 
-    # The job first, as context. My real background last, closest to the pen.
-    # Recency does the rest: a model steeped in a posting and then told to write
-    # writes the posting.
     user = f"""THE JOB I AM APPLYING TO — this is CONTEXT, not content.
-It tells you which of my real experiences to lead with and which words to use for
-them. It does not tell you who I am, where I worked, or what I know.
+It tells you which of my real experiences to lead with. It does not tell you who I
+am, where I worked, or what I know.
 
 Role: {job.get('title', '')}
 Company: {job.get('company', '')}
@@ -740,26 +691,21 @@ Full description:
 Everything below is ME. Everything above is the job. Nothing crosses over.
 ────────────────────────────────────────────────────────────────────────
 
-THE COMPLETE LISTS — closed. Nothing may be added to them.
+{resume_select.choices(profile)}
 
-{closed_lists(profile)}
+MY OWN SUMMARY, which yours must be built from:
+{profile.get('summary', '')}
 
-MY PROJECTS TO INCLUDE (these were selected as most relevant; use only these):
-{_format_projects(projects, indices=set(picked))}
+────────────────────────────────────────────────────────────────────────
 
-MY PROFILE — the only facts you may use:
-{_profile_facts(profile)}
+RETURN THIS JSON. Numbers, and one paragraph:
 
-RETURN THIS EXACT JSON SHAPE, filled in from MY PROFILE above:
-
-{resume_schema.shape_for_prompt()}
-
-Every key is required. A list is empty ONLY if my profile has nothing for it —
-NEVER because you judged it irrelevant to this job.
+{resume_select.shape_for_prompt(profile)}
 
 Output ONLY the JSON. No prose, no markdown fences."""
 
-    resume, provider = _generate_structured(system, user, profile)
+    selection, provider = _select(system, user, profile)
+    resume = resume_select.resolve(selection, profile)
 
     text = resume_schema.to_markdown(resume, profile, name, redacted=redacted)
     if redacted:
@@ -775,45 +721,65 @@ Output ONLY the JSON. No prose, no markdown fences."""
         "text": text,
         "provider": provider,
         "requirements": requirements,
-        "projects_used": [projects[i].get("name", "") for i in picked
-                          if i < len(projects)],
+        "projects_used": [p["name"] for p in resume["projects"]],
     }
 
 
-def _generate_structured(system: str, user: str, profile: dict,
-                         attempts: int = 3) -> tuple[dict, str]:
-    """Ask for the JSON, verify it, and say exactly what was wrong if it is not.
+def _select(system: str, user: str, profile: dict,
+            attempts: int = 3) -> tuple[dict, str]:
+    """Ask for the selection, and check the one thing that can still be a lie.
 
-    Three attempts. A model that invents an employer on the first pass usually
-    stops once it is told precisely which one and that the list is closed — what it
-    cannot do is guess what it got wrong, and it was never given a reason to.
+    The numbers cannot lie. An index the model invents is simply out of range and
+    disappears; an index it omits is filled in from the profile. There is nothing
+    to guard, so there is nothing here guarding it.
+
+    The summary can lie, because the summary is written. So the summary — and only
+    the summary — is read back and checked against the profile, and a model that
+    claims React for someone who has never touched React is told so and asked again.
     """
     complaint = ""
     problems: list[str] = []
+    best: tuple[dict, str] | None = None
 
     for attempt in range(attempts):
         prompt = user if not complaint else (
             f"{user}\n\n"
-            f"YOUR PREVIOUS ATTEMPT WAS WRONG:\n{complaint}\n\n"
-            f"Fix ONLY what is listed. Do NOT delete a section to make a problem go "
-            f"away — every real entry stays, every invented one goes. Return the "
-            f"corrected JSON."
+            f"YOUR PREVIOUS SUMMARY WAS WRONG:\n{complaint}\n\n"
+            f"Rewrite the summary using only what is in MY PROFILE above. Keep the "
+            f"rest of your selection as it was. Return the corrected JSON."
         )
 
         text, provider = llm.generate(system, prompt, personal=True)
 
         try:
-            resume = resume_schema.parse(text)
-        except resume_schema.MalformedResume as e:
+            selection = resume_select.parse(text)
+        except resume_select.MalformedResume as e:
             complaint = f"- {e}. Return a single JSON object and nothing else."
             problems = [str(e)]
             continue
 
-        problems = resume_guard.check_structured(resume, profile)
+        summary = {"summary": str(selection.get("summary") or "")}
+        problems = resume_guard.check_prose(summary, profile)
+
         if not problems:
-            return resume, provider
+            short = resume_limits.summary_is_short(summary, profile)
+            if not short:
+                return selection, provider
+
+            best = (selection, provider)
+            if attempt == 0:
+                complaint = f"- {short}"
+                print("  the summary is thinner than your profile supports "
+                      "— asking again")
+                continue
+            return selection, provider
 
         complaint = "\n".join(f"- {p}" for p in problems)
-        print(f"  attempt {attempt + 1} had problems:\n{complaint}")
+        print(f"  attempt {attempt + 1}: the summary claims things you do not have:"
+              f"\n{complaint}")
+
+    if best:
+        print("  a later summary invented things — keeping the honest earlier one")
+        return best
 
     raise resume_guard.FabricationError(problems)

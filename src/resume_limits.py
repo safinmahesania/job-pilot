@@ -38,17 +38,25 @@ _BULLET_INDENT_MM = 0.25 * 25.4        # the bullet indent, as set by the render
 
 
 def _char_width_mm() -> float:
-    """Average character width at the body size, from the real font.
+    """Average character width at the body size, measured in the font the page
+    actually uses.
 
-    Times New Roman at 11pt on A4 — the same face and size the template uses. Get
-    this wrong and every limit downstream is wrong: a "three-line summary" would be
-    measured against a page that does not exist.
+    This measured Times for a while after the page stopped being set in Times. Its
+    own docstring said "get this wrong and every limit downstream is wrong", and
+    then the face changed to Calibri and this did not follow. Calibri is the
+    narrower of the two, so every limit was quietly too strict — a "three-line
+    summary" was being measured against a page that no longer existed.
+
+    So it asks the renderer which font it is using, rather than assuming.
     """
     from fpdf import FPDF
 
+    from src import resume_pdf
+
     pdf = FPDF(format="A4", unit="mm")
+    face, _ = resume_pdf.resolve_font(pdf)
     pdf.add_page()
-    pdf.set_font("Times", "", _BODY_PT)
+    pdf.set_font(face, "", _BODY_PT)
     sample = ("Built a pipeline that fetches seventy boards concurrently and "
               "scores each posting against my profile using a provider chain. ")
     return pdf.get_string_width(sample) / len(sample)
@@ -105,6 +113,20 @@ def budgets() -> dict:
     return {
         "summary_chars": RESUME_SUMMARY_LINES * per_line,
         "summary_lines": RESUME_SUMMARY_LINES,
+        # A FLOOR as well as a ceiling — which is unusual in this file, and needs
+        # saying why.
+        #
+        # Every other budget here is a ceiling and never a quota, because demanding
+        # three project bullets from a profile that supplies two is asking the model
+        # to invent the third. That reasoning does not carry to the summary. The
+        # profile's summary is a paragraph the person actually wrote, and it
+        # typically runs to four or five lines. Asking for three lines OF IT is
+        # asking for more of what is already there, not for anything new.
+        #
+        # The floor is 85% of the ceiling, not 100%. A summary that lands two words
+        # short of a full third line is finished, not deficient, and chasing the
+        # last few characters is how padding gets in through the back door.
+        "summary_min_chars": int(RESUME_SUMMARY_LINES * per_line * 0.85),
         "experience_bullet_chars": RESUME_EXPERIENCE_BULLET_LINES * per_bullet_line,
         "experience_bullet_lines": RESUME_EXPERIENCE_BULLET_LINES,
         "project_bullet_budget": list(RESUME_PROJECT_BULLET_LINES),
@@ -206,10 +228,58 @@ def check(markdown: str) -> list[Overrun]:
     return problems
 
 
-def instructions() -> str:
+def summary_has_material(profile: dict) -> bool:
+    """Is there enough real material in the profile for three honest lines?
+
+    The first version of this asked whether the PROFILE SUMMARY alone was already
+    three lines long, which is the wrong question and made the floor nearly
+    unreachable: a 317-character profile summary against a 300-character floor
+    leaves the model no room to rewrite anything — it would have to transcribe.
+
+    But a resume summary is a compression of the whole profile, not a rewrite of one
+    field. Real roles, real skills, real projects can all legitimately appear in it.
+    Drawing on them is not invention; it is the summary doing its job.
+
+    So the question is whether the profile has substance: a real paragraph to start
+    from, and real work to draw on. Three lines out of that is honest. Three lines
+    out of "Software developer." and nothing else is padding, and that is what this
+    still refuses.
+    """
+    own = str(profile.get("summary") or "").strip()
+    if len(own) < 60:                  # not a paragraph; a placeholder
+        return False
+
+    has_work = bool(profile.get("experience") or profile.get("projects"))
+    has_skills = bool(profile.get("skills") or profile.get("skill_categories"))
+    return has_work and has_skills
+
+
+def instructions(profile: dict | None = None) -> str:
     """The limits, written for the model, in units it can actually count."""
     b = budgets()
     per_bullet = chars_per_line(indented=True)
+
+    # Three FULL lines when the profile's own summary has three lines of material in
+    # it — and it usually does, because it is a paragraph the person wrote about
+    # themselves. This is the one place a floor is honest: the material exists, and
+    # the instruction is to use more of it, not to make more of it.
+    if profile is None or summary_has_material(profile):
+        summary_rule = (
+            f"aim for a FULL {b['summary_lines']} lines — between "
+            f"{b['summary_min_chars']} and {b['summary_chars']} characters.\n"
+            f"  Draw every word of it from MY PROFILE below — my own summary, my "
+            f"real roles, my real skills, my real projects. A summary is a "
+            f"compression of all of it, not a rewrite of one paragraph, so there is "
+            f"plenty to work with. Do NOT invent anything to reach the length: if "
+            f"you find yourself reaching, you have run out of true things to say, "
+            f"and a short true summary beats a long invented one."
+        )
+    else:
+        summary_rule = (
+            f"at most {b['summary_lines']} lines "
+            f"(~{b['summary_chars']} characters).\n"
+            f"  My profile summary is short, so yours should be too. Do not pad it."
+        )
 
     project_rules = "\n".join(
         f"  - Point {i + 1}: at most {n} line{'s' if n != 1 else ''} "
@@ -223,7 +293,7 @@ onto a second page because a bullet was two words too long is a worse resume.
 A rendered line of this resume holds about {b['chars_per_line']} characters
 ({per_bullet} in an indented bullet). Count characters; the lines follow.
 
-- SUMMARY: at most {b['summary_lines']} lines (~{b['summary_chars']} characters).
+- SUMMARY: {summary_rule}
 - EXPERIENCE: every bullet at most {b['experience_bullet_lines']} lines
   (~{b['experience_bullet_chars']} characters). Each bullet, not the section.
 - PROJECTS: at most {b['max_projects']}, the most relevant to this job.
@@ -243,6 +313,42 @@ A rendered line of this resume holds about {b['chars_per_line']} characters
 Cutting to length means saying the same thing in fewer words. It does not mean
 dropping the achievement, the metric, or the technology — those are the parts that
 matter. Cut the adjectives and the throat-clearing first."""
+
+
+def summary_is_short(resume: dict, profile: dict) -> str:
+    """The summary came back thinner than the profile can support.
+
+    Not an Overrun — nothing overran. It is the opposite, and it is worth telling
+    the model about because the fix is free: there is more in the profile summary,
+    and it simply did not use it.
+    """
+    if not summary_has_material(profile):
+        return ""                       # nothing to draw on; short is correct
+
+    summary = str(resume.get("summary") or "").strip()
+
+    # Count the LINES it renders, not the characters it contains.
+    #
+    # The characters were a proxy for the lines, and a bad one: a 298-character
+    # summary wraps to three full lines, and a floor set at 300 characters sent it
+    # back for being two short. It asked for a rewrite of something that was already
+    # finished — and every needless retry is another chance for the model to invent
+    # something on the way past.
+    #
+    # The line count is the thing that was ever wanted. Ask for that.
+    if measure_lines(summary) >= RESUME_SUMMARY_LINES:
+        return ""
+
+    floor = budgets()["summary_min_chars"]
+    if len(summary) >= floor:
+        return ""
+
+    return (
+        f"The summary is {len(summary)} characters and should be about "
+        f"{floor}-{budgets()['summary_chars']} — a full "
+        f"{RESUME_SUMMARY_LINES} lines. There is more in MY SUMMARY than you used. "
+        f"Use it, angled at this job. Do not invent anything to fill the space."
+    )
 
 
 def check_structured(resume: dict) -> list[Overrun]:

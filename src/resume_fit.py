@@ -23,7 +23,7 @@ this" is a better answer than a resume you would have to hide.
 """
 import re
 
-from src.paths import FIT_MIN_OVERLAP
+from src.paths import FIT_MIN_OVERLAP, FIT_MIN_TECHNOLOGIES
 
 
 def _terms(text: str) -> set[str]:
@@ -55,8 +55,51 @@ _STOPWORDS = {
 }
 
 
+#: Skill categories that belong on the resume but are not evidence you can do the
+#: work.
+#:
+#: The fit check exists to answer one question: would a resume for this job have to
+#: lie? A sales posting wants communication, time management, MS Office and fluent
+#: English — and so does every posting, and so does everyone. Counting them made a
+#: "Canada Sales - Talent Community" posting a 15% match for a computer science
+#: student, which is exactly the floor, on the strength of the words "office",
+#: "management" and "communication".
+#:
+#: These stay on the resume, where a recruiter reads them and they mean something.
+#: They do not count as proof you can write software.
+_NOT_EVIDENCE = (
+    "soft skill",
+    "language",              # human languages: English, Urdu, French
+    "productivity",          # MS Office, Slack — every job, every applicant
+    "interpersonal",
+    "communication",
+    "personal",
+)
+
+
+def _is_evidence(label: str) -> bool:
+    """Is this skill category evidence about the work, or about being a person?"""
+    lowered = str(label).lower()
+    # "Programming & Markup Languages" contains "language" and is very much
+    # evidence. The distinction is whether the category is ABOUT programming.
+    # "Software & Productivity Tools" is MS Office and Slack. "Developer Tools" is
+    # Git and Postman. The word "tool" does not distinguish them; "developer" does.
+    if any(word in lowered for word in ("programming", "markup", "framework",
+                                        "database", "developer tool", "platform",
+                                        "cloud", "machine learning", "methodolog",
+                                        "architecture", "data")):
+        return True
+    return not any(word in lowered for word in _NOT_EVIDENCE)
+
+
 def profile_terms(profile: dict) -> set[str]:
-    """Everything the person can honestly claim."""
+    """Everything the person can honestly claim AS EVIDENCE they can do the work.
+
+    Not everything on their resume. Soft skills, human languages and office suites
+    are real, belong on the page, and prove nothing about whether a software job is
+    a fit — because everyone has them, including the people applying to the sales
+    role.
+    """
     parts = []
 
     skills = profile.get("skills") or {}
@@ -65,7 +108,10 @@ def profile_terms(profile: dict) -> set[str]:
 
     for group in profile.get("skill_categories") or []:
         if isinstance(group, dict):
-            parts.append(str(group.get("label", "")))
+            label = str(group.get("label", ""))
+            if not _is_evidence(label):
+                continue
+            parts.append(label)
             parts.extend(str(s) for s in (group.get("skills") or []))
 
     for exp in profile.get("experience") or []:
@@ -98,14 +144,36 @@ def overlap(requirements: list[str], profile: dict,
     sales posting sailed straight through the check built to stop it. A default
     that turns a failure into an approval is not a default; it is a hole.
 
-    So when there are no requirements, fall back to the title and the posting
-    itself. Noisier, but a sales posting is still unmistakably a sales posting.
+    So when there are no requirements, read the technologies out of the posting
+    directly.
+
+    The first version of this fallback used the whole description as the
+    requirement list, and its docstring said "noisier, but a sales posting is still
+    unmistakably a sales posting". That was true and it was half the story. A job
+    description is two thousand words of culture, benefits and encouragement with a
+    dozen technologies buried in it, so the overlap drowns: a TD Bank software
+    engineering internship — Java, Python, SQL, REST, Git — scored 11% against this
+    profile and would have been REFUSED. The noise stops the sales job and it stops
+    the right job too.
+
+    named_technologies() already knows how to find the tools in a piece of prose,
+    because it was written to catch a model claiming React. Pointed at the posting
+    instead of the resume, it reads the same signal: TD Bank goes to 60%, Autodesk
+    to 46%, and the sales posting to 0%, with no model call at all.
     """
     wanted = _terms(" ".join(requirements))
 
     if not wanted and job:
-        raw = f"{job.get('title', '')} {job.get('description', '')}"
-        wanted = _terms(re.sub(r"<[^>]+>", " ", raw))
+        from src.resume_guard import named_technologies
+
+        raw = re.sub(r"<[^>]+>", " ", str(job.get("description", "")))
+        # sentence_start=True: a posting writes "Python, Kotlin, React." as a whole
+        # sentence, and the first word of it is a technology, not grammar.
+        found = named_technologies(raw, sentence_start=True)
+
+        # The title always counts: "Software Developer" and "Sales Representative"
+        # are the single most honest words in a posting.
+        wanted = _terms(" ".join(found + [str(job.get("title", ""))]))
 
     if not wanted:
         # Genuinely nothing to go on: no requirements, no title, no description.
@@ -150,10 +218,147 @@ class JobDoesNotFitError(Exception):
 def check_fit(job: dict, requirements: list[str], profile: dict) -> None:
     """Refuse before writing, not after.
 
-    The guards downstream catch a fabricated resume. This stops one being
-    attempted, which is better: a refusal you understand beats a refusal that
-    arrives after the model has already tried twice and produced two lies.
+    The guards downstream catch a fabricated resume. This stops one being attempted,
+    which is better: a refusal you understand beats a refusal that arrives after the
+    model has already tried twice and produced two lies.
+
+    HOW IT DECIDES, and why it changed.
+
+    This used to be a ratio: of everything the posting asked for, what fraction was
+    in the profile. It was tuned three times and it never worked, because the
+    denominator is a job description — two thousand words of culture, benefits and
+    section headings with a dozen technologies buried in them. Real developer jobs
+    came out at 10-18% against a 15% floor. The measure had no power left to
+    discriminate; it was reporting noise, and the floor was cutting through the
+    middle of it. Its matched terms were "what", "every", "day", "best".
+
+    A ratio was the wrong instrument. This check has exactly one job — refuse a job
+    whose resume would have to lie — and that is not a question of degree. It is:
+    IS THIS JOB IN MY FIELD?
+
+    So: count. How many of MY technologies does this posting name? The list of my
+    technologies has no noise in it, because a person wrote it. There is no
+    denominator to be poisoned.
+
+        sales, recruiting, sales rep         0
+        IT operations                        1
+        TD Bank software engineering         4  (Java, Python, SQL, Git)
+        Geotab software developer            5  (C#, .NET, SQL Server, Azure, REST)
+
+    The separation is not close, and it does not need tuning.
     """
-    score, matched = overlap(requirements, profile, job)
-    if score < FIT_MIN_OVERLAP:
-        raise JobDoesNotFitError(job, score, matched)
+    # A bare title, and nothing else.
+    #
+    # There is no evidence here to judge, and refusing on no evidence is a different
+    # error from the one this check exists to prevent — it would block a job whose
+    # posting is merely vague. A title cannot be trusted to carry the decision on its
+    # own: "Software Engineer" names no language, and neither does "Engineer II", and
+    # both are jobs he should see.
+    said = f"{job.get('description', '')} {' '.join(requirements or [])}"
+    if not said.strip():
+        return
+
+    wanted = technologies_wanted(job, profile, requirements)
+    languages = wanted & _LANGUAGES
+
+    # A job that asks for a programming language YOU WRITE is a job you can write an
+    # honest resume for. You may be underqualified for it — that is a different
+    # question, and not this one's business — but there is nothing you would have to
+    # invent.
+    #
+    # This is what a count alone could not see. DoorDash's backend role names Kotlin,
+    # gRPC, Postgres, Kubernetes and AWS, of which he has none, and Java, which he
+    # has. One match. A count of two refused it — a Java backend job, refused to a
+    # Java developer. Meanwhile an IT operations role also scored one, on the word
+    # "Agile", and a network engineering role scored one on "Azure".
+    #
+    # The difference is not how many. It is WHICH.
+    if languages:
+        return
+
+    # No language of yours in it. Two other tools of yours can still make it a job in
+    # your field — a DevOps role naming Azure and Docker, say. One cannot: "Agile" is
+    # in every posting ever written.
+    if len(wanted) >= FIT_MIN_TECHNOLOGIES:
+        return
+
+    score, _ = overlap(requirements, profile, job)
+    raise JobDoesNotFitError(job, score, wanted)
+
+# ── How many of YOUR technologies does this job ask for? ────────────────────
+
+def my_technologies(profile: dict) -> set[str]:
+    """The tools you have, as YOU listed them.
+
+    A curated list, written by a person, with no filler in it — which is exactly
+    what the other side of this comparison never was.
+    """
+    found = set()
+
+    skills = profile.get("skills") or {}
+    for tier in ("expert", "proficient", "familiar"):
+        for skill in skills.get(tier) or []:
+            found.add(str(skill).lower().strip())
+
+    for group in profile.get("skill_categories") or []:
+        if not isinstance(group, dict):
+            continue
+        if not _is_evidence(str(group.get("label", ""))):
+            continue
+        for skill in group.get("skills") or []:
+            found.add(str(skill).lower().strip())
+
+    for project in profile.get("projects") or []:
+        for tech in project.get("tech") or []:
+            found.add(str(tech).lower().strip())
+
+    # "MS Office (Word, Excel, PowerPoint)" is one entry and no technology.
+    return {f for f in found if f and len(f) > 1}
+
+
+def technologies_wanted(job: dict, profile: dict,
+                        requirements: list[str] | None = None) -> set[str]:
+    """Which of them this posting names.
+
+    The extracted requirements come first when there are any — a clean list from the
+    model beats reading the raw posting, and throwing it away was a real bug: the
+    first version of this read only the description, so a caller that had already
+    done the extraction had it silently ignored.
+
+    The posting itself is always read too. The model's list is a summary, and a
+    summary can drop a language.
+    """
+    blob = re.sub(r"<[^>]+>", " ",
+                  f"{job.get('title', '')} {job.get('description', '')} "
+                  f"{' '.join(requirements or [])}").lower()
+
+    wanted = set()
+    for tech in my_technologies(profile):
+        # Whole-token, so "c" does not match "critical" and "r" does not match
+        # "revenue" — the single-letter languages are why this needs a boundary and
+        # not an `in`.
+        if re.search(rf"(?<![a-z0-9+#.]){re.escape(tech)}(?![a-z0-9+#])", blob):
+            wanted.add(tech)
+    return wanted
+
+
+#: Programming languages, as a set. Not "every technology" — that list does not
+#: exist and could not be maintained. Languages are a small, slow-moving set, and
+#: they are the one thing that says what KIND of work a job is.
+_LANGUAGES = {
+    "python", "java", "javascript", "typescript", "c", "c#", "c++", "go", "golang",
+    "rust", "ruby", "php", "swift", "kotlin", "dart", "scala", "perl", "r",
+    "objective-c", "sql", "html", "css", "bash", "shell", "matlab", "julia",
+    "haskell", "elixir", "erlang", "clojure", "lua", "assembly", "vb.net",
+    "visual basic", "cobol", "fortran", "groovy", "solidity",
+}
+
+
+def my_languages(profile: dict) -> set[str]:
+    """The programming languages you write."""
+    return {t for t in my_technologies(profile) if t in _LANGUAGES}
+
+
+def languages_wanted(job: dict, profile: dict,
+                     requirements: list[str] | None = None) -> set[str]:
+    return technologies_wanted(job, profile, requirements) & _LANGUAGES

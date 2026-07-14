@@ -143,7 +143,13 @@ def to_docx(content: str, kind: str) -> bytes:
 
 
 def to_pdf(content: str, kind: str) -> bytes:
-    """Render a document to PDF bytes. Raises if fpdf2 isn't installed."""
+    """Render to PDF, matching the Word file rather than approximating it.
+
+    The two renderers used to drift: Word got Calibri, real bullets and clickable
+    links while this one kept Times, a hyphen where a bullet belonged, and raw URLs
+    printed across the page. A resume must not read differently depending on which
+    button you pressed.
+    """
     try:
         from fpdf import FPDF
     except ImportError as e:      # pragma: no cover
@@ -151,10 +157,8 @@ def to_pdf(content: str, kind: str) -> bytes:
             "PDF export needs fpdf2. Install it with: pip install fpdf2"
         ) from e
 
-    # The resume matches the Word template: Times, A4, half-inch margins. The
-    # cover letter keeps the roomier layout — it is prose on its own page, and it
-    # is not competing for space.
-    from src.resume_docx import BODY_PT, MARGIN_IN, TEXT_WIDTH_IN   # noqa: F401
+    from src import resume_pdf
+    from src.resume_docx import BODY_PT, MARGIN_IN, NAME_PT
 
     if kind == "resume":
         pdf = FPDF(format="A4", unit="mm")
@@ -162,24 +166,36 @@ def to_pdf(content: str, kind: str) -> bytes:
         pdf.set_margins(margin, margin, margin)
         pdf.set_auto_page_break(auto=True, margin=margin)
         body_size = BODY_PT
-        face = "Times"
     else:
         pdf = FPDF(format="letter", unit="mm")
         pdf.set_margins(18, 16, 18)
         pdf.set_auto_page_break(auto=True, margin=15)
         body_size = 11
-        face = "Helvetica"
+
+    face, unicode_ok = resume_pdf.resolve_font(pdf)
+    prepare = (lambda t: t) if unicode_ok else resume_pdf.latin1_safe
+    bullet = resume_pdf.BULLET if unicode_ok else "-"
 
     pdf.add_page()
+    pdf.set_text_color(0, 0, 0)
+
+    def write_link(text: str, url: str, size: float):
+        """Blue, underlined, and actually clickable."""
+        pdf.set_font(face, "U", size) if False else pdf.set_font(face, "", size)
+        pdf.set_text_color(5, 99, 193)
+        pdf.cell(pdf.get_string_width(prepare(text)) + 0.5, 5,
+                 prepare(text), link=url)
+        pdf.set_text_color(0, 0, 0)
 
     in_comment = False
+    header_done = False
 
     for raw_line in content.splitlines():
         line = raw_line.rstrip()
-
-        # Skip HTML comment blocks whole — the template's instructions live in one,
-        # and a stray line of them must never end up on a real resume.
         stripped = line.strip()
+
+        # The template explains itself in an HTML comment. A stray line of it on a
+        # real resume, sent to a real employer, is unrecoverable.
         if stripped.startswith("<!--"):
             in_comment = "-->" not in stripped
             continue
@@ -188,74 +204,157 @@ def to_pdf(content: str, kind: str) -> bytes:
                 in_comment = False
             continue
 
-        # Blank line -> vertical space.
         if not stripped:
             pdf.ln(2.5)
             continue
 
-        text = _pdf_safe(line)
-
-        # The `@@` convention: everything after it belongs at the right margin.
-        # In Word this is a right tab stop; here it's a right-aligned cell on the
-        # same line. Either way the reader sees the dates on the right — and a
-        # parser sees one ordinary line of text, not a table cell.
+        text = line
         right = ""
         if "@@" in text:
             left_part, _, right_part = text.partition("@@")
             text = left_part.rstrip()
             right = right_part.strip()
 
-        # Always start a block at the left margin: multi_cell(0, ...) measures its
-        # width from the current x, and a preceding write() leaves x mid-line.
         pdf.set_x(pdf.l_margin)
 
-        if right:
-            _pdf_line_with_right(pdf, text, right, body_size, face)
+        # ── # Name ──────────────────────────────────────────────────────────
+        if text.startswith("# "):
+            pdf.set_font(face, "B", NAME_PT)
+            pdf.multi_cell(0, 9, prepare(text[2:].strip()), align="L")
+            pdf.ln(0.5)
             continue
 
-        # # Name  -> title
-        if text.startswith("# "):
-            pdf.set_font(face, "B", 17)
-            pdf.multi_cell(0, 8, text[2:].strip())
-            pdf.ln(1)
-        # ## Section
-        elif text.startswith("## "):
+        # ── ## Section, with the hairline under it ──────────────────────────
+        if text.startswith("## "):
+            header_done = True
             pdf.ln(2)
-            pdf.set_font(face, "B", 11.5)
-            pdf.multi_cell(0, 6, text[3:].strip().upper())
-            # a rule under the section heading
+            pdf.set_font(face, "B", body_size)
+            pdf.multi_cell(0, 5.5, prepare(text[3:].strip().upper()), align="L")
             y = pdf.get_y()
-            pdf.set_draw_color(180, 121, 26)          # brand
-            pdf.set_line_width(0.4)
+            pdf.set_draw_color(0, 0, 0)
+            pdf.set_line_width(0.2)
             pdf.line(pdf.l_margin, y, pdf.w - pdf.r_margin, y)
             pdf.ln(2)
-        # ### Sub-heading (role, project name)
-        elif text.startswith("### "):
-            pdf.set_font(face, "B", body_size)
-            pdf.multi_cell(0, 5.5, text[4:].strip())
-        # - bullet
-        elif re.match(r"^[-*]\s+", text):
+            continue
+
+        # ── The contact block, above the first heading ──────────────────────
+        # Every piece on ONE line, and the profile URLs clickable. Written with
+        # cell() rather than multi_cell() so the parts sit side by side instead of
+        # each claiming a line of their own.
+        if not header_done:
             pdf.set_font(face, "", body_size)
-            bullet = _strip_md(re.sub(r"^[-*]\s+", "", text))
-            usable = pdf.w - pdf.l_margin - pdf.r_margin
-            pdf.set_x(pdf.l_margin + 3)
-            pdf.multi_cell(usable - 3, 5, f"-  {bullet}")
-        # everything else: a paragraph
-        else:
-            # **Bold label:** rest  -> bold label, regular text, on one flowing line
-            m = re.match(r"^\*\*(.+?):?\*\*:?\s*(.*)$", text)
-            if m:
-                pdf.set_font(face, "B", body_size)
-                pdf.write(5, f"{m.group(1)}: ")
-                pdf.set_font(face, "", body_size)
-                pdf.write(5, _strip_md(m.group(2)))
-                pdf.ln(5.5)
+            parts = [p.strip() for p in text.split("|")]
+            for i, part in enumerate(parts):
+                if i:
+                    pdf.set_font(face, "", body_size)
+                    pdf.cell(pdf.get_string_width(" | ") + 0.5, 5, " | ")
+                if resume_pdf.is_url(part):
+                    url = part if part.startswith("http") else f"https://{part}"
+                    write_link(resume_pdf.link_label(part), url, body_size)
+                else:
+                    pdf.cell(pdf.get_string_width(prepare(part)) + 0.5, 5,
+                             prepare(part))
+            pdf.ln(5.5)
+            continue
+
+        # ── ### Sub-heading (role, project, degree) ─────────────────────────
+        if text.startswith("### "):
+            heading = resume_pdf.strip_md(text[4:].strip())
+            pdf.set_font(face, "B", body_size)
+            if right:
+                pdf.cell(0, 5.5, prepare(heading))
+                _right_aligned(pdf, right, body_size, face, prepare, resume_pdf,
+                               bold=False)
             else:
+                pdf.multi_cell(0, 5.5, prepare(heading), align="L")
+            continue
+
+        # ── - bullet ────────────────────────────────────────────────────────
+        if re.match(r"^[-*]\s+", text):
+            body = resume_pdf.strip_md(re.sub(r"^[-*]\s+", "", text))
+            label, rest = _split_bold_label(re.sub(r"^[-*]\s+", "", text))
+
+            indent = 4.0
+            pdf.set_x(pdf.l_margin)
+            pdf.set_font(face, "", body_size)
+            pdf.cell(indent, 5, prepare(bullet))
+
+            if right:
                 pdf.set_font(face, "", body_size)
-                pdf.multi_cell(0, 5.4, _strip_md(text))
+                pdf.cell(0, 5, prepare(body))
+                _right_aligned(pdf, right, body_size, face, prepare, resume_pdf,
+                               bold=False)
+                continue
+
+            if label:
+                # "- **Databases:** MySQL | SQLite" — the label is bold, the rest
+                # is not, and they belong on the same line.
+                pdf.set_font(face, "B", body_size)
+                pdf.write(5, prepare(f"{label}: "))
+                pdf.set_font(face, "", body_size)
+                pdf.write(5, prepare(rest))
+                pdf.ln(5.2)
+            else:
+                usable = pdf.w - pdf.l_margin - pdf.r_margin - indent
+                pdf.set_x(pdf.l_margin + indent)
+                pdf.multi_cell(usable, 5, prepare(body), align="L")
+            continue
+
+        # ── Everything else: a paragraph ────────────────────────────────────
+        if right:
+            pdf.set_font(face, "", body_size)
+            pdf.cell(0, 5.4, prepare(resume_pdf.strip_md(text)))
+            _right_aligned(pdf, right, body_size, face, prepare, resume_pdf,
+                           bold=False)
+            continue
+
+        label, rest = _split_bold_label(text)
+        if label:
+            pdf.set_font(face, "B", body_size)
+            pdf.write(5, prepare(f"{label}: "))
+            pdf.set_font(face, "", body_size)
+            pdf.write(5, prepare(rest))
+            pdf.ln(5.4)
+        else:
+            pdf.set_font(face, "", body_size)
+            pdf.multi_cell(0, 5.4, prepare(resume_pdf.strip_md(text)), align="L")
 
     out = pdf.output()
     return bytes(out)
+
+
+def _split_bold_label(text: str) -> tuple[str, str]:
+    """"**Databases:** MySQL | SQLite" -> ("Databases", "MySQL | SQLite")."""
+    m = re.match(r"^\*\*(.+?):?\*\*:?\s*(.*)$", text.strip())
+    if not m:
+        return "", ""
+    from src import resume_pdf
+    return m.group(1).strip(), resume_pdf.strip_md(m.group(2))
+
+
+def _right_aligned(pdf, right: str, size: float, face: str, prepare, resume_pdf,
+                   bold: bool):
+    """The dates, or the link, at the right margin — on the line just written.
+
+    In Word this is a right tab stop. Here it is a right-aligned cell placed by
+    hand, which comes to the same thing on the page and, importantly, is still one
+    ordinary line of text to a parser rather than a table cell.
+    """
+    if resume_pdf.is_url(right):
+        label = resume_pdf.link_label(right)
+        url = right if right.startswith("http") else f"https://{right}"
+        pdf.set_font(face, "", size)
+        width = pdf.get_string_width(prepare(label)) + 1
+        pdf.set_xy(pdf.w - pdf.r_margin - width, pdf.get_y())
+        pdf.set_text_color(5, 99, 193)
+        pdf.cell(width, 5.5, prepare(label), align="R", link=url)
+        pdf.set_text_color(0, 0, 0)
+    else:
+        pdf.set_font(face, "B" if bold else "", size)
+        width = pdf.get_string_width(prepare(right)) + 1
+        pdf.set_xy(pdf.w - pdf.r_margin - width, pdf.get_y())
+        pdf.cell(width, 5.5, prepare(right), align="R")
+    pdf.ln(5.5)
 
 
 def _pdf_safe(text: str) -> str:

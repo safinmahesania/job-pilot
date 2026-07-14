@@ -284,3 +284,103 @@ class TestTheBudgetIsACeilingNotAQuota:
         md = ("## Projects\n\n### P @@ x\n" + f"- {point}\n" * 4)
 
         assert any(p.where == "Project 1" for p in limits.check(md))
+
+
+class TestTheSummaryHasAFloorAsWellAsACeiling:
+    """The one place in this file where a budget is a quota, and it needs its
+    reason stated because everywhere else the opposite is true.
+
+    Elsewhere a budget is a ceiling and never a target: demanding three project
+    bullets from a profile that supplies two is asking the model to invent the
+    third. That reasoning does not carry here. The profile's summary is a paragraph
+    the person wrote about themselves, and it typically runs to four or five lines.
+    Asking for three lines OF IT is asking for more of what is already there.
+
+    The floor holds only while that is true. Against a one-line profile summary it
+    switches off, because at that point it would be the same padding wearing a
+    different excuse.
+    """
+
+    #: A real profile: a paragraph, real work, real skills. Three lines out of this
+    #: is a compression, not an invention.
+    RICH = {
+        "summary": ("Software developer who enjoys turning ideas into clean, "
+                    "practical, and maintainable applications. Experienced across "
+                    "frontend and backend development."),
+        "experience": [{"role": "Flutter Developer", "company": "Otrack"}],
+        "skills": {"expert": ["Flutter", "Java", "Python", "C#", "SQL"]},
+    }
+
+    #: A placeholder and nothing else. Three lines out of THIS would be padding.
+    THIN = {"summary": "Software developer."}
+
+    def test_a_rich_profile_summary_gets_a_floor(self):
+        assert limits.summary_has_material(self.RICH)
+
+    def test_a_thin_one_does_not(self):
+        """Three lines out of one line of material is padding, and padding is where
+        invention starts."""
+        assert not limits.summary_has_material(self.THIN)
+
+    def test_a_short_summary_is_flagged_when_there_was_material(self):
+        message = limits.summary_is_short(
+            {"summary": "Junior developer."}, self.RICH)
+
+        assert message
+        assert "should be about" in message
+        assert "Do not invent" in message
+
+    def test_a_short_summary_is_fine_when_there_was_not(self):
+        assert limits.summary_is_short({"summary": "Software developer."},
+                                       self.THIN) == ""
+
+    def test_a_full_summary_passes(self):
+        floor = limits.budgets()["summary_min_chars"]
+        full = "word " * (floor // 5 + 4)
+
+        assert limits.summary_is_short({"summary": full}, self.RICH) == ""
+
+    def test_the_floor_is_below_the_ceiling(self):
+        """A summary two words short of a full third line is finished, not
+        deficient. Chasing the last few characters is how padding gets in."""
+        b = limits.budgets()
+
+        assert b["summary_min_chars"] < b["summary_chars"]
+        assert b["summary_min_chars"] > b["summary_chars"] * 0.7
+
+    def test_the_instructions_ask_for_a_full_three_lines(self):
+        text = limits.instructions(self.RICH)
+
+        assert "aim for a FULL 3 lines" in text
+        assert "Do NOT invent anything to reach the length" in text
+
+    def test_and_do_not_when_there_is_nothing_to_fill_it_with(self):
+        text = limits.instructions(self.THIN)
+
+        assert "aim for a FULL" not in text
+        assert "Do not pad it" in text
+
+
+class TestTheLimitsMeasureTheFontOnThePage:
+    """It measured Times for a while after the page stopped being set in Times.
+
+    The docstring on _char_width_mm said, in as many words, "get this wrong and
+    every limit downstream is wrong" — and then the face changed to Calibri and this
+    did not follow. Calibri is the narrower of the two, so every limit was quietly
+    too strict, and a "three-line summary" was being measured against a page that no
+    longer existed.
+    """
+
+    def test_it_asks_the_renderer_which_font_rather_than_assuming(self):
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parent.parent
+                  / "src" / "resume_limits.py").read_text(encoding="utf-8")
+
+        assert 'pdf.set_font("Times"' not in source
+        assert "resume_pdf.resolve_font" in source
+
+    def test_the_measurement_is_plausible_for_an_a4_page(self):
+        """A sanity range. If this ever reads 40 or 400, something is badly wrong
+        and every limit in the file is meaningless."""
+        assert 90 < limits.chars_per_line() < 140

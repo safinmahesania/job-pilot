@@ -737,3 +737,117 @@ class TestTheDecisionIsWhichNotHowMany:
             self.PROFILE)
 
         assert langs == set()
+
+
+class TestAFieldIsNotATool:
+    """The Achievers "Data Scientist" posting names no tool at all.
+
+        "...research and develop innovative AI and Machine Learning based
+        approaches... a Data Scientist with a strong background in applied Machine
+        Learning, who has experience using data to produce models that power
+        real-world solutions..."
+
+    No Python. No PyTorch. No SQL. Not one. It describes the work in prose, the way
+    a lot of postings do, and a check that reads only tool names read nothing and
+    refused it — a job for which this resume would have been entirely honest, since
+    there is a PyTorch classifier with 99.8% accuracy sitting in the profile.
+
+    But it does name something: the field. And the field is in the profile too, as a
+    label the person wrote on their own skills — "Machine Learning & Deep Learning".
+
+    A count could not see the difference. The posting matched exactly one thing:
+    "machine learning". A technical support role also matched exactly one thing:
+    "Azure". Counted, they are identical. They are not identical. A FIELD says what
+    kind of work a job is, the way a language does. A TOOL does not — every posting
+    mentions a cloud.
+    """
+
+    PROFILE = {
+        "summary": "Software developer.",
+        "skills": {"expert": ["Java", "Python", "Flutter", "SQL"],
+                   "proficient": ["C#"], "familiar": ["Azure", "PyTorch"]},
+        "skill_categories": [
+            {"label": "Programming & Markup Languages",
+             "skills": ["Python", "Java", "C#", "SQL"]},
+            {"label": "Machine Learning & Deep Learning",
+             "skills": ["PyTorch", "scikit-learn", "Pandas", "NumPy"]},
+            {"label": "Cloud & Data Platforms", "skills": ["Azure", "Firebase"]},
+            {"label": "Databases", "skills": ["MySQL", "SQL Server"]},
+            {"label": "Soft Skills", "skills": ["Communication", "Leadership"]},
+        ],
+        "experience": [{"role": "Flutter Developer",
+                        "highlights": ["Built a Flutter app."]}],
+        "projects": [{"name": "Plant Disease Detection",
+                      "tech": ["PyTorch", "Python"]}],
+    }
+
+    ACHIEVERS = {
+        "title": "Data Scientist",
+        "description": (
+            "Our Data Scientists are a highly motivated and curious group, "
+            "spearheading our efforts to build products powered by AI. In this role "
+            "you'll research and develop innovative AI and Machine Learning based "
+            "approaches. You will own part of our data strategy and bring together "
+            "loosely structured datasets to find actionable outcomes. We're looking "
+            "for a Data Scientist with a strong background in applied Machine "
+            "Learning, who has experience using data to produce models that power "
+            "real-world solutions actively used by customers."
+        ),
+    }
+
+    def test_a_posting_that_names_only_the_field_is_accepted(self):
+        resume_fit.check_fit(self.ACHIEVERS, [], self.PROFILE)   # no exception
+
+    def test_the_field_it_matched(self):
+        fields = resume_fit.fields_wanted(self.ACHIEVERS, self.PROFILE)
+
+        assert "machine learning" in fields
+
+    def test_it_names_no_tool_at_all(self):
+        """The premise. If this ever fails, the fixture has drifted and the test
+        below it is proving nothing."""
+        for tool in ("python", "pytorch", "sql", "pandas", "numpy"):
+            assert tool not in self.ACHIEVERS["description"].lower()
+
+    def test_one_tool_is_still_not_enough(self):
+        """A technical support role naming Azure matched exactly as much as the data
+        science role naming Machine Learning. It is not the same thing."""
+        support = {"title": "Technical Support IT",
+                   "description": ("Technical support. Azure AD, ticketing systems, "
+                                   "English and French. Resolve incidents.")}
+
+        with pytest.raises(resume_fit.JobDoesNotFitError):
+            resume_fit.check_fit(support, [], self.PROFILE)
+
+    def test_a_network_role_naming_azure_is_still_not_a_software_job(self):
+        network = {"title": "Network Engineering",
+                   "description": ("Cisco, BGP, firewalls, cloud architecture, "
+                                   "Azure. Operate our global network.")}
+
+        with pytest.raises(resume_fit.JobDoesNotFitError):
+            resume_fit.check_fit(network, [], self.PROFILE)
+
+    def test_single_word_labels_are_not_fields(self):
+        """"Databases", "Cloud", "Architecture" appear in every posting ever
+        written. Letting a one-word label count would put the noise straight back."""
+        fields = resume_fit.my_fields(self.PROFILE)
+
+        assert "databases" not in fields
+        assert "machine learning" in fields
+
+    def test_a_soft_skills_label_is_not_a_field_either(self):
+        fields = resume_fit.my_fields(self.PROFILE)
+
+        assert not any("soft" in f for f in fields)
+
+    def test_the_sales_posting_names_no_field_of_yours(self):
+        sales = {"title": "Canada Sales - Talent Community",
+                 "description": ("Account Executives and Sales Development "
+                                 "Representatives. Revenue growth, pipeline in "
+                                 "Microsoft Dynamics and Salesforce, quota. MS "
+                                 "Office. Fluent English. Strong communication and "
+                                 "time management.")}
+
+        assert resume_fit.fields_wanted(sales, self.PROFILE) == set()
+        with pytest.raises(resume_fit.JobDoesNotFitError):
+            resume_fit.check_fit(sales, [], self.PROFILE)

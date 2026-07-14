@@ -92,6 +92,7 @@ def audit(conn, profile: dict, *, use_llm: bool, everything: bool) -> list[dict]
         # the two together is the clearest possible statement of why it was wrong.
         wanted = resume_fit.technologies_wanted(job, profile)
         languages = resume_fit.languages_wanted(job, profile)
+        fields = resume_fit.fields_wanted(job, profile)
         overlap, _ = resume_fit.overlap(requirements, profile, job)
 
         # A verdict on a posting nobody fetched is not a verdict.
@@ -108,7 +109,7 @@ def audit(conn, profile: dict, *, use_llm: bool, everything: bool) -> list[dict]
         in_feed = score is not None and score >= threshold
         # The same decision check_fit makes. An audit that reaches a different
         # verdict from the code it audits is not auditing anything.
-        fits = bool(languages) or len(wanted) >= FIT_MIN_TECHNOLOGIES
+        fits = bool(languages or fields) or len(wanted) >= FIT_MIN_TECHNOLOGIES
         matched = wanted
 
         if in_feed and not fits:
@@ -126,7 +127,7 @@ def audit(conn, profile: dict, *, use_llm: bool, everything: bool) -> list[dict]
             "company": (job.get("company") or "")[:20],
             "feed_score": round(score) if score is not None else None,
             "tech": len(wanted),
-            "langs": ", ".join(sorted(languages)) or "-",
+            "langs": ", ".join(sorted(languages | fields)) or "-",
             "described": described,
             "fit": round(overlap * 100),
             "verdict": verdict,
@@ -162,14 +163,14 @@ def main() -> None:
     rows.sort(key=lambda r: (order[r["verdict"]], -(r["feed_score"] or 0)))
 
     print()
-    print(f"{'ID':>4}  {'VERDICT':<10} {'FEED':>4} {'TECH':>4}  {'YOUR LANGUAGES':<22} "
+    print(f"{'ID':>4}  {'VERDICT':<10} {'FEED':>4} {'TECH':>4}  {'YOUR LANGUAGES / FIELDS':<24} "
           f"{'TITLE':<40} COMPANY")
     print("-" * 126)
     for r in rows:
         feed = r["feed_score"] if r["feed_score"] is not None else "--"
         stub = "" if r["described"] else "  << no description stored"
         print(f"{r['id']:>4}  {r['verdict']:<10} {feed:>4} {r['tech']:>4}  "
-              f"{r['langs'][:22]:<22} {r['title'][:40]:<40} {r['company']}{stub}")
+              f"{r['langs'][:24]:<24} {r['title'][:40]:<40} {r['company']}{stub}")
 
     thin = [r for r in rows if not r["described"]]
     if thin:

@@ -602,3 +602,140 @@ class TestTechnologiesNamedInProse:
 
         assert "Name ONLY technologies that appear in MY PROFILE" in \
             resume_schema.SHAPE["summary"]
+
+
+class TestYourNameIsNotATechnology:
+    """A model that writes "Safin Mahesania is a junior software developer..." has
+    made a mistake — the name belongs at the top of the page, not in the prose.
+
+    But it is not THIS mistake. check_prose read "Mahesania" as a capitalised
+    mid-sentence token, which is exactly what a tool name looks like, and told the
+    model with total confidence that it came from the job posting and he does not
+    have it.
+
+    The verdict was accidentally right. The reason was nonsense, and it burned three
+    retries arriving at it.
+    """
+
+    PROFILE = {
+        "identity": {"name": "Safin Mahesania"},
+        "summary": "Software developer.",
+        "skills": {"expert": ["Java", "Python", "SQL"]},
+        "skill_categories": [],
+        "experience": [], "projects": [], "certificates": [],
+    }
+
+    def test_a_surname_is_not_flagged_as_a_framework(self):
+        summary = ("Safin Mahesania is a junior software developer with experience "
+                   "in Java and Python.")
+
+        problems = resume_guard.check_prose({"summary": summary}, self.PROFILE)
+
+        assert problems == []
+
+    def test_a_first_name_is_not_either(self):
+        problems = resume_guard.check_prose(
+            {"summary": "A developer, Safin has worked in Java."}, self.PROFILE)
+
+        assert problems == []
+
+    def test_a_real_invention_is_still_caught_alongside_the_name(self):
+        """Forgiving the name must not forgive React."""
+        summary = "Safin Mahesania is a developer with React and Java experience."
+
+        problems = resume_guard.check_prose({"summary": summary}, self.PROFILE)
+
+        assert len(problems) == 1
+        assert "React" in problems[0]
+
+    def test_the_renderer_still_removes_the_name(self):
+        """The guard no longer objects to it. The page still must not carry it."""
+        from src.resume_schema import to_markdown
+
+        resume = {"summary": "Safin Mahesania is a junior software developer.",
+                  "skills": [], "experience": [], "education": [], "projects": [],
+                  "certificates": [], "volunteer": []}
+
+        markdown = to_markdown(resume, self.PROFILE, "Safin Mahesania")
+
+        assert "Safin Mahesania" not in markdown.split("## Summary")[1]
+        assert "Junior software developer." in markdown
+
+
+class TestTheGuardKnowsTheWholeProfile:
+    """A summary saying "teaching experience in Java at Concordia" was refused:
+
+        "Concordia" appears in summary, but it is nowhere in your profile.
+        It came from the job posting. You do not have it.
+
+    Concordia is the university on his resume. It is very much in his profile.
+
+    The vocabulary the guard checks against read an experience entry's ROLE and its
+    HIGHLIGHTS — and stopped. Not the company. Not education at all. Not
+    volunteering. So every university he attended, every employer he worked for and
+    every organisation he volunteered at was, as far as the guard could see, a lie
+    invented from the job posting.
+
+    It is the same shape of error as flagging his own surname as a technology, which
+    was found the same way — by running the thing instead of testing it — and this
+    is the rest of it. The guard was reading a partial copy of the person and calling
+    the missing parts fabrications.
+    """
+
+    PROFILE = {
+        "identity": {"name": "Test Person", "titles": ["Software Developer"]},
+        "summary": "Software developer.",
+        "skills": {"expert": ["Java", "Python", "Flutter"]},
+        "experience": [
+            {"role": "Flutter Developer", "company": "Otrack",
+             "highlights": ["Built a Flutter app."]},
+            {"role": "Teaching Assistant", "company": "Concordia University",
+             "highlights": ["Supported students in Java."]},
+        ],
+        "projects": [{"name": "Recipedia", "tech": ["Flutter"]}],
+        "education": [{"degree": "MSc Computer Science",
+                       "institution": "Concordia University"}],
+        "certificates": [{"name": "Azure Fundamentals", "issuer": "Microsoft"}],
+        "volunteer": [{"organisation": "Let's Talk Science",
+                       "role": "STEM Co-Lead",
+                       "description": "Ran workshops for schools."}],
+    }
+
+    def test_your_university_is_not_an_invented_technology(self):
+        claims = resume_guard.check_prose(
+            {"summary": "Software developer with teaching experience in Java at "
+                        "Concordia University."}, self.PROFILE)
+
+        assert claims == []
+
+    def test_nor_is_your_employer(self):
+        claims = resume_guard.check_prose(
+            {"summary": "Software developer who built a Flutter app at Otrack."},
+            self.PROFILE)
+
+        assert claims == []
+
+    def test_nor_is_a_certificate_issuer(self):
+        claims = resume_guard.check_prose(
+            {"summary": "Software developer certified in Azure by Microsoft."},
+            self.PROFILE)
+
+        assert claims == []
+
+    def test_nor_is_an_organisation_you_volunteered_for(self):
+        claims = resume_guard.check_prose(
+            {"summary": "Software developer who ran STEM workshops with Let's Talk "
+                        "Science."}, self.PROFILE)
+
+        assert claims == []
+
+    def test_and_a_real_lie_is_still_caught_beside_them(self):
+        """The fix widened the vocabulary. It must not have blunted the guard."""
+        claims = resume_guard.check_prose(
+            {"summary": "Software developer at Concordia University with deep React "
+                        "and Kubernetes experience."}, self.PROFILE)
+
+        assert len(claims) == 2
+        assert any("React" in c for c in claims)
+        assert any("Kubernetes" in c for c in claims)
+        assert not any("Concordia" in c for c in claims)

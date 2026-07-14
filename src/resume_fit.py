@@ -260,6 +260,7 @@ def check_fit(job: dict, requirements: list[str], profile: dict) -> None:
 
     wanted = technologies_wanted(job, profile, requirements)
     languages = wanted & _LANGUAGES
+    fields = wanted & my_fields(profile)
 
     # A job that asks for a programming language YOU WRITE is a job you can write an
     # honest resume for. You may be underqualified for it — that is a different
@@ -273,7 +274,7 @@ def check_fit(job: dict, requirements: list[str], profile: dict) -> None:
     # "Agile", and a network engineering role scored one on "Azure".
     #
     # The difference is not how many. It is WHICH.
-    if languages:
+    if languages or fields:
         return
 
     # No language of yours in it. Two other tools of yours can still make it a job in
@@ -303,10 +304,19 @@ def my_technologies(profile: dict) -> set[str]:
     for group in profile.get("skill_categories") or []:
         if not isinstance(group, dict):
             continue
-        if not _is_evidence(str(group.get("label", ""))):
+
+        label = str(group.get("label", ""))
+        if not _is_evidence(label):
             continue
+
         for skill in group.get("skills") or []:
             found.add(str(skill).lower().strip())
+
+        # The label itself, as a FIELD — see my_fields() below.
+        for phrase in re.split(r"[&,/]", label):
+            phrase = phrase.strip().lower()
+            if len(phrase.split()) >= 2:
+                found.add(phrase)
 
     for project in profile.get("projects") or []:
         for tech in project.get("tech") or []:
@@ -362,3 +372,43 @@ def my_languages(profile: dict) -> set[str]:
 def languages_wanted(job: dict, profile: dict,
                      requirements: list[str] | None = None) -> set[str]:
     return technologies_wanted(job, profile, requirements) & _LANGUAGES
+
+
+def my_fields(profile: dict) -> set[str]:
+    """The FIELDS you work in, from the labels you wrote on your own skills.
+
+    "Machine Learning & Deep Learning" is a field. "Azure" is a tool.
+
+    The difference matters, and a count cannot see it. An Achievers data science
+    posting names no tool at all — "innovative AI and Machine Learning based
+    approaches", "a strong background in applied Machine Learning", "models that
+    power real-world solutions" — and matched exactly one thing: the field. A
+    technical support role also matched exactly one thing: Azure. Counted, they are
+    identical. They are not identical.
+
+    A FIELD says what KIND of work a job is, the way a language does. A TOOL does
+    not — every posting mentions a cloud.
+
+    Refusing the Achievers role was wrong: there is a PyTorch classifier with 99.8%
+    accuracy sitting in the profile, and the resume would have been entirely honest.
+    """
+    fields = set()
+    for group in profile.get("skill_categories") or []:
+        if not isinstance(group, dict):
+            continue
+        label = str(group.get("label", ""))
+        if not _is_evidence(label):
+            continue
+        for phrase in re.split(r"[&,/]", label):
+            phrase = phrase.strip().lower()
+            # Two words or more. "Databases", "Cloud" and "Architecture" alone appear
+            # in every posting ever written; counting them puts the noise straight
+            # back.
+            if len(phrase.split()) >= 2:
+                fields.add(phrase)
+    return fields
+
+
+def fields_wanted(job: dict, profile: dict,
+                  requirements: list[str] | None = None) -> set[str]:
+    return technologies_wanted(job, profile, requirements) & my_fields(profile)

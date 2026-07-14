@@ -359,6 +359,7 @@ def _profile_vocabulary(profile: dict) -> str:
 
     for entry in profile.get("experience") or []:
         parts.append(str(entry.get("role", "")))
+        parts.append(str(entry.get("company", "")))
         parts.extend(str(h) for h in (entry.get("highlights") or []))
 
     for entry in profile.get("projects") or []:
@@ -368,6 +369,33 @@ def _profile_vocabulary(profile: dict) -> str:
 
     for entry in profile.get("certificates") or []:
         parts.append(str(entry.get("name", "")))
+        parts.append(str(entry.get("issuer", "")))
+
+    # Education and volunteering were missing entirely, and so were the names of the
+    # companies worked for — the vocabulary read an experience entry's ROLE and its
+    # HIGHLIGHTS and stopped.
+    #
+    # Which meant a summary saying "teaching experience in Java at Concordia" was
+    # refused: "Concordia" appears in summary, but it is nowhere in your profile. It
+    # came from the job posting. You do not have it.
+    #
+    # It is in the profile. It is the university on the resume. The guard was looking
+    # at a partial copy of the person and calling the missing parts lies — the same
+    # shape of error as flagging his own surname, which was fixed, and this is the
+    # rest of it.
+    for entry in profile.get("education") or []:
+        parts.append(str(entry.get("degree", "")))
+        parts.append(str(entry.get("institution", "")))
+        parts.extend(str(h) for h in (entry.get("highlights") or []))
+
+    for entry in profile.get("volunteer") or []:
+        parts.append(str(entry.get("organisation", "")))
+        parts.append(str(entry.get("organization", "")))
+        parts.append(str(entry.get("role", "")))
+        parts.append(str(entry.get("description", "")))
+
+    identity = profile.get("identity") or {}
+    parts.extend(str(t) for t in (identity.get("titles") or []))
 
     return " ".join(parts).lower()
 
@@ -459,6 +487,21 @@ def check_prose(resume: dict, profile: dict) -> list[str]:
     a field.
     """
     vocabulary = _profile_vocabulary(profile)
+
+    # Your own name is not a technology.
+    #
+    # A model that writes "Safin Mahesania is a junior software developer..." gets
+    # "Mahesania" read as a capitalised mid-sentence token, which is what a tool name
+    # looks like — and then told, with total confidence, that it came from the job
+    # posting and he does not have it. The verdict was accidentally right (a name
+    # does not belong in a summary) and the reason was nonsense, and it burned three
+    # retries arriving at it.
+    #
+    # The renderer strips the name anyway. This just stops the guard shouting about
+    # a surname as though it were Kubernetes.
+    ident = profile.get("identity") or {}
+    own = {part.lower() for part in str(ident.get("name") or "").split() if part}
+
     problems = []
     seen = set()
 
@@ -482,6 +525,8 @@ def check_prose(resume: dict, profile: dict) -> list[str]:
             # Substring both ways: "REST" is in "RESTful APIs"; ".NET" is in
             # ".NET 8". A tool you have does not need to be spelled identically.
             if token.lower() in vocabulary:
+                continue
+            if token.lower() in own:
                 continue
 
             problems.append(

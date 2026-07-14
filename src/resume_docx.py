@@ -44,6 +44,90 @@ def _split_right(line: str) -> tuple[str, str]:
     return left.strip(), right.strip()
 
 
+# A bare URL on a resume is a wall of characters nobody reads and nobody types.
+# What a reader wants is a word they can click. So a URL becomes a link labelled by
+# what it points AT — the repo, the certificate, the profile — and the label is
+# chosen from the URL itself rather than asked of the model, which would get it
+# wrong occasionally and unfixably.
+def link_label(url: str) -> str:
+    text = (url or "").strip()
+    lowered = text.lower()
+
+    # The header pair reads better bare — "linkedin.com/in/safinmahesania" tells a
+    # reader who you are; "LinkedIn URL" tells them nothing they didn't know.
+    for host in ("linkedin.com/in/", "github.com/"):
+        if host in lowered:
+            path = lowered.split(host, 1)[1].strip("/")
+            if path and "/" not in path:            # a profile, not a repo
+                return f"{host.rstrip('/')}/{path}"
+
+    if "github.com" in lowered:
+        return "GitHub URL"
+    if any(k in lowered for k in ("credly", "learn.microsoft", "certificate",
+                                  "credential", "drive.google")):
+        return "Certificate URL"
+    if "linkedin.com" in lowered:
+        return "LinkedIn URL"
+    return text
+
+
+def _is_url(text: str) -> bool:
+    lowered = (text or "").strip().lower()
+    return lowered.startswith(("http://", "https://", "www.")) or (
+        "." in lowered and "/" in lowered and " " not in lowered
+    )
+
+
+def _add_hyperlink(paragraph, url: str, label: str, size=BODY_PT, italic=False):
+    """A real Word hyperlink. python-docx has no API for this, so it is assembled
+    from the relationship up."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Pt, RGBColor
+
+    part = paragraph.part
+    r_id = part.relate_to(
+        url,
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+        is_external=True,
+    )
+
+    node = OxmlElement("w:hyperlink")
+    node.set(qn("r:id"), r_id)
+
+    run = OxmlElement("w:r")
+    props = OxmlElement("w:rPr")
+
+    fonts = OxmlElement("w:rFonts")
+    fonts.set(qn("w:ascii"), FONT)
+    fonts.set(qn("w:hAnsi"), FONT)
+    props.append(fonts)
+
+    sz = OxmlElement("w:sz")
+    sz.set(qn("w:val"), str(int(size * 2)))
+    props.append(sz)
+
+    colour = OxmlElement("w:color")
+    colour.set(qn("w:val"), "0563C1")           # Word's own hyperlink blue
+    props.append(colour)
+
+    underline = OxmlElement("w:u")
+    underline.set(qn("w:val"), "single")
+    props.append(underline)
+
+    if italic:
+        props.append(OxmlElement("w:i"))
+
+    run.append(props)
+
+    text = OxmlElement("w:t")
+    text.text = label
+    run.append(text)
+
+    node.append(run)
+    paragraph._p.append(node)
+
+
 def _style(run, size=BODY_PT, bold=False, italic=False, small_caps=False):
     from docx.shared import Pt
 
@@ -163,7 +247,10 @@ def to_docx(markdown: str) -> bytes:
             _add_runs(p, left, size=BODY_PT, bold=True)
             if right:
                 p.add_run("\t")
-                _style(p.add_run(right), size=BODY_PT)
+                if _is_url(right):
+                    _add_hyperlink(p, right, link_label(right))
+                else:
+                    _style(p.add_run(right), size=BODY_PT)
             continue
 
         # ── Bullet ──────────────────────────────────────────────────────────
@@ -180,7 +267,10 @@ def to_docx(markdown: str) -> bytes:
                 _right_tab(p)
                 _add_runs(p, left)
                 p.add_run("\t")
-                _style(p.add_run(right), size=BODY_PT)
+                if _is_url(right):
+                    _add_hyperlink(p, right, link_label(right))
+                else:
+                    _style(p.add_run(right), size=BODY_PT)
             else:
                 _add_runs(p, left)
             continue
@@ -188,7 +278,15 @@ def to_docx(markdown: str) -> bytes:
         # ── Contact block, above the first heading ──────────────────────────
         if not header_done:
             p = _paragraph(doc, space_after=0)
-            _add_runs(p, line.strip(), size=CONTACT_PT)
+            parts = [part.strip() for part in line.split("|")]
+            for i, part in enumerate(parts):
+                if i:
+                    _style(p.add_run(" | "), size=CONTACT_PT)
+                if _is_url(part):
+                    url = part if part.startswith("http") else f"https://{part}"
+                    _add_hyperlink(p, url, link_label(part), size=CONTACT_PT)
+                else:
+                    _add_runs(p, part, size=CONTACT_PT)
             continue
 
         # ── Body prose (summary, company, university, volunteer copy) ───────
@@ -198,7 +296,10 @@ def to_docx(markdown: str) -> bytes:
             _right_tab(p)
             _add_runs(p, left)
             p.add_run("\t")
-            _style(p.add_run(right), size=BODY_PT)
+            if _is_url(right):
+                _add_hyperlink(p, right, link_label(right))
+            else:
+                _style(p.add_run(right), size=BODY_PT)
         else:
             # Justified, as in your template.
             p = _paragraph(doc, space_after=0, justify=True)

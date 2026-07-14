@@ -284,6 +284,22 @@ function jobpilot() {
             };
             return;
           }
+          if (d && d.error === 'does_not_fit') {
+            this.cover = null;
+            this.guardError = {
+              title: "You can't honestly apply to this one",
+              why: 'Only ' + d.score + '% of what this job asks for appears anywhere ' +
+                   'in your profile. A resume tailored to it would have to invent the ' +
+                   'rest — and a model asked to tailor it will, fluently, and you ' +
+                   'would be the one sending it. Nothing was generated.',
+              items: d.matched.length
+                ? ['All this job wants that you actually have: ' + d.matched.join(', ')]
+                : ['Nothing this job asks for appears in your profile at all.'],
+              fix: 'If you think this really is a good fit, your profile is missing ' +
+                   'something. Add it, and try again.',
+            };
+            return;
+          }
           if (d && d.error === 'fabricated') {
             this.cover = null;
             this.guardError = {

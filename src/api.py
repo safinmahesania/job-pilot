@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, PlainTextResponse
 from src import maintenance, scheduler, configio
 from src import resume_guard
+from src import resume_fit
 from src.paths import DB_PATH as DB
 app = FastAPI(title="JobPilot")
 
@@ -665,6 +666,12 @@ def tailored_resume(job_id: int):
         result = apply.generate_resume(dict(row))
     except FileNotFoundError as e:
         raise HTTPException(400, str(e))
+    except resume_fit.JobDoesNotFitError as e:
+        # Nothing was generated, and nothing should have been.
+        raise HTTPException(422, {"error": "does_not_fit",
+                                  "score": round(e.score * 100),
+                                  "matched": sorted(e.matched)[:8],
+                                  "message": str(e)})
     except resume_guard.ProfileIncompleteError as e:
         # Nothing was generated. Say exactly what is missing.
         raise HTTPException(400, {"error": "profile_incomplete",

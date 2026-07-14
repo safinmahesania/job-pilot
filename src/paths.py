@@ -259,6 +259,22 @@ RESUME_PROJECT_BULLET_LINES = (2, 2, 1)
 
 RESUME_VOLUNTEER_LINES = 3          # each entry's description
 
+# ── Fit ─────────────────────────────────────────────────────────────────────
+# The fraction of a job's stated requirements that must appear somewhere in your
+# profile before a resume will be written for it.
+#
+# Below this, the honest resume does not exist. Asked to tailor a software
+# engineer's resume to a healthcare sales posting, a model writes a resume for a
+# salesperson — not out of mischief, but because that is the only answer to the
+# question. Refusing is the correct behaviour, and it is also the answer you
+# wanted: you cannot honestly apply to this.
+#
+# 0.15 is deliberately generous. A junior applying to a role wanting five years of
+# Kubernetes still shares the vocabulary — languages, tools, practices. A software
+# developer and an assisted-living-facility sales rep share almost nothing, which
+# is exactly the case this exists to catch.
+FIT_MIN_OVERLAP = 0.15
+
 # ── Project selection ────────────────────────────────────────────────────────
 # The profile usually lists more projects than belong on one application, and
 # stale work is rarely the best evidence. So we first narrow to the most recent

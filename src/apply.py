@@ -21,7 +21,7 @@ import re
 
 from src import llm
 from src.config import load_profile
-from src import resume_limits, resume_guard
+from src import resume_limits, resume_guard, resume_fit
 from src.llm import LLMError
 from src.paths import (
     CONFIG_DIR,
@@ -174,6 +174,59 @@ def skill_groups(profile: dict) -> list[dict]:
     return groups
 
 
+def _ordinal(n: int) -> str:
+    """"a 4th", "a 3rd" — not "a 3th"."""
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"a {n}{suffix}"
+
+
+def closed_lists(profile: dict) -> str:
+    """The exact, complete, numbered set of proper nouns the resume may contain.
+
+    "Never invent an employer" is an open-ended prohibition, and a model asked to
+    tailor a resume to a job that wants more experience than you have will quietly
+    add one — not out of malice, but because the instruction says what NOT to do
+    without ever saying what the complete truth IS. It never learns that the list
+    is finished.
+
+    Counting them closes the world. "You have exactly three employers, here they
+    are, add none" turns an open generative task into a fill-in-the-blanks one, and
+    a model that would happily invent a fourth employer will not invent a fourth
+    item in a list it has been told has three.
+    """
+    def block(label, values, noun):
+        if not values:
+            return (f"{label}: you have NONE. The resume must not contain a "
+                    f"{noun} section at all.")
+        lines = [f"{label}: you have EXACTLY {len(values)}. "
+                 f"These and no others:"]
+        lines += [f"  {i + 1}. {v}" for i, v in enumerate(values)]
+        lines.append(f"  Do not add {_ordinal(len(values) + 1)}. There isn't one.")
+        return "\n".join(lines)
+
+    employers = [e.get("company", "") for e in (profile.get("experience") or [])
+                 if e.get("company")]
+    schools = [e.get("institution", "") for e in (profile.get("education") or [])
+               if e.get("institution")]
+    certificates = [c.get("name", "") for c in (profile.get("certificates") or [])
+                    if c.get("name")]
+    organisations = [
+        f"{v.get('organization', '')} ({v.get('role', '')})"
+        for v in (profile.get("volunteer") or []) if v.get("organization")
+    ]
+
+    return "\n\n".join([
+        block("EMPLOYERS", employers, "Work Experience"),
+        block("SCHOOLS", schools, "Education"),
+        block("CERTIFICATES", certificates, "Certificates and Achievements"),
+        block("VOLUNTEER ORGANISATIONS", organisations,
+              "Volunteer and Community Involvement"),
+    ])
+
+
 def _profile_facts(profile: dict) -> str:
     """The profile as a compact fact sheet. Only fields that exist are included,
     so the model has no blanks to fill in.
@@ -248,17 +301,24 @@ def _format_projects(projects: list, indices=None) -> str:
     for i, p in enumerate(projects):
         if indices is not None and i not in indices:
             continue
+        # Labelled fields, one per line. The old one-line format —
+        #   [0] Plant Disease Detection (owner: course) — ... (tech: ...) (link: ...)
+        # was copied onto the resume verbatim, "(owner: course)" and all. A model
+        # given a line that looks like output will treat it as output. These are
+        # notes, so they must look like notes.
         tech = ", ".join(p.get("tech", []) or [])
         bits = [f"[{i}] {p.get('name', '')}"]
         if p.get("owner"):
-            bits.append(f"(owner: {p['owner']})")
-        if p.get("description"):
-            bits.append(f"— {p['description']}")
+            bits.append(f"\n    OWNER: {p['owner']}   (write this after the "
+                        f"project name, e.g. \"Plant Disease Detection - "
+                        f"{p['owner'].title()}\")")
         if tech:
-            bits.append(f"(tech: {tech})")
+            bits.append(f"\n    TECH: {tech}")
         if p.get("link"):
-            bits.append(f"(link: {p['link']})")
-        line = " ".join(bits)
+            bits.append(f"\n    LINK: {p['link']}   (goes on the right, after @@)")
+        if p.get("description"):
+            bits.append(f"\n    WHAT IT IS: {p['description']}")
+        line = "".join(bits)
         for h in p.get("highlights", []) or []:
             line += f"\n    - {h}"
         out.append(line)
@@ -550,8 +610,27 @@ Rewrite it. Output only the final letter.""",
 
 # ── Resume tailoring ────────────────────────────────────────────────────────
 
-_RESUME_SYSTEM = """You tailor {name}'s resume to a specific job by filling in a
-Markdown template. You are a careful editor, not a copywriter.
+_RESUME_SYSTEM = """You SELECT from {name}'s real background. You do not tailor
+them to a job.
+
+That distinction is the whole task, so be clear about it: "tailor this resume to
+this job" invites you to become whoever the job is looking for, and a model that
+takes the invitation writes a sales resume for a software engineer — fluently,
+plausibly, and entirely falsely. That has happened. It is what this instruction
+exists to prevent.
+
+The job decides ORDER and EMPHASIS and VOCABULARY. It never decides CONTENT.
+  - ORDER: lead with the experience this employer cares about most.
+  - EMPHASIS: give it more words; give the rest fewer.
+  - VOCABULARY: where the job says "REST APIs" and the profile says "RESTful
+    services", use the job's phrase — it is the same thing.
+  - CONTENT: comes ONLY from the profile. Always. Without exception.
+
+If the job asks for something {name} does not have, {name} does not have it. Say
+nothing. An omission is honest; an invention is not, and it is the kind of
+dishonesty that ends a career rather than a conversation.
+
+You are a careful editor, not a copywriter.
 
 TEMPLATE IS LAW:
 - Reproduce the template EXACTLY: same headings, same order, same Markdown.
@@ -668,33 +747,63 @@ def generate_resume(job: dict) -> dict:
         requirements=requirements, pool=RESUME_PROJECT_POOL,
     )
 
+    # Refuse a job that cannot have an honest resume written for it. This runs
+    # before the model is called at all — the guards downstream catch a fabricated
+    # resume, but a refusal you understand beats one that arrives after two
+    # attempts and two lies.
+    resume_fit.check_fit(job, requirements, profile)
+
     jd = _strip_html(job.get("description", ""))[:5000]
     reqs_block = "\n".join(f"- {r}" for r in requirements) or "(see description below)"
 
     system = _RESUME_SYSTEM.format(name=name or "the candidate",
                                    limits=resume_limits.instructions())
-    user = f"""MY PROFILE — the only facts you may use:
-{_profile_facts(profile)}
 
-MY PROJECTS TO INCLUDE (these were selected as most relevant; use only these):
-{_format_projects(projects, indices=set(picked))}
+    # ORDER MATTERS, and it was wrong.
+    #
+    # The job description used to sit at the bottom, immediately before "fill the
+    # template now" — five thousand characters of someone else's role, and the
+    # last thing the model read before it began to write. The profile was at the
+    # top, far away. Recency does the rest: a model steeped in a sales posting and
+    # then told to write writes a salesperson.
+    #
+    # So the job goes FIRST, as context, and my real background goes LAST, closest
+    # to the pen. The job is the lens; the profile is the subject. Whichever one is
+    # nearest the moment of writing is the one that shapes the output.
+    user = f"""THE JOB I AM APPLYING TO — this is CONTEXT, not content.
+It tells you which of my real experiences to lead with and which words to use for
+them. It does not tell you who I am, where I worked, or what I know.
 
-THE JOB
 Role: {job.get('title', '')}
 Company: {job.get('company', '')}
 
-What this job asks for:
+What it asks for:
 {reqs_block}
 
-Full description (context):
+Full description:
 {jd}
+
+────────────────────────────────────────────────────────────────────────
+Everything below is ME. Everything above is the job. Nothing crosses over.
+────────────────────────────────────────────────────────────────────────
 
 THE TEMPLATE TO FILL (reproduce its structure exactly):
 ---
 {template}
 ---
 
-Fill the template now. Output only the finished Markdown resume."""
+MY PROJECTS TO INCLUDE (these were selected as most relevant; use only these):
+{_format_projects(projects, indices=set(picked))}
+
+THE COMPLETE LISTS — closed. Nothing may be added to them.
+
+{closed_lists(profile)}
+
+MY PROFILE — the only facts you may use:
+{_profile_facts(profile)}
+
+Fill the template now, from MY PROFILE directly above. Output only the finished
+Markdown resume."""
 
     text, provider = llm.generate(system, user, personal=True)
     text = _clean_output(text)
@@ -742,10 +851,17 @@ Fill the template now. Output only the finished Markdown resume."""
             f"{user}\n\n"
             f"YOUR PREVIOUS ATTEMPT INVENTED FACTS THAT ARE NOT IN MY PROFILE:\n"
             + "\n".join(f"- {p}" for p in invented)
-            + "\n\nEvery employer, school, project and certificate on this resume "
-              "must come from MY PROFILE above — not from the job description. The "
-              "job tells you what to EMPHASISE. It does not tell you who I am.\n\n"
-              "Write the resume again, using only my real background."
+            + "\n\nFIX ONLY WHAT IS LISTED ABOVE. Do NOT delete a section to make "
+              "the problem go away — told it had invented an employer, a previous "
+              "attempt responded by deleting my entire work history and writing "
+              "\"(No work experience listed)\" for someone with three real jobs. "
+              "That is not a correction; it is a different lie.\n\n"
+              "Every employer, school, project and certificate must come from MY "
+              "PROFILE — not from the job description. The job tells you what to "
+              "EMPHASISE. It does not tell you who I am.\n\n"
+            + closed_lists(profile)
+            + "\n\nWrite the resume again: every real entry present, every "
+              "invented one gone."
         )
         try:
             retried, provider = llm.generate(system, strict, personal=True)

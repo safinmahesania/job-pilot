@@ -352,3 +352,93 @@ class TestSkillCategoriesAreYours:
 
         assert "Deep Learning: PyTorch | Torchvision" in facts
         assert "Soft Skills: Leadership" in facts
+
+
+class TestLinksAreClickableAndReadable:
+    """A bare URL on a resume is a wall of characters nobody reads and nobody types.
+
+    What a reader wants is a word they can click. So a URL becomes a real Word
+    hyperlink labelled by what it points AT — "GitHub URL", "Certificate URL" — and
+    the label is derived from the URL rather than asked of the model, which would
+    get it wrong occasionally and unfixably.
+
+    The exception is the header pair: "linkedin.com/in/safinmahesania" tells a
+    reader who you are, where "LinkedIn URL" tells them nothing.
+    """
+
+    WITH_LINKS = """# Safin Mahesania
+
+Montreal, QC
+me@example.com | linkedin.com/in/safinmahesania | github.com/safinmahesania
+
+## Projects
+
+### Plant Disease Detection - Course @@ https://github.com/safinmahesania/Plant-Diseases-Detection-AI
+- Built a classifier.
+
+## Certificates and Achievements
+
+- Azure Fundamentals @@ https://learn.microsoft.com/en-us/users/x/credentials/y
+"""
+
+    def _links(self):
+        import re
+        data = to_docx(self.WITH_LINKS)
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            xml = z.read("word/document.xml").decode()
+            rels = z.read("word/_rels/document.xml.rels").decode()
+
+        ids = re.findall(r'<w:hyperlink r:id="(\w+)"', xml)
+        targets = dict(re.findall(r'Id="(\w+)"[^>]*Target="([^"]+)"', rels))
+        labels = re.findall(
+            r'<w:hyperlink[^>]*>.*?<w:t[^>]*>([^<]*)</w:t>', xml, re.S)
+        return list(zip(labels, [targets.get(i, "") for i in ids])), xml
+
+    def test_a_repo_link_says_github_url(self):
+        links, _ = self._links()
+        assert any(label == "GitHub URL" and "Plant-Diseases" in url
+                   for label, url in links)
+
+    def test_a_certificate_link_says_certificate_url(self):
+        links, _ = self._links()
+        assert any(label == "Certificate URL" and "learn.microsoft" in url
+                   for label, url in links)
+
+    def test_the_profile_links_stay_readable(self):
+        """"linkedin.com/in/safinmahesania" identifies you. "LinkedIn URL" does not."""
+        links, _ = self._links()
+        labels = [label for label, _ in links]
+
+        assert "linkedin.com/in/safinmahesania" in labels
+        assert "github.com/safinmahesania" in labels
+
+    def test_no_raw_url_is_left_on_the_page(self):
+        import re
+        _, xml = self._links()
+        assert not re.findall(r">https?://", xml), (
+            "a bare URL survived — nobody reads them and nobody types them"
+        )
+
+    def test_they_are_real_hyperlinks_not_blue_text(self):
+        """Blue and underlined is not clickable. A relationship is."""
+        _, xml = self._links()
+        assert "<w:hyperlink" in xml
+
+    def test_a_profile_link_gets_a_scheme_so_word_can_open_it(self):
+        """The profile writes "github.com/x"; Word needs "https://github.com/x"."""
+        links, _ = self._links()
+        for label, url in links:
+            if label.startswith("github.com"):
+                assert url.startswith("https://")
+
+    def test_a_date_on_the_right_is_still_plain_text(self):
+        """Only URLs become links. A date must not."""
+        import re
+        data = to_docx(RESUME)
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            xml = z.read("word/document.xml").decode()
+
+        hyperlinked = " ".join(
+            re.findall(r'<w:hyperlink.*?</w:hyperlink>', xml, re.S))
+
+        assert "May 2024" not in hyperlinked

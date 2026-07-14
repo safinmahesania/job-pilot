@@ -252,6 +252,40 @@ def check_grounding(markdown: str, profile: dict) -> list[str]:
         if not _mentions_any(org, known["organisation"]):
             problems.append(f'"{org}" is not in your volunteer history.')
 
+    # ── Skills ──────────────────────────────────────────────────────────────
+    # The skill LINES are yours; their labels come from profile.yaml. A resume
+    # headed "Sales Experience:" for a profile that has no such category did not
+    # get that from you — it got it from the job posting, which is the same failure
+    # as an invented employer wearing different clothes.
+    from src.apply import skill_groups
+    allowed = {_normalise(g["label"]) for g in skill_groups(profile)}
+    if allowed:
+        for line in sections.get("skills", []):
+            match = re.match(r"[-*]\s*\*\*(.+?):?\*\*", line.strip())
+            if not match:
+                continue
+            label = match.group(1).strip()
+            if not _mentions_any(label, allowed):
+                problems.append(
+                    f'"{label}" is not a skill category in your profile. It came '
+                    f'from the job posting, not from you.'
+                )
+
+    # ── Nothing real may be dropped ─────────────────────────────────────────
+    # The other half of the failure. Told it had invented an employer, the model
+    # deleted the entire Work Experience section and wrote "(No work experience
+    # listed)" — for someone with three real jobs. Over-correction is not a fix;
+    # a resume that omits your career is as wrong as one that invents a career.
+    for label, section, allowed_set in [
+        ("Work Experience", "work experience", known["company"]),
+        ("Education", "education", known["institution"]),
+    ]:
+        if allowed_set and not entries(section):
+            problems.append(
+                f'The {label} section is empty, but your profile has '
+                f'{len(allowed_set)}. Nothing real may be dropped — list them.'
+            )
+
     return problems
 
 

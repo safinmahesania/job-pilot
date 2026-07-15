@@ -83,7 +83,6 @@ def _add_hyperlink(paragraph, url: str, label: str, size=BODY_PT, italic=False):
     from the relationship up."""
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
-    from docx.shared import Pt, RGBColor
 
     part = paragraph.part
     r_id = part.relate_to(

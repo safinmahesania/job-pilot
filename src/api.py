@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from pathlib import Path
 import os
 import secrets
-from fastapi import FastAPI, HTTPException, UploadFile, File, Request
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 import threading
@@ -174,6 +174,20 @@ def _conn():
     return c
 
 
+def _db_dep():
+    """FastAPI dependency: a connection closed when the request ends.
+
+    Endpoints declare `conn=Depends(_db_dep)` and use conn as before; FastAPI runs the
+    code after `yield` when the request finishes — success OR exception — so the
+    connection is always closed. This replaces the `conn = _conn() ... conn.close()`
+    pattern that leaked on any exception between the two."""
+    conn = _conn()
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
 @contextmanager
 def _db():
     """A connection that always closes, even if the body raises.
@@ -197,13 +211,11 @@ def _db():
 # ---- pipeline run state (in-memory) ----
 
 @app.get("/api/health")
-def source_health():
-    conn = _conn()
+def source_health(conn=Depends(_db_dep)):
     rows = conn.execute(
         "SELECT name, ats, fetched, kept, status, error, last_run "
         "FROM source_health ORDER BY status DESC, fetched DESC"
     ).fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 
@@ -213,8 +225,7 @@ def _get_setting(conn, key, default=None):
 
 
 @app.get("/api/counts")
-def counts():
-    conn = _conn()
+def counts(conn=Depends(_db_dep)):
     threshold = int(_get_setting(conn, "score_threshold", 70))
     out = {
         "feed": conn.execute(f"SELECT COUNT(*) FROM jobs WHERE status='surfaced' AND score >= {threshold}").fetchone()[
@@ -228,15 +239,12 @@ def counts():
     }
     from src import followups
     out["followups"] = followups.summary(conn)["total"]
-    conn.close()
     return out
 
 
 @app.get("/api/settings")
-def get_settings():
-    conn = _conn()
+def get_settings(conn=Depends(_db_dep)):
     t = int(_get_setting(conn, "score_threshold", 70))
-    conn.close()
     return {"score_threshold": t}
 
 
@@ -245,19 +253,16 @@ class ThresholdUpdate(BaseModel):
 
 
 @app.post("/api/settings/threshold")
-def set_threshold(body: ThresholdUpdate):
+def set_threshold(body: ThresholdUpdate, conn=Depends(_db_dep)):
     v = max(0, min(100, body.value))
-    conn = _conn()
     conn.execute("INSERT INTO settings (key,value) VALUES ('score_threshold',?) "
                  "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(v),))
     conn.commit()
-    conn.close()
     return {"score_threshold": v}
 
 
 @app.get("/api/stats")
-def stats():
-    conn = _conn()
+def stats(conn=Depends(_db_dep)):
     threshold = int(_get_setting(conn, "score_threshold", 70))
     q = lambda sql, *a: conn.execute(sql, a).fetchone()[0]
 
@@ -302,7 +307,6 @@ def stats():
         "offer_of_interview": pct(funnel["offer"], funnel["interview"] + funnel["offer"]),
     }
 
-    conn.close()
     return {
         "funnel": funnel, "total": total, "avg_score": avg_score,
         "feed_size": feed_size, "distribution": dist, "sources": sources,
@@ -351,8 +355,7 @@ def maint_reset():
     return maintenance.reset_all_jobs()
 
 @app.get("/api/jobs")
-def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all"):
-    conn = _conn()
+def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all", conn=Depends(_db_dep)):
     threshold = int(_get_setting(conn, "score_threshold", 70))
 
     # An unknown tab used to fall back to the feed, which quietly showed the wrong
@@ -378,40 +381,31 @@ def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all"):
 
     rows = conn.execute(f"SELECT {COLS} FROM jobs WHERE {where} ORDER BY {order}",
                         params).fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 @app.get("/api/sources")
-def sources_list():
-    conn = _conn()
+def sources_list(conn=Depends(_db_dep)):
     rows = conn.execute("SELECT DISTINCT source FROM jobs ORDER BY source").fetchall()
-    conn.close()
     return [r["source"] for r in rows if r["source"]]
 
 
 @app.get("/api/errors")
-def errors_list(limit: int = 100):
+def errors_list(limit: int = 100, conn=Depends(_db_dep)):
     """Everything that has gone wrong, newest first."""
-    conn = _conn()
     rows = store.recent_errors(conn, limit)
-    conn.close()
     return rows
 
 
 @app.post("/api/errors/clear")
-def errors_clear():
-    conn = _conn()
+def errors_clear(conn=Depends(_db_dep)):
     n = store.clear_errors(conn)
-    conn.close()
     return {"cleared": n}
 
 
 @app.get("/api/runs")
-def runs_list(limit: int = 50):
+def runs_list(limit: int = 50, conn=Depends(_db_dep)):
     """The fetch history — what each run pulled in and kept."""
-    conn = _conn()
     rows = store.recent_runs(conn, limit)
-    conn.close()
     return rows
 
 
@@ -459,11 +453,9 @@ def run_status():
 # ───────────────────────── schedule config ─────────────────────────
 
 @app.get("/api/schedule")
-def get_schedule():
-    conn = _conn()
+def get_schedule(conn=Depends(_db_dep)):
     enabled = _get_setting(conn, "scheduler_enabled", "1") == "1"
     hours = float(_get_setting(conn, "run_interval_hours", "8") or 8)
-    conn.close()
     s = scheduler.get_state()
     return {"enabled": enabled, "interval_hours": hours,
             "last_run": s["last_run"], "next_run": s["next_run"], "running": s["running"]}
@@ -475,15 +467,13 @@ class ScheduleUpdate(BaseModel):
 
 
 @app.post("/api/schedule")
-def set_schedule(body: ScheduleUpdate):
+def set_schedule(body: ScheduleUpdate, conn=Depends(_db_dep)):
     hours = max(0.5, min(168.0, body.interval_hours))
-    conn = _conn()
     for k, v in (("scheduler_enabled", "1" if body.enabled else "0"),
                  ("run_interval_hours", str(hours))):
         conn.execute("INSERT INTO settings (key,value) VALUES (?,?) "
                      "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (k, v))
     conn.commit()
-    conn.close()
     return {"enabled": body.enabled, "interval_hours": hours}
 
 
@@ -605,10 +595,9 @@ class StatusUpdate(BaseModel):
     status: str
 
 @app.post("/api/jobs/{job_id}/status")
-def set_status(job_id: int, body: StatusUpdate):
+def set_status(job_id: int, body: StatusUpdate, conn=Depends(_db_dep)):
     if body.status not in ALLOWED_STATUS:
         raise HTTPException(400, f"invalid status: {body.status}")
-    conn = _conn()
     if body.status == "applied":
         cur = conn.execute(
             "UPDATE jobs SET status=?, applied_on=COALESCE(applied_on, date('now')) WHERE id=?",
@@ -618,7 +607,6 @@ def set_status(job_id: int, body: StatusUpdate):
         cur = conn.execute("UPDATE jobs SET status=? WHERE id=?", (body.status, job_id))
     conn.commit()
     changed = cur.rowcount
-    conn.close()
     if not changed:
         raise HTTPException(404, "job not found")
     return {"id": job_id, "status": body.status}
@@ -628,21 +616,17 @@ class NotesUpdate(BaseModel):
     notes: str
 
 @app.post("/api/jobs/{job_id}/notes")
-def set_notes(job_id: int, body: NotesUpdate):
-    conn = _conn()
+def set_notes(job_id: int, body: NotesUpdate, conn=Depends(_db_dep)):
     conn.execute("UPDATE jobs SET notes=? WHERE id=?", (body.notes, job_id))
     conn.commit()
-    conn.close()
     return {"ok": True}
 
 @app.get("/api/runs")
-def list_runs(limit: int = 20):
-    conn = _conn()
+def list_runs(limit: int = 20, conn=Depends(_db_dep)):
     rows = conn.execute(
         "SELECT id, started_at, kind, fetched, seen, dropped, trashed, kept, errors "
         "FROM runs ORDER BY id DESC LIMIT ?", (limit,)
     ).fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 @app.get("/api/model")
@@ -655,22 +639,18 @@ class ModelUpdate(BaseModel):
 
 
 @app.post("/api/model")
-def set_model(body: ModelUpdate):
+def set_model(body: ModelUpdate, conn=Depends(_db_dep)):
     from src.scoring.rerank import set_preferred, get_model_state
     set_preferred(body.model)
-    conn = _conn()
     conn.execute("INSERT INTO settings (key,value) VALUES ('scoring_model',?) "
                  "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (body.model,))
     conn.commit()
-    conn.close()
     return get_model_state()
 
 @app.get("/api/notify")
-def get_notify():
+def get_notify(conn=Depends(_db_dep)):
     from src import notify
-    conn = _conn()
     enabled = _get_setting(conn, "notify_enabled", "1") == "1"
-    conn.close()
     return {"enabled": enabled, "configured": bool(notify.TOKEN and notify.CHAT_ID)}
 
 
@@ -679,13 +659,11 @@ class NotifyUpdate(BaseModel):
 
 
 @app.post("/api/notify")
-def set_notify(body: NotifyUpdate):
-    conn = _conn()
+def set_notify(body: NotifyUpdate, conn=Depends(_db_dep)):
     conn.execute("INSERT INTO settings (key,value) VALUES ('notify_enabled',?) "
                  "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                  ("1" if body.enabled else "0",))
     conn.commit()
-    conn.close()
     return {"enabled": body.enabled}
 
 
@@ -698,11 +676,9 @@ def test_notify():
 # ── AI features (scrape-time scoring / on-demand generation) ────────────────
 
 @app.get("/api/ai-features")
-def get_ai_features():
-    conn = _conn()
+def get_ai_features(conn=Depends(_db_dep)):
     scoring = _get_setting(conn, "scoring_enabled", "1") == "1"
     generation = _get_setting(conn, "generation_enabled", "1") == "1"
-    conn.close()
     return {"scoring": scoring, "generation": generation}
 
 
@@ -712,16 +688,14 @@ class AIFeature(BaseModel):
 
 
 @app.post("/api/ai-features")
-def set_ai_features(body: AIFeature):
+def set_ai_features(body: AIFeature, conn=Depends(_db_dep)):
     keys = {"scoring": "scoring_enabled", "generation": "generation_enabled"}
     if body.feature not in keys:
         raise HTTPException(400, "unknown feature")
-    conn = _conn()
     conn.execute("INSERT INTO settings (key,value) VALUES (?,?) "
                  "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                  (keys[body.feature], "1" if body.enabled else "0"))
     conn.commit()
-    conn.close()
     return {"feature": body.feature, "enabled": body.enabled}
 
 
@@ -829,18 +803,15 @@ def _generation_http_error(e: Exception) -> HTTPException:
 
 
 @app.post("/api/jobs/{job_id}/cover-letter")
-def cover_letter(job_id: int):
+def cover_letter(job_id: int, conn=Depends(_db_dep)):
     """Generate a grounded cover letter for one job."""
-    conn = _conn()
     if _get_setting(conn, "generation_enabled", "1") != "1":
-        conn.close()
         raise HTTPException(
             403, "On-demand AI is off — enable it in Settings > AI features."
         )
     row = conn.execute(
         "SELECT title, company, description FROM jobs WHERE id=?", (job_id,)
     ).fetchone()
-    conn.close()
     if not row:
         raise HTTPException(404, "job not found")
     try:
@@ -866,18 +837,15 @@ def cover_letter(job_id: int):
 
 
 @app.post("/api/jobs/{job_id}/resume")
-def tailored_resume(job_id: int):
+def tailored_resume(job_id: int, conn=Depends(_db_dep)):
     """Tailor the resume template to one job."""
-    conn = _conn()
     if _get_setting(conn, "generation_enabled", "1") != "1":
-        conn.close()
         raise HTTPException(
             403, "On-demand AI is off — enable it in Settings > AI features."
         )
     row = conn.execute(
         "SELECT title, company, description FROM jobs WHERE id=?", (job_id,)
     ).fetchone()
-    conn.close()
     if not row:
         raise HTTPException(404, "job not found")
     try:
@@ -933,11 +901,9 @@ class ResolveRequest(BaseModel):
 
 
 @app.post("/api/autofill/resolve")
-def autofill_resolve(body: ResolveRequest):
+def autofill_resolve(body: ResolveRequest, conn=Depends(_db_dep)):
     """AI-map the fields local heuristics couldn't place. Blank if unknown."""
-    conn = _conn()
     if _get_setting(conn, "generation_enabled", "1") != "1":
-        conn.close()
         raise HTTPException(403, "On-demand AI is off — enable it in Settings.")
 
     job = None
@@ -946,7 +912,6 @@ def autofill_resolve(body: ResolveRequest):
             "SELECT title, company FROM jobs WHERE id=?", (body.job_id,)
         ).fetchone()
         job = dict(row) if row else None
-    conn.close()
 
     try:
         from src import autofill
@@ -967,12 +932,10 @@ class MaterialSave(BaseModel):
 
 
 @app.post("/api/jobs/{job_id}/materials")
-def save_material(job_id: int, body: MaterialSave):
+def save_material(job_id: int, body: MaterialSave, conn=Depends(_db_dep)):
     """Store a generated document against this job."""
     from src import materials
-    conn = _conn()
     exists = conn.execute("SELECT 1 FROM jobs WHERE id=?", (job_id,)).fetchone()
-    conn.close()
     if not exists:
         raise HTTPException(404, "job not found")
     try:
@@ -995,7 +958,7 @@ def delete_material(job_id: int, kind: str):
 
 
 @app.get("/api/jobs/{job_id}/materials/{kind}/file")
-def material_file(job_id: int, kind: str, format: str = "pdf"):
+def material_file(job_id: int, kind: str, format: str = "pdf", conn=Depends(_db_dep)):
     """Download a saved document. This is what the extension attaches.
 
     The document is looked up by job_id, so the file returned always belongs to
@@ -1004,11 +967,9 @@ def material_file(job_id: int, kind: str, format: str = "pdf"):
     """
     from src import materials
 
-    conn = _conn()
     job = conn.execute(
         "SELECT id, title, company FROM jobs WHERE id=?", (job_id,)
     ).fetchone()
-    conn.close()
     if not job:
         raise HTTPException(404, "job not found")
 
@@ -1066,7 +1027,7 @@ def _normalize_url(url: str) -> str:
 
 
 @app.get("/api/jobs/match")
-def match_job(url: str):
+def match_job(url: str, conn=Depends(_db_dep)):
     """Find the job this browser page belongs to.
 
     Confidence is deliberately conservative: a wrong match would attach the wrong
@@ -1078,12 +1039,10 @@ def match_job(url: str):
     if not target:
         return {"match": None, "candidates": []}
 
-    conn = _conn()
     rows = conn.execute(
         "SELECT id, title, company, apply_url, source_url, status FROM jobs "
         "WHERE apply_url IS NOT NULL OR source_url IS NOT NULL"
     ).fetchall()
-    conn.close()
 
     exact, partial = [], []
     for r in rows:
@@ -1115,9 +1074,8 @@ def match_job(url: str):
 
 
 @app.get("/api/jobs/search")
-def search_jobs(q: str = "", limit: int = 10):
+def search_jobs(q: str = "", limit: int = 10, conn=Depends(_db_dep)):
     """Free-text search over title/company, for the extension's manual picker."""
-    conn = _conn()
     like = f"%{q.strip()}%"
     rows = conn.execute(
         "SELECT id, title, company, status FROM jobs "
@@ -1126,7 +1084,6 @@ def search_jobs(q: str = "", limit: int = 10):
         "score DESC LIMIT ?",
         (like, like, limit),
     ).fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 
@@ -1180,13 +1137,10 @@ class PastedJob(BaseModel):
 
 
 @app.post("/api/import/text")
-def import_text(body: PastedJob):
+def import_text(body: PastedJob, conn=Depends(_db_dep)):
     """Paste a whole job posting; the model pulls the fields out of it."""
-    conn = _conn()
     if _get_setting(conn, "generation_enabled", "1") != "1":
-        conn.close()
         raise HTTPException(403, "On-demand AI is off — enable it in Settings.")
-    conn.close()
 
     from src import importers
     try:
@@ -1264,11 +1218,9 @@ class PrivacyUpdate(BaseModel):
 
 
 @app.post("/api/privacy")
-def set_privacy(body: PrivacyUpdate):
-    conn = _conn()
+def set_privacy(body: PrivacyUpdate, conn=Depends(_db_dep)):
     if body.mode is not None:
         if body.mode not in ("redacted", "local", "full"):
-            conn.close()
             raise HTTPException(400, f"unknown privacy mode: {body.mode}")
         conn.execute("INSERT INTO settings (key,value) VALUES ('privacy_mode',?) "
                      "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
@@ -1278,7 +1230,6 @@ def set_privacy(body: PrivacyUpdate):
                      "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                      ("1" if body.follow_job_links else "0",))
     conn.commit()
-    conn.close()
 
     from src import llm, importers
     return {"mode": llm.privacy_mode(),
@@ -1301,13 +1252,11 @@ def import_template():
 # ── Feedback loop ───────────────────────────────────────────────────────────
 
 @app.get("/api/feedback")
-def get_feedback():
+def get_feedback(conn=Depends(_db_dep)):
     """What the scoring has learned from your save/dismiss decisions."""
     from src.scoring import feedback
     from src.scoring.rerank import scoring_via_chain
-    conn = _conn()
     data = feedback.stats(conn)
-    conn.close()
     data["scoring_via_chain"] = scoring_via_chain()
     return data
 
@@ -1317,27 +1266,23 @@ class ScoringUpdate(BaseModel):
 
 
 @app.post("/api/feedback/scoring")
-def set_scoring_chain(body: ScoringUpdate):
+def set_scoring_chain(body: ScoringUpdate, conn=Depends(_db_dep)):
     """Score through the provider chain, or pin scoring to local Ollama."""
-    conn = _conn()
     conn.execute("INSERT INTO settings (key,value) VALUES ('scoring_via_chain',?) "
                  "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                  ("1" if body.scoring_via_chain else "0",))
     conn.commit()
-    conn.close()
     return {"scoring_via_chain": body.scoring_via_chain}
 
 
 # ── Follow-ups ──────────────────────────────────────────────────────────────
 
 @app.get("/api/followups")
-def list_followups():
+def list_followups(conn=Depends(_db_dep)):
     """Applications that need a nudge today."""
     from src import followups
-    conn = _conn()
     items = followups.due(conn)
     counts = followups.summary(conn)
-    conn.close()
     return {"items": items, **counts}
 
 
@@ -1347,18 +1292,14 @@ class FollowupAction(BaseModel):
 
 
 @app.post("/api/jobs/{job_id}/followup")
-def set_followup(job_id: int, body: FollowupAction):
+def set_followup(job_id: int, body: FollowupAction, conn=Depends(_db_dep)):
     from src import followups
-    conn = _conn()
-    try:
-        if body.action == "done":
-            ok = followups.mark_followed_up(conn, job_id)
-        elif body.action == "snooze":
-            ok = followups.snooze(conn, job_id, body.days)
-        else:
-            raise HTTPException(400, f"unknown action: {body.action}")
-    finally:
-        conn.close()
+    if body.action == "done":
+        ok = followups.mark_followed_up(conn, job_id)
+    elif body.action == "snooze":
+        ok = followups.snooze(conn, job_id, body.days)
+    else:
+        raise HTTPException(400, f"unknown action: {body.action}")
 
     if not ok:
         raise HTTPException(404, "job not found, or it isn't an applied job")
@@ -1368,23 +1309,19 @@ def set_followup(job_id: int, body: FollowupAction):
 # ── Source health ───────────────────────────────────────────────────────────
 
 @app.get("/api/health/assess")
-def assess_health():
+def assess_health(conn=Depends(_db_dep)):
     """Every board with a verdict — including the ones failing silently."""
     from src import health
-    conn = _conn()
     boards = health.assess(conn)
     counts = health.summary(conn)
-    conn.close()
     return {"boards": boards, **counts}
 
 
 @app.post("/api/notify/test-digest")
-def send_test_digest():
+def send_test_digest(conn=Depends(_db_dep)):
     """Send this week's digest now, so you can see what it looks like."""
     from src import health, notify
-    conn = _conn()
     stats = health.week_stats(conn)
-    conn.close()
 
     message = notify.weekly_digest(stats)
     if not notify.enabled():

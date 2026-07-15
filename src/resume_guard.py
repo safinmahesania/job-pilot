@@ -535,3 +535,81 @@ def check_prose(resume: dict, profile: dict) -> list[str]:
             )
 
     return problems
+
+
+# The ordinary capitalised words a cover letter is full of that are not technologies:
+# salutations and closings, and the generic vocabulary of applying for a job. Without
+# this the guard reads "Dear Hiring Manager" as three invented tools. This is a
+# stoplist, not an allowlist of tools — it only removes known non-tech English, so a
+# real invented framework still gets through and flagged.
+_COVER_LETTER_NON_TECH = {
+    # salutation / closing
+    "dear", "hi", "hello", "sincerely", "regards", "best", "kind", "warm",
+    "thank", "thanks", "yours", "faithfully", "respectfully", "cheers",
+    # the machinery of an application
+    "hiring", "manager", "team", "recruiter", "recruiting", "position", "role",
+    "job", "opening", "opportunity", "application", "applicant", "candidate",
+    "company", "organisation", "organization", "department", "posting", "listing",
+    "resume", "cv", "letter", "cover", "attached", "enclosed", "reference",
+    # generic sentence words that get capitalised at the start of clauses
+    "i", "my", "your", "our", "their", "this", "that", "these", "those", "it",
+    "as", "at", "in", "on", "to", "for", "with", "and", "but", "or", "so",
+    "when", "while", "where", "what", "who", "how", "why", "if", "then",
+    "having", "being", "working", "looking", "seeking", "excited", "thrilled",
+    "eager", "keen", "confident", "passionate", "motivated", "please", "would",
+    "could", "should", "will", "am", "is", "are", "was", "were", "have", "has",
+    "experience", "experienced", "skilled", "proficient", "background", "years",
+    "year", "months", "recently", "currently", "graduate", "graduated", "student",
+    "university", "college", "degree", "bachelor", "master", "diploma",
+    "developer", "engineer", "programmer", "software", "development", "engineering",
+    "junior", "senior", "intern", "internship", "entry", "level", "new", "grad",
+    "projects", "project", "work", "worked", "building", "built", "developed",
+    "created", "designed", "delivered", "shipped", "led", "managed", "collaborated",
+}
+
+
+def check_cover_letter_prose(text: str, profile: dict, target_company: str = "") -> list[str]:
+    """Every technology a cover letter claims must be one you actually have.
+
+    The resume was made safe by construction — it SELECTS from your background and can
+    only reorder what is already true. The cover letter still WRITES prose, which is
+    exactly where invention moved to once the resume closed the door:
+
+        "In my three years with React and AWS at a fintech startup..."
+
+    None of that is in the profile. It reads perfectly, it is a lie, and it goes to a
+    named human who can check. This is the same grounding the resume summary gets: pull
+    every technology the letter names, and if one is not anywhere in your profile, it
+    came from the job description and you do not have it.
+
+    A cover letter opens with capitalised sentences and names the target company by
+    design, so both are excluded from the check — the company you are writing TO is not
+    a claim about your background, and a sentence-initial capital is grammar, not a
+    tool.
+    """
+    vocabulary = _profile_vocabulary(profile)
+
+    ident = profile.get("identity") or {}
+    own = {part.lower() for part in str(ident.get("name") or "").split() if part}
+
+    # The company you are applying to is named all over a cover letter, legitimately.
+    # It is not a claim about your history, so it must not read as an invented tool.
+    company_words = {w.lower() for w in re.split(r"\W+", str(target_company)) if len(w) > 1}
+
+    problems = []
+    seen = set()
+    for token in named_technologies(text, sentence_start=False):
+        low = token.lower()
+        if low in seen:
+            continue
+        seen.add(low)
+        if low in vocabulary or low in own or low in company_words:
+            continue
+        if low in _COVER_LETTER_NON_TECH:
+            continue
+        problems.append(
+            f'"{token}" appears in the cover letter, but it is nowhere in your '
+            f'profile. It came from the job posting. You do not have it.'
+        )
+
+    return problems

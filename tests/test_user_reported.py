@@ -102,3 +102,31 @@ class TestAnUnknownTabIsEmptyNotTheFeed:
     def test_the_real_tabs_still_work(self, client):
         for tab in ("feed", "saved", "applied", "dismissed", "unscored"):
             assert client.get(f"/api/jobs?tab={tab}").status_code == 200
+
+
+class TestUploadsAreSizeCapped:
+    """An import endpoint that reads the whole body into memory with no limit is a
+    one-line denial of service: a single large POST exhausts memory. The cap rejects
+    anything oversized with a 413 before it is fully buffered."""
+
+    def test_a_small_file_is_not_rejected_for_size(self, client, written_profile):
+        """A file under the cap must not get a 413. Whether the import then succeeds
+        or 400s on content is a different concern — this test is only about size."""
+        csv = (b"title,company,location,apply_url,description\n"
+               b"Dev,Acme,Remote,http://x,A Flutter role\n")
+
+        r = client.post("/api/import/file",
+                        files={"file": ("jobs.csv", csv, "text/csv")})
+
+        assert r.status_code != 413
+
+    def test_an_oversized_file_is_refused_with_413(self, client):
+        from src.paths import MAX_UPLOAD_BYTES
+
+        oversized = b"title,company\n" + b"x,y\n" * (MAX_UPLOAD_BYTES // 3)
+
+        r = client.post("/api/import/file",
+                        files={"file": ("big.csv", oversized, "text/csv")})
+
+        assert r.status_code == 413
+        assert "too large" in r.json()["detail"].lower()

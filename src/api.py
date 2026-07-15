@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, Response, PlainTextResponse
 from src import maintenance, scheduler, configio, store
 from src import resume_guard
 from src import resume_fit
-from src.paths import DB_PATH as DB
+from src.paths import DB_PATH as DB, MAX_UPLOAD_BYTES
 app = FastAPI(title="JobPilot")
 
 # The browser extension runs on ATS pages and calls this API from a
@@ -845,6 +845,16 @@ def cover_letter(job_id: int):
     try:
         from src import apply          # imported here so import errors surface
         result = apply.generate_cover_letter(dict(row))
+    except resume_guard.FabricationError as e:
+        # The letter named something the profile does not contain. It was written and
+        # then refused — the same fatal stance the resume takes. Do not hand it over.
+        raise HTTPException(422, {"error": "fabricated",
+                                  "problems": e.problems,
+                                  "message": str(e)})
+    except resume_guard.ProfileIncompleteError as e:
+        raise HTTPException(400, {"error": "profile_incomplete",
+                                  "missing": e.missing,
+                                  "message": str(e)})
     except HTTPException:
         raise
     except Exception as e:
@@ -1121,11 +1131,34 @@ def search_jobs(q: str = "", limit: int = 10):
 
 # ── Importing jobs from outside the fetch pipeline ──────────────────────────
 
+async def _read_capped(file) -> bytes:
+    """Read an upload, refusing anything over the cap.
+
+    UploadFile.read() with no argument pulls the entire body into memory, so the size
+    limit has to be enforced here — a client that sends a 2 GB file should get a 413,
+    not an out-of-memory kill. Read in chunks and stop the moment the cap is passed,
+    so an oversized upload is rejected without ever being fully buffered.
+    """
+    chunks = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)     # 1 MB at a time
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                413, f"file too large — the limit is "
+                     f"{MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 @app.post("/api/import/file")
 async def import_file(file: UploadFile = File(...)):
     """Import jobs from a CSV or Excel file."""
     from src import importers
-    data = await file.read()
+    data = await _read_capped(file)
     try:
         rows = importers.parse_tabular(data, file.filename or "")
     except RuntimeError as e:
@@ -1176,7 +1209,7 @@ async def import_email_file(file: UploadFile = File(...)):
     hand it and nothing else — there is no path from this app to your mailbox.
     """
     from src import importers
-    data = await file.read()
+    data = await _read_capped(file)
     try:
         jobs = importers.parse_email_file(data, file.filename or "")
     except Exception as e:

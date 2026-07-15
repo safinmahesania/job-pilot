@@ -474,6 +474,17 @@ Rewrite it. Output only the final letter.""",
         except Exception:
             pass                            # draft stands
 
+    # The last gate, and the reason this is safe to send. The resume cannot fabricate
+    # because it only selects; the cover letter writes prose, so it is checked the way
+    # the resume summary is: every technology it names must be one you actually have.
+    # A letter that claims a framework from the job description you have never used is
+    # not returned — the same fatal stance as an invented employer on a resume, since
+    # a cover letter goes to a named human who can check.
+    problems = resume_guard.check_cover_letter_prose(
+        text, profile, target_company=job.get("company", ""))
+    if problems:
+        raise resume_guard.FabricationError(problems)
+
     text = fill_contact(text, profile)      # identifiers restored, on this machine
 
     return {

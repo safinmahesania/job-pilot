@@ -330,3 +330,11 @@ FIT_MIN_TECHNOLOGIES = 2
 # newest-first, as on a resume.
 PROJECT_POOL_SIZE = 4          # how many recent projects are even considered
 PROJECTS_IN_LETTER = 2         # how many make it into the letter
+
+
+# ── Upload size cap ──
+# Job import files are CSV/Excel exports and job-alert emails — kilobytes, rarely a
+# megabyte. An upload endpoint with no cap will read whatever it is handed straight
+# into memory, so a single large POST is an easy denial of service. 10 MB is orders
+# of magnitude above any real import and still safe.
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024

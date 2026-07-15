@@ -217,3 +217,31 @@ def _unlock_app(monkeypatch):
     src.notify/src.llm call load_dotenv() at import, so a developer's .env password
     lands back in the environment; clear it before each test."""
     monkeypatch.delenv("JOBPILOT_PASSWORD", raising=False)
+
+
+@pytest.fixture
+def written_profile(tmp_path, monkeypatch):
+    """Write a minimal profile.yaml and point the config loaders at it.
+
+    Some endpoints (job import, generation) call load_profile(), which reads a real
+    file. That file is gitignored and absent on a clean checkout, so any test that
+    exercises those paths needs one written for it — otherwise the test depends on
+    whether the developer happens to have a profile.yaml, which is exactly the kind of
+    environment coupling CI exists to remove."""
+    import yaml as _yaml
+    (tmp_path / "profile.yaml").write_text(_yaml.safe_dump({
+        "identity": {"name": "Test User", "seniority": "junior"},
+        "contact": {"email": "t@example.com"},
+        "summary": "A junior developer.",
+        "skills": {"expert": ["Flutter", "Python"]},
+        "skill_categories": [],
+        "constraints": {"locations": ["Remote"]},
+        "search": {"role_levels": ["junior"]},
+    }), encoding="utf-8")
+    (tmp_path / "companies.yaml").write_text(
+        _yaml.safe_dump({"companies": []}), encoding="utf-8")
+
+    monkeypatch.setattr("src.paths.CONFIG_DIR", tmp_path)
+    monkeypatch.setattr("src.config.CONFIG_DIR", tmp_path)
+    monkeypatch.setattr("src.configio.CONFIG_DIR", tmp_path)
+    return tmp_path

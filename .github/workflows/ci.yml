@@ -1,0 +1,52 @@
+name: tests
+
+# Runs the whole suite on every push and pull request. Until now the tests only ran
+# when someone remembered to run them locally — which meant a fix could be green on
+# the author's machine and broken on a fresh checkout, and three times it was (a .env
+# leaking a password into the suite, a Windows file lock, a missing config file). CI
+# runs against a clean clone every time, so those never reach main unnoticed again.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run the test suite
+        # No .env exists on a clean checkout, which is the point: the app runs unlocked
+        # and every endpoint is reachable, exactly as the tests expect. The suite must
+        # be green here with nothing configured.
+        run: python -m pytest -p no:warnings
+
+  frontend:
+    name: sanitizer test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install jsdom
+        run: npm install
+
+      - name: Run the XSS sanitizer test
+        run: npm test

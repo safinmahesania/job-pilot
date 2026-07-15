@@ -7,7 +7,7 @@ import os
 import secrets
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import threading
 from datetime import datetime
 from fastapi.staticfiles import StaticFiles
@@ -354,8 +354,16 @@ def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all"):
     conn = _conn()
     threshold = int(_get_setting(conn, "score_threshold", 70))
 
-    where = (f"status='surfaced' AND score IS NOT NULL AND score >= {threshold}"
-             if tab == "feed" else TAB_WHERE.get(tab, TAB_WHERE["feed"]))
+    # An unknown tab used to fall back to the feed, which quietly showed the wrong
+    # list instead of signalling the mistake. A tab the app does not define returns
+    # nothing — a visibly empty list is a clearer "that is not a real tab" than a
+    # screenful of feed under the wrong heading.
+    if tab == "feed":
+        where = f"status='surfaced' AND score IS NOT NULL AND score >= {threshold}"
+    elif tab in TAB_WHERE:
+        where = TAB_WHERE[tab]
+    else:
+        where = "1 = 0"          # no such tab -> no rows
 
     params = []
     if source and source != "all":
@@ -504,8 +512,12 @@ def toggle_source(index: int):
 
 
 class NewSource(BaseModel):
-    name: str
-    ats: str
+    # A source with no name or no ats used to be accepted and written to
+    # companies.yaml, where it did nothing except produce a "No adapter for ats=''"
+    # error on the next fetch — with a blank name, so you could not even tell which
+    # row was broken. min_length rejects the empty case at the form.
+    name: str = Field(min_length=1)
+    ats: str = Field(min_length=1)
     identifier: str | None = None
     tenant: str | None = None
     host: str | None = None
@@ -517,8 +529,18 @@ class NewSource(BaseModel):
 
 @app.post("/api/sources")
 def add_source(body: NewSource):
+    from src.adapters.base import KNOWN_ATS
+
+    name = body.name.strip()
+    ats = body.ats.strip().lower()
+    if not name:
+        raise HTTPException(400, "a source needs a name")
+    if ats not in KNOWN_ATS:
+        raise HTTPException(
+            400, f"unknown ats '{ats}' — must be one of: {', '.join(sorted(KNOWN_ATS))}")
+
     data = configio.read_yaml("companies.yaml") or {"companies": []}
-    entry = {"name": body.name, "ats": body.ats}
+    entry = {"name": name, "ats": ats}
     for k in ("identifier", "tenant", "host", "site", "base", "query"):
         v = getattr(body, k)
         if v:
@@ -526,7 +548,7 @@ def add_source(body: NewSource):
     entry["active"] = body.active
     data.setdefault("companies", []).append(entry)
     configio.write_yaml("companies.yaml", data)
-    return {"added": body.name, "total": len(data["companies"])}
+    return {"added": name, "total": len(data["companies"])}
 
 
 @app.delete("/api/sources/{index}")
@@ -785,6 +807,26 @@ def maint_nuclear():
     return maintenance.nuclear_reset()
 
 
+def _generation_http_error(e: Exception) -> HTTPException:
+    """Turn a generation failure into a message a person can act on.
+
+    The most common failure by far is that no AI provider is configured — a new user
+    with no API key and no local Ollama. The raw exception for that is
+    "all providers failed -> gemini: not configured | cerebras: not configured |
+    ollama: ...", which is accurate and useless to the person reading it. Catch that
+    one case and say what to do about it; anything genuinely unexpected still gets the
+    502 with its type, and the full traceback is already on the console.
+    """
+    from src.llm import LLMError
+
+    msg = str(e)
+    if isinstance(e, LLMError) or "all providers failed" in msg:
+        return HTTPException(503, (
+            "No AI provider is available. Add a Gemini or Cerebras API key to your "
+            ".env, or run Ollama locally, then try again."))
+    return HTTPException(502, f"{type(e).__name__}: {e}")
+
+
 @app.post("/api/jobs/{job_id}/cover-letter")
 def cover_letter(job_id: int):
     """Generate a grounded cover letter for one job."""
@@ -808,7 +850,7 @@ def cover_letter(job_id: int):
     except Exception as e:
         import traceback
         traceback.print_exc()          # full trace in the uvicorn console
-        raise HTTPException(502, f"{type(e).__name__}: {e}")
+        raise _generation_http_error(e)
     return result
 
 
@@ -853,7 +895,7 @@ def tailored_resume(job_id: int):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(502, f"{type(e).__name__}: {e}")
+        raise _generation_http_error(e)
     return result
 
 

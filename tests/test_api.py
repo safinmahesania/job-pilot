@@ -22,12 +22,6 @@ from fastapi.testclient import TestClient
 ROOT = Path(__file__).resolve().parent.parent
 
 
-@pytest.fixture
-def client(db):
-    from src import api
-    return TestClient(api.app)
-
-
 class TestStructure:
     def test_the_static_mount_is_last(self):
         """Anything declared after it is dead code that returns 404."""

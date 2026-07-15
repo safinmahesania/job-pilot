@@ -44,3 +44,13 @@ def get_adapter(company: dict) -> SourceAdapter:
     if ats not in registry:
         raise ValueError(f"No adapter for ats='{ats}' (company: {company['name']})")
     return registry[ats](company)
+
+
+# The ats values the app actually knows how to fetch. Kept next to the registry so
+# the two cannot drift: this is what the "add a source" endpoint validates against,
+# so a typo like ats="greehnouse" is caught at the form instead of surfacing later as
+# a fetch error against a source that can never work.
+KNOWN_ATS = frozenset({
+    "greenhouse", "lever", "themuse", "remotive", "workday", "remoteok",
+    "weworkremotely", "jobspresso", "oracle", "phenom", "ashby",
+})

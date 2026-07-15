@@ -65,6 +65,15 @@ def db(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def client(db):
+    """A TestClient against the app, bound to the per-test database. Shared here so
+    every test file can use it, not just test_api.py."""
+    from fastapi.testclient import TestClient
+    from src import api
+    return TestClient(api.app)
+
+
+@pytest.fixture
 def conn(db):
     """An open connection to the test database, closed afterwards."""
     from src import store

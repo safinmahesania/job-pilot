@@ -42,6 +42,8 @@ def gated_client(monkeypatch, tmp_path):
     api.DB = db
     import src.store as store
     store.DB = db
+    import src.deps as deps
+    deps.DB = db
 
     yield api
 
@@ -62,6 +64,8 @@ def open_client(monkeypatch, tmp_path):
     api.DB = db
     import src.store as store
     store.DB = db
+    import src.deps as deps
+    deps.DB = db
 
     yield api
 

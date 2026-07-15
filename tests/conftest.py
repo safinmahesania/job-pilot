@@ -245,3 +245,21 @@ def written_profile(tmp_path, monkeypatch):
     monkeypatch.setattr("src.config.CONFIG_DIR", tmp_path)
     monkeypatch.setattr("src.configio.CONFIG_DIR", tmp_path)
     return tmp_path
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Clear the rate limiter before every test.
+
+    The limiter keeps its counters in process-global memory, so without this a test
+    that makes several generation/import calls would leave those counts sitting there
+    for whatever test ran next — and a later test making one more call could tip over a
+    limit it never set. That is exactly the kind of order- and timing-dependent failure
+    that passes locally and goes red on CI. Resetting per test makes each one start from
+    a clean count."""
+    try:
+        import src.api as api
+        api.limiter.reset()
+    except Exception:
+        pass
+    yield

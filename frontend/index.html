@@ -542,6 +542,37 @@
         </template>
         <div x-show="runs.length===0" class="px-4 py-8 text-center text-gray-400 text-sm">No runs recorded yet.</div>
       </div>
+
+      <!-- Errors. Everything that went wrong, kept instead of scrolling past in a
+           terminal that was already closed. -->
+      <div class="flex items-center justify-between mt-6 mb-3">
+        <div class="text-sm text-gray-500">Errors</div>
+        <button x-show="errors.length" @click="clearErrors()"
+          class="text-xs h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">
+          Clear
+        </button>
+      </div>
+      <div class="card overflow-hidden">
+        <template x-for="e in errors" :key="e.id">
+          <div class="px-3 sm:px-4 py-3 border-b border-gray-100 last:border-0">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full shrink-0 bg-red-500"></span>
+              <span class="text-sm font-medium" x-text="e.kind"></span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium" x-text="e.where"></span>
+              <span x-show="e.notified" class="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium" title="sent to Telegram">notified</span>
+              <span class="ml-auto text-xs text-gray-400 shrink-0" x-text="e.at"></span>
+            </div>
+            <div class="text-sm text-gray-700 mt-1 break-words" x-text="e.message"></div>
+            <!-- The full traceback is here when the one-line message is not enough,
+                 folded away so the list stays readable. -->
+            <details x-show="e.traceback" class="mt-1.5">
+              <summary class="text-xs text-gray-400 cursor-pointer select-none">traceback</summary>
+              <pre class="text-[11px] text-gray-500 mt-1 overflow-x-auto whitespace-pre-wrap" x-text="e.traceback"></pre>
+            </details>
+          </div>
+        </template>
+        <div x-show="errors.length===0" class="px-4 py-8 text-center text-gray-400 text-sm">Nothing has gone wrong. Good.</div>
+      </div>
     </div>
 
     <!-- ─── Settings ─── -->

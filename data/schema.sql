@@ -82,6 +82,24 @@ CREATE TABLE IF NOT EXISTS runs (
 
 -- Per-day, per-provider token/request usage for the generation providers.
 -- Used by the AI Providers panel to show quota consumption.
+-- Every exception worth keeping, so an error is something you can look back on
+-- rather than a line that scrolled past in a terminal you had already closed.
+--
+-- The pipeline used to fail into a print() and nowhere else: the scheduler caught
+-- it, put "error: ..." in an in-memory dict, and the next server restart erased even
+-- that. An error you cannot read after the fact is an error you cannot fix.
+CREATE TABLE IF NOT EXISTS errors (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    at          TEXT DEFAULT (datetime('now')),
+    where_      TEXT,                     -- 'pipeline', 'fetch:talent.com', 'resume:59'
+    kind        TEXT,                     -- the exception class name
+    message     TEXT,                     -- str(exception)
+    traceback   TEXT,                     -- the full traceback, for when the message is not enough
+    notified    INTEGER DEFAULT 0         -- did this one reach Telegram
+);
+
+CREATE INDEX IF NOT EXISTS idx_errors_at ON errors(at DESC);
+
 CREATE TABLE IF NOT EXISTS llm_usage (
     day       TEXT NOT NULL,          -- UTC date, YYYY-MM-DD
     provider  TEXT NOT NULL,          -- gemini | cerebras | ollama

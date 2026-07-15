@@ -113,6 +113,13 @@ def run():
             stats["errors"] += 1
             store.save_source_health(conn, company["name"], company.get("ats"),
                                      src_stat, now)
+            # A board that failed to fetch is worth keeping too — not raised (the
+            # pool already swallowed it so one broken board cannot stop the run), but
+            # recorded, so "why did nothing come from talent.com last night" has an
+            # answer.
+            store.record_source_error(
+                conn, f"fetch:{company['name']}",
+                src_stat.get("error") or "fetch failed")
             continue
 
         for raw in raw_jobs:

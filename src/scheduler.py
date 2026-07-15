@@ -9,7 +9,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from src import store
+from src import store, notify
 from src.paths import DEFAULT_RUN_INTERVAL_HOURS as DEFAULT_HOURS, SCHEDULER_POLL_SECONDS as POLL_SECONDS
 
 _state = {"running": False, "last_run": None, "last_summary": None, "next_run": None}
@@ -50,8 +50,22 @@ def _run_once():
         run_pipeline()
         _state["last_summary"] = "completed"
     except Exception as e:
+        # A pipeline crash used to live in a print() and this dict, and the next
+        # restart erased both. Now it is a row you can read, and a message on your
+        # phone the moment it happens.
         _state["last_summary"] = f"error: {e}"
         print(f"[scheduler] pipeline failed: {e}")
+
+        sent = notify.send(
+            f"\u26a0\ufe0f <b>Pipeline failed</b>\n"
+            f"<code>{type(e).__name__}: {str(e)[:200]}</code>"
+        )
+        try:
+            conn = store.connect()
+            store.record_error(conn, "pipeline", e, notified=sent)
+            conn.close()
+        except Exception as inner:
+            print(f"[scheduler] could not record the error: {inner}")
     finally:
         now = datetime.now()
         _state["running"] = False

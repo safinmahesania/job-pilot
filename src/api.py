@@ -2,7 +2,9 @@
 import re
 import sqlite3
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, UploadFile, File
+import os
+import secrets
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import threading
@@ -25,6 +27,97 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── A lock on the door ─────────────────────────────────────────────────────────
+#
+# This app has a person's phone number and home address in it, and a reset endpoint
+# that empties the database with no confirmation. On a public URL, the URL is not a
+# secret — bots sweep the whole internet — so "nobody knows the address" is not a
+# defence.
+#
+# Cloudflare Access sits in front of this and asks for a Google login before a
+# request ever reaches here. This is the second lock, in case Access is ever
+# misconfigured or the tunnel is pointed straight at the app: set JOBPILOT_PASSWORD
+# and every request must carry it.
+#
+# Unset, the gate is open — so local development, where the app is only ever on
+# localhost, is unchanged. It is the deploy step that sets the password.
+_PASSWORD = os.environ.get("JOBPILOT_PASSWORD", "").strip()
+
+# The extension calls the API from a chrome-extension:// origin and cannot carry a
+# cookie, so it authenticates with the same password as a header instead.
+_OPEN_PATHS = ("/api/health", "/healthz")
+
+
+@app.middleware("http")
+async def _gate(request: Request, call_next):
+    if not _PASSWORD:
+        return await call_next(request)
+
+    path = request.url.path
+    if path in _OPEN_PATHS:
+        return await call_next(request)
+
+    # A request that reached the app directly on localhost came from THIS machine —
+    # the browser extension, a local script, you at the keyboard. The tunnel does not
+    # arrive this way: Cloudflare connects and the request carries forwarded headers.
+    # So localhost is trusted and the extension keeps working with the gate on, while
+    # anything coming in over the tunnel must still log in.
+    client = request.client.host if request.client else ""
+    forwarded = request.headers.get("cf-connecting-ip") or \
+                request.headers.get("x-forwarded-for")
+    if client in ("127.0.0.1", "::1", "localhost", "testclient") and not forwarded:
+        return await call_next(request)
+
+    # A browser carries the cookie once it has logged in; the extension sends the
+    # password as a header on every call.
+    cookie = request.cookies.get("jp_auth", "")
+    header = request.headers.get("x-jobpilot-key", "")
+    if secrets.compare_digest(cookie, _PASSWORD) or \
+       secrets.compare_digest(header, _PASSWORD):
+        return await call_next(request)
+
+    # The login form itself, and the POST that checks the password.
+    if path == "/login" or path == "/api/login":
+        return await call_next(request)
+
+    # A browser asking for a page gets the login screen; an API call gets a 401.
+    if path.startswith("/api/"):
+        return Response('{"detail":"unauthorized"}', status_code=401,
+                        media_type="application/json")
+    return Response(_LOGIN_HTML, status_code=401, media_type="text/html")
+
+
+_LOGIN_HTML = """<!doctype html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>JobPilot</title>
+<style>body{font-family:system-ui;background:#0f1115;color:#e7e7e7;display:grid;
+place-items:center;height:100vh;margin:0}form{background:#1a1d24;padding:2rem;
+border-radius:12px;width:min(90vw,320px)}h1{font-size:1rem;margin:0 0 1rem}
+input{width:100%;box-sizing:border-box;padding:.7rem;border-radius:8px;border:1px
+solid #333;background:#0f1115;color:#e7e7e7;margin-bottom:.8rem}button{width:100%;
+padding:.7rem;border:0;border-radius:8px;background:#c9a227;color:#0f1115;
+font-weight:600;cursor:pointer}</style></head><body>
+<form method=post action=/api/login>
+<h1>JobPilot</h1>
+<input type=password name=password placeholder=Password autofocus>
+<button>Enter</button></form></body></html>"""
+
+
+@app.post("/api/login")
+async def _login(request: Request):
+    form = await request.form()
+    if _PASSWORD and secrets.compare_digest(str(form.get("password", "")), _PASSWORD):
+        r = Response(status_code=303)
+        r.headers["Location"] = "/"
+        # Session cookie, http-only, and marked secure so it only ever travels over
+        # HTTPS — which the tunnel always is.
+        r.set_cookie("jp_auth", _PASSWORD, httponly=True, secure=True,
+                     samesite="lax", max_age=60 * 60 * 24 * 30)
+        return r
+    r = Response(_LOGIN_HTML, status_code=401, media_type="text/html")
+    return r
 
 COLS = ("id, title, company, location, remote, job_type, source, source_url, "
         "apply_url, description, posted_date, deadline, salary_min, salary_max, "

@@ -111,3 +111,71 @@ def set_setting(conn, key, value):
         (key, str(value)),
     )
     conn.commit()
+
+
+# ── Errors: something you can look back on ─────────────────────────────────────
+
+def record_error(conn, where: str, exc: BaseException,
+                 notified: bool = False) -> int:
+    """Keep one exception. Returns its id.
+
+    The pipeline used to fail into a print() and an in-memory string the next
+    restart erased. This is the difference between "it broke last night" and "it
+    broke last night at 2:14, here, with this traceback".
+    """
+    import traceback as _tb
+
+    tb = "".join(_tb.format_exception(type(exc), exc, exc.__traceback__))
+    cur = conn.execute(
+        "INSERT INTO errors (where_, kind, message, traceback, notified) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (where, type(exc).__name__, str(exc), tb, 1 if notified else 0),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def recent_errors(conn, limit: int = 100) -> list[dict]:
+    rows = conn.execute(
+        "SELECT id, at, where_, kind, message, traceback, notified "
+        "FROM errors ORDER BY at DESC, id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    return [
+        {"id": r[0], "at": r[1], "where": r[2], "kind": r[3],
+         "message": r[4], "traceback": r[5], "notified": bool(r[6])}
+        for r in rows
+    ]
+
+
+def clear_errors(conn) -> int:
+    n = conn.execute("SELECT COUNT(*) FROM errors").fetchone()[0]
+    conn.execute("DELETE FROM errors")
+    conn.commit()
+    return n
+
+
+def recent_runs(conn, limit: int = 50) -> list[dict]:
+    """The fetch history. run() has always written these rows; nothing ever read
+    them back for the UI, so a summary that scrolled past in the terminal was the
+    only record anyone saw."""
+    rows = conn.execute(
+        "SELECT id, started_at, kind, fetched, seen, dropped, trashed, kept, errors "
+        "FROM runs ORDER BY started_at DESC, id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    return [
+        {"id": r[0], "at": r[1], "kind": r[2], "fetched": r[3], "seen": r[4],
+         "dropped": r[5], "trashed": r[6], "kept": r[7], "errors": r[8]}
+        for r in rows
+    ]
+
+
+def record_source_error(conn, where: str, message: str) -> int:
+    """A fetch failure, where all we have is a message string, not an exception.
+
+    A broken board does not raise into the pool — one bad source must not stop the
+    run — so there is no traceback to keep, only the reason the board reported."""
+    cur = conn.execute(
+        "INSERT INTO errors (where_, kind, message, traceback, notified) "
+        "VALUES (?, 'FetchError', ?, '', 0)", (where, str(message)[:500]))
+    conn.commit()
+    return cur.lastrowid

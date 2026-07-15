@@ -1,6 +1,6 @@
 function jobpilot() {
   return {
-    tab: 'feed', jobs: [], counts: {}, health: [], runs: [], stats: null, loading: true, q: '', detail: null,
+    tab: 'feed', jobs: [], counts: {}, health: [], runs: [], errors: [], stats: null, loading: true, q: '', detail: null,
     running: false, lastRun: null, nextRun: null, threshold: 70,
     sort: 'score', source: 'all', sources: [],
     busy: null, snack: null, blocking: null, confirmBox: null,
@@ -59,6 +59,12 @@ function jobpilot() {
       return all ? all.label : this.tab;
     },
 
+    async clearErrors() {
+      if (!confirm('Clear the error log?')) return;
+      await fetch('/api/errors/clear', { method: 'POST' }).catch(()=>{});
+      this.errors = [];
+    },
+
     async go(tab) {
       this.tab = tab;
       this.mobileNav = false;
@@ -73,7 +79,7 @@ function jobpilot() {
       const jobsP = this.isJobView()
         ? fetch(`/api/jobs?tab=${this.tab}&sort=${this.sort}&source=${this.source}`).then(r=>r.json()).catch(()=>[])
         : Promise.resolve(this.jobs);
-      const [jobs, counts, followups, health, runs, settings, stats, sources, sched, model, notifyState] = await Promise.all([
+      const [jobs, counts, followups, health, runs, settings, stats, sources, sched, model, notifyState, errors] = await Promise.all([
         jobsP,
         fetch('/api/counts').then(r=>r.json()).catch(()=>({})),
         fetch('/api/followups').then(r=>r.json()).catch(()=>({items:[],total:0})),
@@ -85,12 +91,14 @@ function jobpilot() {
         fetch('/api/schedule').then(r=>r.json()).catch(()=>null),
         fetch('/api/model').then(r=>r.json()).catch(()=>null),
         fetch('/api/notify').then(r=>r.json()).catch(()=>null),
+        fetch('/api/errors').then(r=>r.json()).catch(()=>[]),
       ]);
       this.jobs = jobs;
       this.counts = { ...counts };
       this.fu = followups;
       this.health = health.boards || [];
       this.runs = runs || [];
+      this.errors = errors || [];
       this.threshold = settings.score_threshold ?? 70;
       this.stats = stats;
       this.sources = sources;

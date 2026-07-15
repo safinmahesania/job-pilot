@@ -1,24 +1,32 @@
-# Web backend
-fastapi
-uvicorn[standard]
-pydantic
+# Pinned with lower bounds: these are the versions the app is tested against, and
+# anything older is known-incompatible. The upper end stays open so security patches
+# still flow in — a hard == pin would freeze those out too. If a future release ever
+# breaks something, cap it here with a <next-major.
+#
+# To reproduce the exact tested set:  pip install -r requirements.txt
+# To see what you actually have:       pip freeze
 
-# Config & HTTP
-pyyaml
-httpx
-python-dotenv
+# ── Web backend ──
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
 
-# Scraping / parsing
-beautifulsoup4
+# ── Config & HTTP ──
+pyyaml>=6.0
+httpx>=0.27
+python-dotenv>=1.0
 
-# File uploads (CSV / Excel import)
-python-multipart
-openpyxl
+# ── Scraping / parsing ──
+beautifulsoup4>=4.12
 
-# PDF export for generated resumes / cover letters
-fpdf2
+# ── File uploads (CSV / Excel import) ──
+python-multipart>=0.0.9
+openpyxl>=3.1
 
-# Local LLM scoring (requires Ollama running separately)
-ollama
+# ── PDF / DOCX export for generated resumes and cover letters ──
+fpdf2>=2.8
 python-docx>=1.1
 pypdf>=4.0        # tests: read back the PDF we generated, without a system binary
+
+# ── Local LLM scoring (requires Ollama running separately) ──
+ollama>=0.3

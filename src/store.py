@@ -134,6 +134,21 @@ def set_setting(conn, key, value):
 
 # ── Errors: something you can look back on ─────────────────────────────────────
 
+# The errors table grows one row per failure and nothing ever removed old ones, so
+# over a long-running deployment it would climb without bound. A few thousand is far
+# more history than anyone reads; past that, the oldest rows are noise. Trim after
+# each insert so the table self-limits.
+_ERROR_CAP = 2000
+
+
+def _trim_errors(conn) -> None:
+    conn.execute(
+        "DELETE FROM errors WHERE id NOT IN ("
+        "  SELECT id FROM errors ORDER BY id DESC LIMIT ?)",
+        (_ERROR_CAP,),
+    )
+
+
 def record_error(conn, where: str, exc: BaseException,
                  notified: bool = False) -> int:
     """Keep one exception. Returns its id.
@@ -150,6 +165,7 @@ def record_error(conn, where: str, exc: BaseException,
         "VALUES (?, ?, ?, ?, ?)",
         (where, type(exc).__name__, str(exc), tb, 1 if notified else 0),
     )
+    _trim_errors(conn)
     conn.commit()
     return cur.lastrowid
 
@@ -196,5 +212,6 @@ def record_source_error(conn, where: str, message: str) -> int:
     cur = conn.execute(
         "INSERT INTO errors (where_, kind, message, traceback, notified) "
         "VALUES (?, 'FetchError', ?, '', 0)", (where, str(message)[:500]))
+    _trim_errors(conn)
     conn.commit()
     return cur.lastrowid

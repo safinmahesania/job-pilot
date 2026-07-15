@@ -1,6 +1,7 @@
 """FastAPI backend for JobPilot — serves jobs, status updates, and the frontend."""
 import re
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 import os
 import secrets
@@ -170,6 +171,26 @@ def _conn():
     c = store._tune(sqlite3.connect(DB))
     c.row_factory = sqlite3.Row
     return c
+
+
+@contextmanager
+def _db():
+    """A connection that always closes, even if the body raises.
+
+    Most endpoints open with _conn() and close at the end — which leaks the connection
+    on any exception in between. In practice SQLite's connections are reclaimed by the
+    garbage collector shortly after, so on a single-user app this has never surfaced
+    as a real problem; but new code should prefer this form, which guarantees the
+    close through a finally:
+
+        with _db() as conn:
+            ...                       # close happens no matter what
+    """
+    conn = _conn()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 # ---- pipeline run state (in-memory) ----

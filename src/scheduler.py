@@ -191,7 +191,20 @@ def _loop():
             _followup_check()
             _weekly_digest()
         except Exception as e:
+            # The scheduler loop is the one place a crash means the app quietly stops
+            # doing its job — no run, no follow-up check, and nobody watching. Print
+            # scrolls past; record it so it is visible in the UI and on Telegram, the
+            # same way a pipeline crash is.
             print(f"[scheduler] loop error: {e}")
+            try:
+                sent = notify.send(
+                    f"\u26a0\ufe0f <b>Scheduler loop error</b>\n"
+                    f"<code>{type(e).__name__}: {str(e)[:200]}</code>")
+                conn = store.connect()
+                store.record_error(conn, "scheduler:loop", e, notified=sent)
+                conn.close()
+            except Exception as inner:
+                print(f"[scheduler] could not record the loop error: {inner}")
 
         time.sleep(POLL_SECONDS)
 

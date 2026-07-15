@@ -14,6 +14,16 @@ from contextlib import contextmanager
 from src.paths import DB_PATH as DB
 from src import store
 
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from src.paths import RATE_LIMIT_DEFAULT
+
+# The rate limiter lives here so both api.py (which wires it to the app and its error
+# handler) and the route modules (which decorate the expensive endpoints with
+# @limiter.limit) can share the one instance. Keyed by client address; the per-route
+# limits are applied where the routes are defined.
+limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT_DEFAULT])
+
 
 # The columns a job row returns to the frontend, in one place so the SELECTs agree.
 COLS = ("id, title, company, location, remote, job_type, source, source_url, "

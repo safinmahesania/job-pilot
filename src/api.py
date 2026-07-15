@@ -8,26 +8,22 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from src import scheduler
-from src import resume_guard
-from src import resume_fit
 from src.paths import MAX_UPLOAD_BYTES
 from src.deps import (_db_dep, _get_setting)
 from src.logs import log
 from src import __version__
 from src.env import load_env
 load_env()
-from src.paths import (RATE_LIMIT_GENERATION, RATE_LIMIT_IMPORT, RATE_LIMIT_DEFAULT)
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from src.paths import (RATE_LIMIT_IMPORT)
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
+from src.deps import limiter
 app = FastAPI(title="JobPilot", version=__version__)
 
-# Rate limiting. Keyed by client address, with a generous global default; the
-# expensive endpoints (generation, import) get tighter per-route limits via the
-# @limiter.limit decorator. A single real user never approaches these — they exist so
-# a public tunnel URL cannot be turned into free LLM compute or a parse-DoS by a bot.
-limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT_DEFAULT])
+# Rate limiting. The limiter itself lives in deps.py so the route modules can share it;
+# here we wire it to the app and its 429 handler. A single real user never approaches
+# the limits — they exist so a public tunnel URL cannot be turned into free LLM compute
+# or a parse-DoS by a bot.
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -217,104 +213,6 @@ def _startup():
 
 
 # ── Storage & cleanup ───────────────────────────────────────────────────────
-
-
-def _generation_http_error(e: Exception) -> HTTPException:
-    """Turn a generation failure into a message a person can act on.
-
-    The most common failure by far is that no AI provider is configured — a new user
-    with no API key and no local Ollama. The raw exception for that is
-    "all providers failed -> gemini: not configured | cerebras: not configured |
-    ollama: ...", which is accurate and useless to the person reading it. Catch that
-    one case and say what to do about it; anything genuinely unexpected still gets the
-    502 with its type, and the full traceback is already on the console.
-    """
-    from src.llm import LLMError
-
-    msg = str(e)
-    if isinstance(e, LLMError) or "all providers failed" in msg:
-        return HTTPException(503, (
-            "No AI provider is available. Add a Gemini or Cerebras API key to your "
-            ".env, or run Ollama locally, then try again."))
-    return HTTPException(502, f"{type(e).__name__}: {e}")
-
-
-@app.post("/api/jobs/{job_id}/cover-letter")
-@limiter.limit(RATE_LIMIT_GENERATION)
-def cover_letter(request: Request, job_id: int, conn=Depends(_db_dep)):
-    """Generate a grounded cover letter for one job."""
-    if _get_setting(conn, "generation_enabled", "1") != "1":
-        raise HTTPException(
-            403, "On-demand AI is off — enable it in Settings > AI features."
-        )
-    row = conn.execute(
-        "SELECT title, company, description FROM jobs WHERE id=?", (job_id,)
-    ).fetchone()
-    if not row:
-        raise HTTPException(404, "job not found")
-    try:
-        from src import apply          # imported here so import errors surface
-        result = apply.generate_cover_letter(dict(row))
-    except resume_guard.FabricationError as e:
-        # The letter named something the profile does not contain. It was written and
-        # then refused — the same fatal stance the resume takes. Do not hand it over.
-        raise HTTPException(422, {"error": "fabricated",
-                                  "problems": e.problems,
-                                  "message": str(e)})
-    except resume_guard.ProfileIncompleteError as e:
-        raise HTTPException(400, {"error": "profile_incomplete",
-                                  "missing": e.missing,
-                                  "message": str(e)})
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        traceback.print_exc()          # full trace in the uvicorn console
-        raise _generation_http_error(e)
-    return result
-
-
-@app.post("/api/jobs/{job_id}/resume")
-@limiter.limit(RATE_LIMIT_GENERATION)
-def tailored_resume(request: Request, job_id: int, conn=Depends(_db_dep)):
-    """Tailor the resume template to one job."""
-    if _get_setting(conn, "generation_enabled", "1") != "1":
-        raise HTTPException(
-            403, "On-demand AI is off — enable it in Settings > AI features."
-        )
-    row = conn.execute(
-        "SELECT title, company, description FROM jobs WHERE id=?", (job_id,)
-    ).fetchone()
-    if not row:
-        raise HTTPException(404, "job not found")
-    try:
-        from src import apply
-        result = apply.generate_resume(dict(row))
-    except FileNotFoundError as e:
-        raise HTTPException(400, str(e))
-    except resume_fit.JobDoesNotFitError as e:
-        # Nothing was generated, and nothing should have been.
-        raise HTTPException(422, {"error": "does_not_fit",
-                                  "score": round(e.score * 100),
-                                  "matched": sorted(e.matched)[:8],
-                                  "message": str(e)})
-    except resume_guard.ProfileIncompleteError as e:
-        # Nothing was generated. Say exactly what is missing.
-        raise HTTPException(400, {"error": "profile_incomplete",
-                                  "missing": e.missing,
-                                  "message": str(e)})
-    except resume_guard.FabricationError as e:
-        # Something was generated and then refused. Do not hand it over.
-        raise HTTPException(422, {"error": "fabricated",
-                                  "problems": e.problems,
-                                  "message": str(e)})
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise _generation_http_error(e)
-    return result
 
 
 # ── Autofill (browser extension) ────────────────────────────────────────────
@@ -665,12 +563,14 @@ from src.routes import settings as settings_routes
 from src.routes import providers as providers_routes
 from src.routes import admin as admin_routes
 from src.routes import jobs as jobs_routes
+from src.routes import generation as generation_routes
 app.include_router(profile_routes.router)
 app.include_router(sources_routes.router)
 app.include_router(settings_routes.router)
 app.include_router(providers_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(jobs_routes.router)
+app.include_router(generation_routes.router)
 
 
 app.mount("/", StaticFiles(

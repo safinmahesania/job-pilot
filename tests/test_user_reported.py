@@ -137,7 +137,8 @@ class TestExpensiveEndpointsAreRateLimited:
     public tunnel they are the expensive surface, so they carry per-route limits a real
     user never reaches and a bot does."""
 
-    def test_hammering_cover_letter_eventually_429s(self, client, written_profile):
+    def test_hammering_cover_letter_eventually_429s(self, client, written_profile,
+                                                    monkeypatch):
         import sqlite3
         from src.paths import DB_PATH
         conn = sqlite3.connect(DB_PATH)
@@ -147,6 +148,21 @@ class TestExpensiveEndpointsAreRateLimited:
         conn.commit()
         jid = conn.execute("SELECT id FROM jobs WHERE dedupe_hash='rl'").fetchone()[0]
         conn.close()
+
+        # This test is about the rate limiter, not the model — so the generation itself
+        # must be instant and offline. On a machine with real provider keys in .env,
+        # each un-stubbed call would go out to Gemini/Cerebras over the network and take
+        # seconds; the 30 calls would then spread across more than the limiter's
+        # 60-second window, so the 20/minute cap would never be reached within any one
+        # window and the test would fail for a reason that has nothing to do with the
+        # limiter. Stubbing the call keeps every request cheap so the burst actually
+        # hits the cap, on any machine, keys or no keys.
+        import src.apply as apply
+
+        def _instant(_job):
+            return {"text": "stub", "provider": "test"}
+
+        monkeypatch.setattr(apply, "generate_cover_letter", _instant)
 
         # The generation limit is 20/minute; well within a burst of 30.
         saw_429 = False

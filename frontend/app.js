@@ -239,7 +239,25 @@ function jobpilot() {
     // ───────── jobs ─────────
     formatJD(text) {
       if (!text) return 'No description available.';
-      if (/<(p|ul|ol|li|br|div|h[1-6]|strong|b)\b/i.test(text)) return text;
+
+      // Job descriptions are scraped from job boards — untrusted HTML. The previous
+      // version, if the text already contained a tag like <p> or <div>, returned it
+      // RAW into x-html. A posting crafted with
+      //   <img src=x onerror="fetch('/api/maint/nuclear',{method:'POST'})">
+      // would then run in your logged-in browser, with your session. Stored XSS: the
+      // payload lives in the database and fires on every view.
+      //
+      // So nothing scraped is ever trusted as markup. When the text already looks
+      // like HTML, it is sanitised through an allowlist that keeps a handful of
+      // formatting tags and DISCARDS every attribute — because the attribute is
+      // where onerror, onload and href="javascript:" live. When it is plain text,
+      // it is escaped and laid out line by line as before.
+      const looksLikeHTML = /<(p|ul|ol|li|br|div|h[1-6]|strong|b|em|i)\b/i.test(text);
+      return looksLikeHTML ? this.sanitizeHTML(text) : this.textToHTML(text);
+    },
+
+    // Plain text -> safe HTML. Every character is escaped; nothing here can be a tag.
+    textToHTML(text) {
       const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const ls = text.split('\n').map(l=>l.trim()).filter(l=>l.length);
       let html = '';
@@ -248,6 +266,45 @@ function jobpilot() {
         html += isH ? `<h4>${esc(line.replace(/:$/,''))}</h4>` : `<p>${esc(line)}</p>`;
       }
       return html;
+    },
+
+    // Untrusted HTML -> safe HTML, through an allowlist.
+    //
+    // The browser's own parser builds the tree (no regex trying to match HTML, which
+    // never ends well), then this walks it and rebuilds a new tree containing ONLY
+    // the tags on the list and NONE of their attributes. A <script>, an onerror, an
+    // href="javascript:", an <iframe> — anything not on the list — simply does not
+    // survive the copy. Text content is preserved; markup is not trusted.
+    sanitizeHTML(dirty) {
+      const ALLOWED = new Set(
+        ['P','UL','OL','LI','BR','DIV','H1','H2','H3','H4','H5','H6',
+         'STRONG','B','EM','I','SPAN']);
+
+      const doc = new DOMParser().parseFromString(dirty, 'text/html');
+
+      const clean = (node) => {
+        const out = document.createDocumentFragment();
+        for (const child of node.childNodes) {
+          if (child.nodeType === Node.TEXT_NODE) {
+            out.appendChild(document.createTextNode(child.textContent));
+          } else if (child.nodeType === Node.ELEMENT_NODE
+                     && ALLOWED.has(child.tagName)) {
+            // A fresh element of the same tag, with no attributes carried over.
+            const el = document.createElement(child.tagName.toLowerCase());
+            el.appendChild(clean(child));      // recurse into the children
+            out.appendChild(el);
+          } else {
+            // Disallowed element (script, img, iframe, a, ...): drop the tag but keep
+            // whatever text was inside it, so content is never silently lost.
+            out.appendChild(clean(child));
+          }
+        }
+        return out;
+      };
+
+      const container = document.createElement('div');
+      container.appendChild(clean(doc.body));
+      return container.innerHTML;
     },
 
     filtered() {

@@ -26,8 +26,17 @@ const API = "http://localhost:8000";
 // tabId -> { id, title, company, confidence }
 const bindings = new Map();
 
+// The app can be locked with a password (JOBPILOT_PASSWORD). When it is, every call
+// must carry the key as a header — the extension cannot log in through the browser
+// form, so it authenticates this way instead. Stored in the popup's settings; blank
+// when the app is running unlocked for local development.
+async function authHeaders(extra = {}) {
+  const { apiKey } = await chrome.storage.local.get("apiKey");
+  return apiKey ? { ...extra, "x-jobpilot-key": apiKey } : extra;
+}
+
 async function getJSON(path) {
-  const r = await fetch(`${API}${path}`);
+  const r = await fetch(`${API}${path}`, { headers: await authHeaders() });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
@@ -35,7 +44,7 @@ async function getJSON(path) {
 async function postJSON(path, body) {
   const r = await fetch(`${API}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
   if (!r.ok) {
@@ -47,7 +56,8 @@ async function postJSON(path, body) {
 
 /** Fetch a saved document as base64 — extension messaging can't carry binary. */
 async function fetchFile(jobId, kind) {
-  const r = await fetch(`${API}/api/jobs/${jobId}/materials/${kind}/file?format=pdf`);
+  const r = await fetch(`${API}/api/jobs/${jobId}/materials/${kind}/file?format=pdf`,
+                        { headers: await authHeaders() });
   if (!r.ok) {
     const err = await r.json().catch(() => ({}));
     throw new Error(err.detail || `HTTP ${r.status}`);

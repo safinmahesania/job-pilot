@@ -246,6 +246,18 @@ for (const [key, el] of Object.entries(toggles)) {
     paintToggles();
   });
 
+  // The app password, if the app is locked. Saved as you type; sent by
+  // background.js as the x-jobpilot-key header on every call.
+  const keyInput = document.getElementById("apiKey");
+  if (keyInput) {
+    chrome.storage.local.get("apiKey", ({ apiKey }) => {
+      if (apiKey) keyInput.value = apiKey;
+    });
+    keyInput.addEventListener("input", () => {
+      chrome.storage.local.set({ apiKey: keyInput.value.trim() });
+    });
+  }
+
   const health = await send({ type: "health" });
   if (!health?.ok) {
     dot.classList.add("bad");

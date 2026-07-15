@@ -22,6 +22,9 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import os as _os
+_os.environ.pop("JOBPILOT_PASSWORD", None)
+
 # Ollama isn't installed in CI and must never be called from a test.
 if "ollama" not in sys.modules:
     stub = types.ModuleType("ollama")
@@ -197,3 +200,11 @@ def make_job(**overrides):
     }
     job.update(overrides)
     return job
+
+
+@pytest.fixture(autouse=True)
+def _unlock_app(monkeypatch):
+    """Every test runs against an unlocked app; test_auth_gate opts back in.
+    src.notify/src.llm call load_dotenv() at import, so a developer's .env password
+    lands back in the environment; clear it before each test."""
+    monkeypatch.delenv("JOBPILOT_PASSWORD", raising=False)

@@ -4,8 +4,27 @@ import sqlite3
 from src.paths import DB_PATH as DB
 
 
+def _tune(conn: sqlite3.Connection) -> sqlite3.Connection:
+    """The two pragmas that let the scheduler and the UI share one database.
+
+    The pipeline runs in a background thread and writes; you browse the feed in a
+    request thread and read. With SQLite's default rollback journal, a writer blocks
+    readers for the length of the write, so a fetch running while you click around
+    surfaces as "database is locked".
+
+    WAL (write-ahead logging) lets readers keep reading while a writer writes — they
+    see the last committed state until the write lands. busy_timeout gives any call
+    that does still hit a lock five seconds to wait for it instead of failing
+    instantly. journal_mode is a property of the database file and persists; the
+    timeout is per connection, so it is set every time.
+    """
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
+
+
 def connect():
-    return sqlite3.connect(DB)
+    return _tune(sqlite3.connect(DB))
 
 
 def already_seen(conn, dedupe_hash: str) -> bool:

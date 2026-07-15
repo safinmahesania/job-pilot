@@ -20,12 +20,26 @@ app = FastAPI(title="JobPilot")
 
 # The browser extension runs on ATS pages and calls this API from a
 # chrome-extension:// origin, so those requests must be allowed through.
+# CORS for the browser extension only.
+#
+# The extension runs on ATS pages and calls this API from a chrome-extension:// (or
+# moz-extension://) origin, so those origins are allowed. Two deliberate narrowings
+# from the audit:
+#
+#   allow_credentials stays False, so this policy never lets another origin send the
+#   jp_auth cookie — cross-origin requests can only authenticate with the explicit
+#   x-jobpilot-key header, which the extension sets and a random page does not.
+#
+#   the methods and headers are named, not "*". A wildcard invites any extension to
+#   send anything; the app only needs these. The real defence is still the auth gate
+#   on the server — CORS is a browser-side courtesy, not a lock — but there is no
+#   reason to hold the door wider than the extension uses.
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"chrome-extension://.*|moz-extension://.*",
+    allow_origin_regex=r"chrome-extension://[a-p]{32}|moz-extension://[0-9a-f-]{36}",
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "x-jobpilot-key"],
 )
 
 
@@ -43,7 +57,14 @@ app.add_middleware(
 #
 # Unset, the gate is open — so local development, where the app is only ever on
 # localhost, is unchanged. It is the deploy step that sets the password.
-_PASSWORD = os.environ.get("JOBPILOT_PASSWORD", "").strip()
+def _password() -> str:
+    """Read the password at request time, not import time.
+
+    Bound at import, the gate would freeze whatever the environment held when
+    src.api was first imported — making it depend on import order and forcing a test
+    that sets the password to reload the whole module. Reading it per request costs
+    nothing and always reflects the environment as it is."""
+    return os.environ.get("JOBPILOT_PASSWORD", "").strip()
 
 # The extension calls the API from a chrome-extension:// origin and cannot carry a
 # cookie, so it authenticates with the same password as a header instead.
@@ -52,37 +73,37 @@ _OPEN_PATHS = ("/api/health", "/healthz")
 
 @app.middleware("http")
 async def _gate(request: Request, call_next):
-    if not _PASSWORD:
+    # The audit found the previous version of this backwards, and it is worth writing
+    # down so it does not come back.
+    #
+    # It trusted "the request arrived on localhost" as proof the request was local.
+    # But cloudflared connects to the app ON localhost: every tunnel request arrives
+    # from 127.0.0.1. So the rule was not "trust the extension", it was "trust
+    # anything coming through the tunnel" — the exact opposite of the point. Stripping
+    # one forwarded header opened the gate onto /api/maint/reset.
+    #
+    # There is no network fact that distinguishes the owner from an attacker here;
+    # both are on the far side of the same tunnel. Only the password does. So no IP is
+    # trusted. Proof is the cookie (a browser that logged in) or the header (the
+    # extension, carrying the key on every call). Nothing else gets in.
+    password = _password()
+    if not password:
         return await call_next(request)
 
     path = request.url.path
-    if path in _OPEN_PATHS:
+
+    # A tiny, fixed set of endpoints that must answer before login: the health check
+    # a monitor hits, and the login form and its POST.
+    if path in _OPEN_PATHS or path in ("/login", "/api/login"):
         return await call_next(request)
 
-    # A request that reached the app directly on localhost came from THIS machine —
-    # the browser extension, a local script, you at the keyboard. The tunnel does not
-    # arrive this way: Cloudflare connects and the request carries forwarded headers.
-    # So localhost is trusted and the extension keeps working with the gate on, while
-    # anything coming in over the tunnel must still log in.
-    client = request.client.host if request.client else ""
-    forwarded = request.headers.get("cf-connecting-ip") or \
-                request.headers.get("x-forwarded-for")
-    if client in ("127.0.0.1", "::1", "localhost", "testclient") and not forwarded:
-        return await call_next(request)
-
-    # A browser carries the cookie once it has logged in; the extension sends the
-    # password as a header on every call.
     cookie = request.cookies.get("jp_auth", "")
     header = request.headers.get("x-jobpilot-key", "")
-    if secrets.compare_digest(cookie, _PASSWORD) or \
-       secrets.compare_digest(header, _PASSWORD):
+    if secrets.compare_digest(cookie, password) or \
+       secrets.compare_digest(header, password):
         return await call_next(request)
 
-    # The login form itself, and the POST that checks the password.
-    if path == "/login" or path == "/api/login":
-        return await call_next(request)
-
-    # A browser asking for a page gets the login screen; an API call gets a 401.
+    # A browser asking for a page gets the login screen; anything else gets a 401.
     if path.startswith("/api/"):
         return Response('{"detail":"unauthorized"}', status_code=401,
                         media_type="application/json")
@@ -108,12 +129,13 @@ font-weight:600;cursor:pointer}</style></head><body>
 @app.post("/api/login")
 async def _login(request: Request):
     form = await request.form()
-    if _PASSWORD and secrets.compare_digest(str(form.get("password", "")), _PASSWORD):
+    password = _password()
+    if password and secrets.compare_digest(str(form.get("password", "")), password):
         r = Response(status_code=303)
         r.headers["Location"] = "/"
         # Session cookie, http-only, and marked secure so it only ever travels over
         # HTTPS — which the tunnel always is.
-        r.set_cookie("jp_auth", _PASSWORD, httponly=True, secure=True,
+        r.set_cookie("jp_auth", password, httponly=True, secure=True,
                      samesite="lax", max_age=60 * 60 * 24 * 30)
         return r
     r = Response(_LOGIN_HTML, status_code=401, media_type="text/html")
@@ -141,7 +163,11 @@ ALLOWED_STATUS = {"surfaced", "saved", "applied", "dismissed",
 
 
 def _conn():
-    c = sqlite3.connect(DB)
+    # Same WAL + busy_timeout as store.connect(), so the read path and the write path
+    # agree on how they share the file. Without this the UI's own connections would
+    # fall back to the default journal and re-introduce the locking WAL was meant to
+    # remove.
+    c = store._tune(sqlite3.connect(DB))
     c.row_factory = sqlite3.Row
     return c
 

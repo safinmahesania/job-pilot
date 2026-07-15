@@ -14,53 +14,56 @@ Two properties matter, and a regression in either is a leak:
     request from localhost — you, or the browser extension on the same machine —
     must not, or the extension breaks the day the app goes online.
 """
-import importlib
-import os
 import sqlite3
-import tempfile
 
 import pytest
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def gated_client(monkeypatch):
+def gated_client(monkeypatch, tmp_path):
     """The app with a password set and a real (empty) database."""
-    db = tempfile.mktemp(suffix=".db")
-    sqlite3.connect(db).executescript(
-        open("data/schema.sql", encoding="utf-8").read())
+    db = str(tmp_path / "gated.db")
+    # Close the setup connection before yielding. On Windows an open handle makes the
+    # file unremovable, so a leaked connection surfaces as a PermissionError at
+    # teardown — a real leak, hidden on Linux where an open file can still be unlinked.
+    conn = sqlite3.connect(db)
+    conn.executescript(open("data/schema.sql", encoding="utf-8").read())
+    conn.commit()
+    conn.close()
 
     monkeypatch.setenv("JOBPILOT_PASSWORD", "correct-horse")
     monkeypatch.setattr("src.paths.DB_PATH", db)
 
+    # No importlib.reload: the gate reads the password per request, so setting the env
+    # var is enough. Reloading would re-run load_dotenv() in notify/llm and drag a
+    # developer's real .env back into the test.
     import src.api as api
-    importlib.reload(api)
     api.DB = db
     import src.store as store
     store.DB = db
 
     yield api
-    os.unlink(db)
 
 
 @pytest.fixture
-def open_client(monkeypatch):
+def open_client(monkeypatch, tmp_path):
     """The app with NO password — local development."""
-    db = tempfile.mktemp(suffix=".db")
-    sqlite3.connect(db).executescript(
-        open("data/schema.sql", encoding="utf-8").read())
+    db = str(tmp_path / "open.db")
+    conn = sqlite3.connect(db)
+    conn.executescript(open("data/schema.sql", encoding="utf-8").read())
+    conn.commit()
+    conn.close()
 
     monkeypatch.delenv("JOBPILOT_PASSWORD", raising=False)
     monkeypatch.setattr("src.paths.DB_PATH", db)
 
     import src.api as api
-    importlib.reload(api)
     api.DB = db
     import src.store as store
     store.DB = db
 
     yield api
-    os.unlink(db)
 
 
 TUNNEL = {"cf-connecting-ip": "8.8.8.8"}      # a request that came in over the tunnel
@@ -119,21 +122,71 @@ class TestWithAPasswordTheTunnelMustLogIn:
         assert r.status_code == 401
 
 
-class TestLocalhostIsTrustedSoTheExtensionKeepsWorking:
-    def test_localhost_bypasses_the_gate_even_when_a_password_is_set(
-            self, gated_client):
-        """The extension calls the API from the same machine. If the gate stopped it,
-        going online would silently break autofill."""
-        client = TestClient(gated_client.app)      # arrives as a local client
+class TestNoNetworkFactIsTrusted:
+    """The audit found the first version of this gate backwards.
 
-        assert client.get("/api/counts").status_code == 200
+    It trusted "the request arrived on localhost" as proof the request was local. But
+    cloudflared connects to the app ON localhost — every tunnel request arrives from
+    127.0.0.1 — so the rule was really "trust anything through the tunnel", the exact
+    opposite of the point. Stripping one forwarded header opened the gate onto
+    /api/maint/reset; it was demonstrated with the database wipeable, no password.
 
-    def test_but_a_forwarded_header_from_localhost_is_still_challenged(
-            self, gated_client):
-        """Defence in depth: if something local is proxying tunnel traffic, the
-        forwarded header gives it away and the trust does not apply."""
+    Nothing about the connection is trusted now — not the IP, not the absence of a
+    header. Only the password.
+    """
+
+    def test_a_localhost_request_without_the_key_is_refused(self, gated_client):
+        """The exact shape of the bypass: a request that looks local, no credential.
+        It used to return 200. It must be 401."""
         client = TestClient(gated_client.app)
 
-        r = client.get("/api/counts", headers={"x-forwarded-for": "8.8.8.8"})
+        assert client.get("/api/errors").status_code == 401
 
-        assert r.status_code == 401
+    def test_the_reset_endpoint_cannot_be_reached_by_looking_local(
+            self, gated_client):
+        client = TestClient(gated_client.app)
+
+        assert client.post("/api/maint/reset").status_code == 401
+
+    def test_forging_a_forwarded_header_does_not_help(self, gated_client):
+        client = TestClient(gated_client.app)
+
+        assert client.get("/api/errors",
+                          headers={"cf-connecting-ip": "1.2.3.4"}).status_code == 401
+
+    def test_the_extension_authenticates_with_the_header(self, gated_client):
+        """It cannot log in through the browser form, so it carries the password as
+        x-jobpilot-key on every call. That, not its IP, is what gets it in."""
+        client = TestClient(gated_client.app)
+
+        r = client.get("/api/counts", headers={"x-jobpilot-key": "correct-horse"})
+
+        assert r.status_code == 200
+
+
+class TestCORSDoesNotHandOutCredentials:
+    """The extension calls the API cross-origin. The CORS policy must let it in
+    WITHOUT ever letting a cross-origin caller carry the session cookie — that is the
+    difference between "the extension can use the API" and "any page can act as you".
+    """
+
+    def test_credentials_are_never_allowed_cross_origin(self):
+        """allow_credentials=False: the cookie is same-origin only. A cross-origin
+        request authenticates with the explicit header or not at all."""
+        import src.api as api
+
+        cors = next(m for m in api.app.user_middleware
+                    if "CORS" in m.cls.__name__)
+
+        assert cors.kwargs.get("allow_credentials") is False
+
+    def test_methods_and_headers_are_named_not_wildcarded(self):
+        """A wildcard invites any extension to send anything. The app needs a fixed,
+        small set."""
+        import src.api as api
+
+        cors = next(m for m in api.app.user_middleware
+                    if "CORS" in m.cls.__name__)
+
+        assert "*" not in cors.kwargs.get("allow_methods", [])
+        assert "*" not in cors.kwargs.get("allow_headers", [])

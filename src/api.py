@@ -4,11 +4,11 @@ from pathlib import Path
 import os
 import secrets
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-from src import maintenance, scheduler, configio, store
+from src import scheduler
 from src import resume_guard
 from src import resume_fit
 from src.paths import MAX_UPLOAD_BYTES
@@ -248,46 +248,6 @@ def stats(conn=Depends(_db_dep)):
     }
 
 
-@app.post("/api/maint/rescore")
-def maint_rescore():
-    return maintenance.rescore_all()
-
-
-@app.post("/api/maint/cleanup")
-def maint_cleanup():
-    return maintenance.cleanup_below_threshold()
-
-
-class DaysBody(BaseModel):
-    days: int = 30
-
-
-@app.post("/api/maint/clear-old")
-def maint_clear_old(body: DaysBody):
-    return maintenance.clear_old_jobs(body.days)
-
-
-@app.get("/api/maint/export")
-def maint_export():
-    csv_data = maintenance.export_csv()
-    return Response(content=csv_data, media_type="text/csv",
-                    headers={"Content-Disposition": "attachment; filename=jobpilot_jobs.csv"})
-
-
-@app.post("/api/maint/reload")
-def maint_reload():
-    return maintenance.reload_config()
-
-
-@app.post("/api/maint/clean-cache")
-def maint_clean_cache():
-    return maintenance.clean_cache()
-
-
-@app.post("/api/maint/reset")
-def maint_reset():
-    return maintenance.reset_all_jobs()
-
 @app.get("/api/jobs")
 def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all", conn=Depends(_db_dep)):
     threshold = int(_get_setting(conn, "score_threshold", 70))
@@ -317,26 +277,6 @@ def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all", conn=
                         params).fetchall()
     return [dict(r) for r in rows]
 
-@app.get("/api/errors")
-def errors_list(limit: int = 100, conn=Depends(_db_dep)):
-    """Everything that has gone wrong, newest first."""
-    rows = store.recent_errors(conn, limit)
-    return rows
-
-
-@app.post("/api/errors/clear")
-def errors_clear(conn=Depends(_db_dep)):
-    n = store.clear_errors(conn)
-    return {"cleared": n}
-
-
-@app.get("/api/runs")
-def runs_list(limit: int = 50, conn=Depends(_db_dep)):
-    """The fetch history — what each run pulled in and kept."""
-    rows = store.recent_runs(conn, limit)
-    return rows
-
-
 @app.on_event("startup")
 def _startup():
     # Bring the database up to date before anything can query it.
@@ -365,17 +305,6 @@ def _startup():
 
 
 # ───────────────────────── pipeline runs ─────────────────────────
-
-@app.post("/api/run")
-def trigger_run():
-    if not scheduler.trigger_async():
-        raise HTTPException(409, "pipeline already running")
-    return {"started": True}
-
-
-@app.get("/api/run/status")
-def run_status():
-    return scheduler.get_state()
 
 
 # ───────────────────────── schedule config ─────────────────────────
@@ -414,29 +343,12 @@ def set_notes(job_id: int, body: NotesUpdate, conn=Depends(_db_dep)):
     conn.commit()
     return {"ok": True}
 
-@app.get("/api/runs")
-def list_runs(limit: int = 20, conn=Depends(_db_dep)):
-    rows = conn.execute(
-        "SELECT id, started_at, kind, fetched, seen, dropped, trashed, kept, errors "
-        "FROM runs ORDER BY id DESC LIMIT ?", (limit,)
-    ).fetchall()
-    return [dict(r) for r in rows]
-
 # ── AI features (scrape-time scoring / on-demand generation) ────────────────
 
 # ── Connection tests ────────────────────────────────────────────────────────
 
 
 # ── Storage & cleanup ───────────────────────────────────────────────────────
-
-@app.post("/api/maint/clear-runs")
-def maint_clear_runs():
-    return maintenance.clear_run_history()
-
-
-@app.post("/api/maint/nuclear")
-def maint_nuclear():
-    return maintenance.nuclear_reset()
 
 
 def _generation_http_error(e: Exception) -> HTTPException:
@@ -956,10 +868,12 @@ from src.routes import profile as profile_routes
 from src.routes import sources as sources_routes
 from src.routes import settings as settings_routes
 from src.routes import providers as providers_routes
+from src.routes import admin as admin_routes
 app.include_router(profile_routes.router)
 app.include_router(sources_routes.router)
 app.include_router(settings_routes.router)
 app.include_router(providers_routes.router)
+app.include_router(admin_routes.router)
 
 
 app.mount("/", StaticFiles(

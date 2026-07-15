@@ -12,7 +12,7 @@ from datetime import datetime
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, PlainTextResponse
-from src import maintenance, scheduler, configio
+from src import maintenance, scheduler, configio, store
 from src import resume_guard
 from src import resume_fit
 from src.paths import DB_PATH as DB
@@ -331,6 +331,32 @@ def sources_list():
     rows = conn.execute("SELECT DISTINCT source FROM jobs ORDER BY source").fetchall()
     conn.close()
     return [r["source"] for r in rows if r["source"]]
+
+
+@app.get("/api/errors")
+def errors_list(limit: int = 100):
+    """Everything that has gone wrong, newest first."""
+    conn = _conn()
+    rows = store.recent_errors(conn, limit)
+    conn.close()
+    return rows
+
+
+@app.post("/api/errors/clear")
+def errors_clear():
+    conn = _conn()
+    n = store.clear_errors(conn)
+    conn.close()
+    return {"cleared": n}
+
+
+@app.get("/api/runs")
+def runs_list(limit: int = 50):
+    """The fetch history — what each run pulled in and kept."""
+    conn = _conn()
+    rows = store.recent_runs(conn, limit)
+    conn.close()
+    return rows
 
 
 @app.on_event("startup")

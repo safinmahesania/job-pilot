@@ -39,7 +39,6 @@ def gated_client(monkeypatch, tmp_path):
     # var is enough. Reloading would re-run load_dotenv() in notify/llm and drag a
     # developer's real .env back into the test.
     import src.api as api
-    api.DB = db
     import src.store as store
     store.DB = db
     import src.deps as deps
@@ -61,7 +60,6 @@ def open_client(monkeypatch, tmp_path):
     monkeypatch.setattr("src.paths.DB_PATH", db)
 
     import src.api as api
-    api.DB = db
     import src.store as store
     store.DB = db
     import src.deps as deps

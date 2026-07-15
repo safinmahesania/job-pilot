@@ -1,25 +1,22 @@
 """FastAPI backend for JobPilot — serves jobs, status updates, and the frontend."""
 import re
-import sqlite3
 from pathlib import Path
 import os
 import secrets
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Depends
-from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-import threading
-from datetime import datetime
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response, PlainTextResponse
+from fastapi.responses import Response
 from src import maintenance, scheduler, configio, store
 from src import resume_guard
 from src import resume_fit
-from src.paths import DB_PATH as DB, MAX_UPLOAD_BYTES
-from src.deps import (_conn, _db_dep, _db, _get_setting,
+from src.paths import MAX_UPLOAD_BYTES
+from src.deps import (_db_dep, _get_setting,
                       COLS, TAB_WHERE, ALLOWED_STATUS)
 from src.logs import log
-app = FastAPI(title="JobPilot")
+from src import __version__
+app = FastAPI(title="JobPilot", version=__version__)
 
 # The browser extension runs on ATS pages and calls this API from a
 # chrome-extension:// origin, so those requests must be allowed through.
@@ -71,7 +68,7 @@ def _password() -> str:
 
 # The extension calls the API from a chrome-extension:// origin and cannot carry a
 # cookie, so it authenticates with the same password as a header instead.
-_OPEN_PATHS = ("/api/health", "/healthz")
+_OPEN_PATHS = ("/api/health", "/healthz", "/api/version")
 
 
 @app.middleware("http")
@@ -148,6 +145,12 @@ async def _login(request: Request):
 
 
 # ---- pipeline run state (in-memory) ----
+
+@app.get("/api/version")
+def version():
+    """What's running. Handy when a deployment might be behind the repo."""
+    return {"version": __version__}
+
 
 @app.get("/api/health")
 def source_health(conn=Depends(_db_dep)):

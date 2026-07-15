@@ -23,17 +23,12 @@ from src import llm
 from src.config import load_profile, skill_groups
 from src import (resume_limits, resume_guard, resume_fit, resume_schema,
                  resume_select)
-from src.llm import LLMError
 from src.paths import (
-    CONFIG_DIR,
     COVER_LETTER_WORDS,
     COVER_LETTER_PROJECT_POOL,
     COVER_LETTER_PROJECTS_USED,
     COVER_LETTER_MENTION_RELOCATION,
     COVER_LETTER_REVISE,
-    RESUME_TEMPLATE_FILE,
-    RESUME_PROJECT_POOL,
-    RESUME_PROJECTS_USED,
 )
 
 

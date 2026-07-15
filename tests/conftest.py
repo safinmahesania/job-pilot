@@ -40,7 +40,7 @@ if "ollama" not in sys.modules:
 #: import DB_PATH as DB` takes a copy — so patching `paths.DB_PATH` alone leaves
 #: these pointing at the real database, and a test would quietly read and write
 #: your actual jobs. Each of these must be patched too.
-_DB_BINDERS = ["src.store", "src.api", "src.report", "src.deps"]
+_DB_BINDERS = ["src.store", "src.report", "src.deps"]
 
 
 @pytest.fixture

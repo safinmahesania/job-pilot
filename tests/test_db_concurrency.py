@@ -52,9 +52,9 @@ class TestTheConnectionIsTuned:
         """The read path and the write path must agree. If the UI's own connections
         fell back to the default journal, they would re-introduce the locking that
         WAL removes."""
-        import src.api as api
+        import src.deps as deps
 
-        conn = api._conn()
+        conn = deps._conn()
         mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
         conn.close()
 

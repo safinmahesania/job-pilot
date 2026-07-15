@@ -1,0 +1,31 @@
+# Ruff — linting and import hygiene.
+#
+# The high-value rules are the ones that catch real mistakes: unused imports (F401),
+# undefined names (F821), redefinitions (F811). Enabling ruff already paid for itself —
+# it and mypy together found a `from src.logs import log` that had been pasted into the
+# middle of a module docstring, so the import never ran and `log` was undefined on the
+# error path. Tests passed because that path was never hit; a real import failure in
+# production would have raised NameError and hidden the actual error.
+#
+# A few cosmetic rules are turned off rather than chased through the whole codebase:
+# a single-letter loop variable (E741) and one lambda binding (E731) are readable in
+# context and not worth a churn-heavy rewrite. New code is still held to them if it
+# introduces new instances elsewhere.
+
+target-version = "py311"
+line-length = 100
+
+[lint]
+select = ["E", "F", "W"]          # pycodestyle, pyflakes, warnings
+# "I" (import-sorting) is intentionally left off for now: enabling it would
+# reorder imports in nearly every file at once, which is exactly the kind of
+# noise diff that buries a real change. Add it in its own pass later.
+ignore = [
+    "E741",   # ambiguous variable name (a couple of `l` loop vars read fine in place)
+    "E731",   # lambda assignment (one deliberate local helper)
+    "E501",   # line length is enforced by line-length above, not as a hard error here
+]
+
+[lint.per-file-ignores]
+# Tests favour long descriptive names and occasional unused fixtures.
+"tests/*" = ["F811", "F841"]

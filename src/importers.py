@@ -29,7 +29,6 @@ The description problem, and what we do about it
 Alert emails carry a title, a company, a location and a link — no job
 description. Our scoring is an AI judgement of fit, and fit cannot be judged
 from a title alone; a score derived from nothing would look authoritative and be
-from src.logs import log
 worthless.
 
 So: if a real description can be recovered, the job is scored normally. If it
@@ -59,12 +58,12 @@ yields only alert mail — but the folder boundary is the real guarantee.
 import csv
 import io
 import re
-from datetime import datetime
 
 import httpx
 from bs4 import BeautifulSoup
 
 from src import llm, store
+from src.logs import log
 from src.config import load_profile
 from src.normalize import normalize, clean_html
 from src.scoring.prefilter import passes

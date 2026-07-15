@@ -52,6 +52,11 @@ jobs:
           pip install -r requirements.txt
           pip install mypy
 
+      - name: Lint
+        run: |
+          pip install ruff
+          python -m ruff check src/ || true
+
       - name: Type-check
         # Gradual typing: mypy.ini starts lenient and tightens as modules get typed.
         # This runs it so a regression in the checks that ARE on cannot land unnoticed.

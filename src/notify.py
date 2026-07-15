@@ -120,7 +120,7 @@ def weekly_digest(stats: dict) -> str:
                      f"{'s' if stats['unreviewed'] != 1 else ''} waiting in the feed.")
 
     lines.append("")
-    lines.append(f"🗓 <b>Last 7 days</b>")
+    lines.append("🗓 <b>Last 7 days</b>")
     lines.append(f"• {stats['new_jobs']} new jobs surfaced")
     lines.append(f"• {stats['applied']} applied · {stats['saved']} saved · "
                  f"{stats['dismissed']} dismissed")

@@ -44,7 +44,7 @@ def answers() -> dict:
     )
 
     skills = p.get("skills", {}) or {}
-    all_skills = []
+    all_skills: list = []
     for tier in ("expert", "proficient", "familiar"):
         all_skills += skills.get(tier, []) or []
 

@@ -142,7 +142,8 @@ def budgets() -> dict:
 
 def _sections(markdown: str) -> dict[str, list[str]]:
     """Split the resume into its sections, keeping the lines of each."""
-    out, current = {}, None
+    out: dict = {}
+    current = None
     for raw in markdown.splitlines():
         line = raw.rstrip()
         if line.startswith("## "):
@@ -210,7 +211,8 @@ def check(markdown: str) -> list[Overrun]:
                     f"Project {i + 1}, bullet {j + 1}", allowed, actual, bullet))
 
     # ── Volunteer: the description under each entry ──────────────────────────
-    entry, body = 0, []
+    entry = 0
+    body: list = []
     for line in sections.get("volunteer and community involvement", []) + ["### "]:
         if line.startswith("### "):
             if body:

@@ -35,6 +35,30 @@ jobs:
         # be green here with nothing configured.
         run: python -m pytest -p no:warnings
 
+  types:
+    name: mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install mypy
+
+      - name: Type-check
+        # Gradual typing: mypy.ini starts lenient and tightens as modules get typed.
+        # This runs it so a regression in the checks that ARE on cannot land unnoticed.
+        # It does not fail the build yet — the codebase still has known dynamic-JSON
+        # findings — but it surfaces them on every push.
+        run: python -m mypy src/ || true
+
   frontend:
     name: sanitizer test
     runs-on: ubuntu-latest

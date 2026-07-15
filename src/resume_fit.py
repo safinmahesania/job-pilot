@@ -100,7 +100,7 @@ def profile_terms(profile: dict) -> set[str]:
     a fit — because everyone has them, including the people applying to the sales
     role.
     """
-    parts = []
+    parts: list = []
 
     skills = profile.get("skills") or {}
     for tier in ("expert", "proficient", "familiar"):

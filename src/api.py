@@ -531,7 +531,7 @@ def add_source(body: NewSource):
             400, f"unknown ats '{ats}' — must be one of: {', '.join(sorted(KNOWN_ATS))}")
 
     data = configio.read_yaml("companies.yaml") or {"companies": []}
-    entry = {"name": name, "ats": ats}
+    entry: dict = {"name": name, "ats": ats}
     for k in ("identifier", "tenant", "host", "site", "base", "query"):
         v = getattr(body, k)
         if v:

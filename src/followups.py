@@ -83,7 +83,9 @@ def due(conn) -> list[dict]:
 
         # Followed up already; time for one more.
         elif followed_up:
-            if since_followup < FOLLOWUP_SECOND_DAYS:
+            # since_followup can be None if the stored follow-up date won't parse —
+            # treat that as "no usable follow-up date", not a crash on None < int.
+            if since_followup is None or since_followup < FOLLOWUP_SECOND_DAYS:
                 continue
             reason, stage = (
                 f"Followed up {since_followup} days ago and heard nothing. "

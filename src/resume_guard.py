@@ -162,7 +162,8 @@ def _mentions_any(line: str, allowed: set[str]) -> bool:
 
 
 def _sections(markdown: str) -> dict[str, list[str]]:
-    out, current = {}, None
+    out: dict = {}
+    current = None
     for raw in markdown.splitlines():
         line = raw.rstrip()
         if line.startswith("## "):
@@ -201,7 +202,9 @@ def check_grounding(markdown: str, profile: dict) -> list[str]:
 
     def entries(section: str) -> list[tuple[str, list[str]]]:
         """[(heading, [the lines under it that aren't bullets]), ...]"""
-        out, head, body = [], None, []
+        out: list = []
+        head = None
+        body: list = []
         for line in sections.get(section, []):
             if line.startswith("### "):
                 if head is not None:

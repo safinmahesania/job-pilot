@@ -2,8 +2,7 @@
 from pathlib import Path
 import os
 import secrets
-from fastapi import FastAPI, HTTPException, Request, Depends
-from pydantic import BaseModel
+from fastapi import FastAPI, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -219,73 +218,6 @@ def _startup():
 
 # ── Feedback loop ───────────────────────────────────────────────────────────
 
-@app.get("/api/feedback")
-def get_feedback(conn=Depends(_db_dep)):
-    """What the scoring has learned from your save/dismiss decisions."""
-    from src.scoring import feedback
-    from src.scoring.rerank import scoring_via_chain
-    data = feedback.stats(conn)
-    data["scoring_via_chain"] = scoring_via_chain()
-    return data
-
-
-class ScoringUpdate(BaseModel):
-    scoring_via_chain: bool
-
-
-@app.post("/api/feedback/scoring")
-def set_scoring_chain(body: ScoringUpdate, conn=Depends(_db_dep)):
-    """Score through the provider chain, or pin scoring to local Ollama."""
-    conn.execute("INSERT INTO settings (key,value) VALUES ('scoring_via_chain',?) "
-                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                 ("1" if body.scoring_via_chain else "0",))
-    conn.commit()
-    return {"scoring_via_chain": body.scoring_via_chain}
-
-
-# ── Follow-ups ──────────────────────────────────────────────────────────────
-
-@app.get("/api/followups")
-def list_followups(conn=Depends(_db_dep)):
-    """Applications that need a nudge today."""
-    from src import followups
-    items = followups.due(conn)
-    counts = followups.summary(conn)
-    return {"items": items, **counts}
-
-
-class FollowupAction(BaseModel):
-    action: str                # "done" | "snooze"
-    days: int = 7              # for snooze
-
-
-@app.post("/api/jobs/{job_id}/followup")
-def set_followup(job_id: int, body: FollowupAction, conn=Depends(_db_dep)):
-    from src import followups
-    if body.action == "done":
-        ok = followups.mark_followed_up(conn, job_id)
-    elif body.action == "snooze":
-        ok = followups.snooze(conn, job_id, body.days)
-    else:
-        raise HTTPException(400, f"unknown action: {body.action}")
-
-    if not ok:
-        raise HTTPException(404, "job not found, or it isn't an applied job")
-    return {"id": job_id, "action": body.action}
-
-
-# ── Source health ───────────────────────────────────────────────────────────
-
-@app.get("/api/health/assess")
-def assess_health(conn=Depends(_db_dep)):
-    """Every board with a verdict — including the ones failing silently."""
-    from src import health
-    boards = health.assess(conn)
-    counts = health.summary(conn)
-    return {"boards": boards, **counts}
-
-
-
 # ── Route modules ──
 # Routes live in src/routes/*.py as APIRouters and are included here. This block sits
 # just above the static mount because the mount catches "/" for the frontend and must
@@ -298,6 +230,7 @@ from src.routes import admin as admin_routes
 from src.routes import jobs as jobs_routes
 from src.routes import generation as generation_routes
 from src.routes import imports as imports_routes
+from src.routes import insights as insights_routes
 app.include_router(profile_routes.router)
 app.include_router(sources_routes.router)
 app.include_router(settings_routes.router)
@@ -306,6 +239,7 @@ app.include_router(admin_routes.router)
 app.include_router(jobs_routes.router)
 app.include_router(generation_routes.router)
 app.include_router(imports_routes.router)
+app.include_router(insights_routes.router)
 
 
 app.mount("/", StaticFiles(

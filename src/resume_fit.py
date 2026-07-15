@@ -23,7 +23,7 @@ this" is a better answer than a resume you would have to hide.
 """
 import re
 
-from src.paths import FIT_MIN_OVERLAP, FIT_MIN_TECHNOLOGIES
+from src.paths import FIT_MIN_TECHNOLOGIES
 
 
 def _terms(text: str) -> set[str]:
@@ -201,12 +201,22 @@ class JobDoesNotFitError(Exception):
         company = job.get("company", "")
         overlap_pct = int(score * 100)
 
+        # Assembled outside the f-strings below on purpose. Inlining
+        #   f"...{", ".join(sorted(matched)[:6])}..."
+        # with a double-quoted separator inside a double-quoted f-string relies on
+        # PEP 701 quote-reuse, which is Python 3.12+ only — on 3.11 (what CI runs) the
+        # outer quote closes early and the module fails to import. Building the pieces
+        # here keeps every f-string simple and the syntax valid on both.
+        at_company = f" at {company}" if company else ""
+        matched_list = ", ".join(sorted(matched)[:6])
+        just = f" — just: {matched_list}" if matched else ""
+
         super().__init__(
             f"This job asks for a background you do not have.\n\n"
-            f"Only {overlap_pct}% of what \"{title}\"" 
-            f"{f' at {company}' if company else ''} asks for appears anywhere in "
+            f'Only {overlap_pct}% of what "{title}"'
+            f"{at_company} asks for appears anywhere in "
             f"your profile"
-            f"{f' — just: {", ".join(sorted(matched)[:6])}' if matched else ''}.\n\n"
+            f"{just}.\n\n"
             f"A resume tailored to this job would have to invent the rest, and a "
             f"model asked to tailor it will: it will write you a career you never "
             f"had, fluently, and you would be the one sending it.\n\n"

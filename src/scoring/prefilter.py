@@ -3,8 +3,6 @@
 Sirf un checks chalte hain jinki key profile['constraints'] me present hai.
 Naya rule = profile.yaml me field + yahan ek check function. Bas.
 """
-
-"""Dynamic hard filter — profile ke constraints + search se drive hota hai."""
 from datetime import datetime, timezone
 
 

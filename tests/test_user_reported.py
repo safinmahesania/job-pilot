@@ -5,10 +5,7 @@ test — so each gets a test now, to keep it fixed.
 """
 import sqlite3
 
-import pytest
-from fastapi.testclient import TestClient
 
-import src.api as api
 
 
 class TestAddingASourceIsValidated:

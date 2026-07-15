@@ -28,7 +28,7 @@ ignore = [
 
 [lint.per-file-ignores]
 # Tests favour long descriptive names and occasional unused fixtures.
-"tests/*" = ["F811", "F841"]
+"tests/*" = ["F811", "F841", "E402"]  # conftest sets sys.path before importing src, by design
 # api.py imports the route modules and includes their routers near the bottom of the
 # file, on purpose: the static mount catches "/" and must be registered last, so every
 # router has to be included after the app and its middleware are set up but before the

@@ -35,9 +35,17 @@ def _backup(p: Path):
 
 
 def read_yaml(name: str):
-    """Parse a config file and return the data structure."""
-    with open(_path(name), encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    """Parse a config file and return the data structure, or None if it is not there.
+
+    A missing config file is a normal state, not an error: on a fresh install there is
+    no companies.yaml until the first source is added, and callers already handle a
+    None with `or {...}`. Raising FileNotFoundError here instead turned that first-ever
+    add into a crash."""
+    try:
+        with open(_path(name), encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError:
+        return None
 
 
 def write_yaml(name: str, data):

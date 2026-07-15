@@ -52,7 +52,6 @@ class TestGenerationWithoutAProviderIsFriendly:
     the message now says what to do."""
 
     def _a_job(self, client):
-        # Insert a job directly so we have something to generate for.
         from src.paths import DB_PATH
         conn = sqlite3.connect(DB_PATH)
         conn.execute(
@@ -64,15 +63,29 @@ class TestGenerationWithoutAProviderIsFriendly:
         conn.close()
         return jid
 
-    def test_a_missing_provider_gives_503_and_actionable_text(self, client):
-        jid = self._a_job(client)
+    def test_a_missing_provider_gives_503_and_actionable_text(
+            self, client, monkeypatch):
+        # The unit under test is the endpoint's error MAPPING, not the generator. Force
+        # the generator to fail exactly the way a missing provider fails — an LLMError —
+        # and assert the endpoint turns that into a friendly 503 rather than a raw 502.
+        # (Driving it through the real generator would depend on whether a profile.yaml
+        # and a provider happen to exist in the environment, which is not what this
+        # test is about.)
+        from src.llm import LLMError
 
+        def _no_provider(*_a, **_k):
+            raise LLMError(
+                "all providers failed -> gemini: not configured | "
+                "cerebras: not configured | ollama: not running")
+
+        monkeypatch.setattr("src.apply.generate_cover_letter", _no_provider)
+
+        jid = self._a_job(client)
         r = client.post(f"/api/jobs/{jid}/cover-letter")
 
         assert r.status_code == 503
         detail = r.json()["detail"].lower()
         assert "provider" in detail
-        # points at the fix, not the stack trace
         assert "key" in detail or "ollama" in detail
         assert "traceback" not in detail
 

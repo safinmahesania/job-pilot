@@ -36,11 +36,16 @@ class TestStructure:
         )
 
     def test_every_route_the_frontend_calls_exists(self):
-        api_source = (ROOT / "src" / "api.py").read_text(encoding="utf-8")
         js = (ROOT / "frontend" / "app.js").read_text(encoding="utf-8")
 
-        routes = [m.group(2) for m in
-                  re.finditer(r'@app\.(get|post|delete|put)\("([^"]+)"', api_source)]
+        # Collect routes from the live app, not by grepping api.py — routes now live in
+        # both api.py and src/routes/*.py, and a source grep would miss the routers and
+        # report their paths as "missing". The app object knows every route that is
+        # actually registered, wherever it was defined.
+        from src import api as _api
+        # openapi() flattens every registered path, including those from included
+        # routers (which nest under the app rather than sitting in app.routes directly).
+        routes = [p for p in _api.app.openapi().get("paths", {}) if p.startswith("/api/")]
         called = set(re.findall(r"""['"`](/api/[^'"`?\s]+)""", js))
 
         def compatible(call: str, route: str) -> bool:

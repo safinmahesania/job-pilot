@@ -508,42 +508,6 @@ def delete_source(index: int):
 
 # ───────────────────────── profile.yaml ─────────────────────────
 
-@app.get("/api/profile")
-def get_profile():
-    return {"data": configio.read_yaml("profile.yaml") or {}}
-
-
-class ProfileData(BaseModel):
-    data: dict
-
-
-@app.post("/api/profile")
-def save_profile(body: ProfileData):
-    current = configio.read_yaml("profile.yaml") or {}
-    current.update(body.data)          # only the keys the form manages
-    configio.write_yaml("profile.yaml", current)
-    return {"saved": True}
-
-
-# Raw YAML escape hatch — for the fields the form doesn't cover.
-
-@app.get("/api/profile/raw")
-def get_profile_raw():
-    return {"text": configio.read_text("profile.yaml")}
-
-
-class ProfileText(BaseModel):
-    text: str
-
-
-@app.post("/api/profile/raw")
-def save_profile_raw(body: ProfileText):
-    try:
-        configio.write_text("profile.yaml", body.text)
-    except Exception as e:
-        raise HTTPException(400, f"invalid YAML: {e}")
-    return {"saved": True}
-
 class StatusUpdate(BaseModel):
     status: str
 
@@ -1286,6 +1250,14 @@ def send_test_digest(conn=Depends(_db_dep)):
         return {"sent": False, "preview": message,
                 "reason": "Telegram isn't configured, or notifications are off."}
     return {"sent": notify.send(message), "preview": message}
+
+
+# ── Route modules ──
+# Routes live in src/routes/*.py as APIRouters and are included here. This block sits
+# just above the static mount because the mount catches "/" for the frontend and must
+# be registered last; every API router has to be included before it.
+from src.routes import profile as profile_routes
+app.include_router(profile_routes.router)
 
 
 app.mount("/", StaticFiles(

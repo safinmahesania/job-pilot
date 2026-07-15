@@ -29,6 +29,7 @@ The description problem, and what we do about it
 Alert emails carry a title, a company, a location and a link — no job
 description. Our scoring is an AI judgement of fit, and fit cannot be judged
 from a title alone; a score derived from nothing would look authoritative and be
+from src.logs import log
 worthless.
 
 So: if a real description can be recovered, the job is scored normally. If it
@@ -244,7 +245,7 @@ def read_mail_drop() -> tuple[list[dict], list[str]]:
             jobs += parse_email_file(path.read_bytes(), path.name)
             files.append(path.name)
         except Exception as e:
-            print(f"[mail_drop] {path.name}: {e}")
+            log.warning("[mail_drop] %s: %s", path.name, e)
 
     return _dedupe_by_url(jobs), files
 
@@ -478,7 +479,7 @@ def import_jobs(raw_jobs: list[dict], *, source: str = "import",
             stats["unscored"] += 1
 
         except Exception as e:
-            print(f"[import] {raw.get('title', '?')}: {e}")
+            log.warning("[import] %s: %s", raw.get("title", "?"), e)
             stats["errors"] += 1
 
     conn.commit()

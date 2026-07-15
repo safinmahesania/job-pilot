@@ -3,6 +3,7 @@ import httpx
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from .base import SourceAdapter
+from src.logs import log
 
 
 class PhenomAdapter(SourceAdapter):
@@ -22,7 +23,7 @@ class PhenomAdapter(SourceAdapter):
                 r.raise_for_status()
                 soup = BeautifulSoup(r.text, "html.parser")
             except Exception as e:
-                print(f"  [Phenom {self.name}] page {page} failed: {e}")
+                log.warning("[Phenom %s] page %s failed: %s", self.name, page, e)
                 break
 
             links = [a for a in soup.find_all("a", href=True)

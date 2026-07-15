@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 from src import store, notify
 from src.paths import DEFAULT_RUN_INTERVAL_HOURS as DEFAULT_HOURS, SCHEDULER_POLL_SECONDS as POLL_SECONDS
+from src.logs import log
 
 _state = {"running": False, "last_run": None, "last_summary": None, "next_run": None}
 _lock = threading.Lock()
@@ -54,7 +55,7 @@ def _run_once():
         # restart erased both. Now it is a row you can read, and a message on your
         # phone the moment it happens.
         _state["last_summary"] = f"error: {e}"
-        print(f"[scheduler] pipeline failed: {e}")
+        log.exception("[scheduler] pipeline failed")
 
         sent = notify.send(
             f"\u26a0\ufe0f <b>Pipeline failed</b>\n"
@@ -65,7 +66,7 @@ def _run_once():
             store.record_error(conn, "pipeline", e, notified=sent)
             conn.close()
         except Exception as inner:
-            print(f"[scheduler] could not record the error: {inner}")
+            log.error("[scheduler] could not record the error: %s", inner)
     finally:
         now = datetime.now()
         _state["running"] = False
@@ -184,7 +185,7 @@ def _loop():
                 due = False
 
             if enabled and due and not _state["running"]:
-                print("[scheduler] interval elapsed — starting run")
+                log.info("[scheduler] interval elapsed — starting run")
                 _run_once()
                 _board_alerts()          # streaks are freshest right after a run
 
@@ -195,7 +196,7 @@ def _loop():
             # doing its job — no run, no follow-up check, and nobody watching. Print
             # scrolls past; record it so it is visible in the UI and on Telegram, the
             # same way a pipeline crash is.
-            print(f"[scheduler] loop error: {e}")
+            log.exception("[scheduler] loop error")
             try:
                 sent = notify.send(
                     f"\u26a0\ufe0f <b>Scheduler loop error</b>\n"
@@ -204,11 +205,11 @@ def _loop():
                 store.record_error(conn, "scheduler:loop", e, notified=sent)
                 conn.close()
             except Exception as inner:
-                print(f"[scheduler] could not record the loop error: {inner}")
+                log.error("[scheduler] could not record the loop error: %s", inner)
 
         time.sleep(POLL_SECONDS)
 
 
 def start():
     threading.Thread(target=_loop, daemon=True).start()
-    print("[scheduler] started")
+    log.info("[scheduler] started")

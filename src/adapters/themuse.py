@@ -2,6 +2,7 @@
 import time
 import httpx
 from .base import SourceAdapter
+from src.logs import log
 
 API = "https://www.themuse.com/api/public/jobs"
 
@@ -24,7 +25,7 @@ class TheMuseAdapter(SourceAdapter):
                 r.raise_for_status()
                 data = r.json()
             except Exception as e:
-                print(f"  [The Muse] page {page} failed: {e}")
+                log.warning("[The Muse] page %s failed: %s", page, e)
                 break
 
             for j in data.get("results", []):

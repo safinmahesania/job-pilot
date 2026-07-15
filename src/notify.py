@@ -2,6 +2,7 @@
 import os
 import httpx
 from dotenv import load_dotenv
+from src.logs import log
 load_dotenv()
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -19,7 +20,7 @@ def send(text: str) -> bool:
         )
         return r.status_code == 200
     except Exception as e:
-        print(f"[notify] telegram failed: {e}")
+        log.warning("[notify] telegram failed: %s", e)
         return False
 
 

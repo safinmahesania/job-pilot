@@ -6,6 +6,7 @@ Thin read-only helpers used by the pipeline. All file locations come from
 import yaml
 
 from src.paths import CONFIG_DIR, COMPANIES_FILE, PROFILE_FILE
+from src.logs import log
 
 
 def load_yaml(name: str):
@@ -117,7 +118,7 @@ def load_profile() -> dict:
     """Return the candidate profile the scorer matches jobs against."""
     profile, warnings = normalise_profile(load_yaml(PROFILE_FILE) or {})
     for warning in warnings:
-        print(f"[profile] {warning}")
+        log.warning("[profile] %s", warning)
     return profile
 
 

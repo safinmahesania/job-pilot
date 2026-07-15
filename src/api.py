@@ -17,6 +17,7 @@ from src import maintenance, scheduler, configio, store
 from src import resume_guard
 from src import resume_fit
 from src.paths import DB_PATH as DB, MAX_UPLOAD_BYTES
+from src.logs import log
 app = FastAPI(title="JobPilot")
 
 # The browser extension runs on ATS pages and calls this API from a
@@ -436,7 +437,7 @@ def _startup():
         # Never take the server down over this — a failed migration should be
         # loud, not fatal. The endpoints that need the new columns will fail
         # clearly, and the reason is right here in the log.
-        print(f"[startup] schema migration failed: {e}")
+        log.error("[startup] schema migration failed: %s", e)
 
     scheduler.start()
 

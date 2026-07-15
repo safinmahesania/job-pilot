@@ -24,6 +24,7 @@ from src.scoring.rerank import (
 )
 from src import store, notify
 from src.paths import DEFAULT_SCORE_THRESHOLD, NOTIFY_MIN_SCORE, FETCH_CONCURRENCY
+from src.logs import log
 
 
 def _fetch_one(company: dict) -> tuple[dict, list[dict], dict]:
@@ -39,7 +40,7 @@ def _fetch_one(company: dict) -> tuple[dict, list[dict], dict]:
         health["fetched"] = len(raw_jobs)
         return company, raw_jobs, health
     except Exception as e:
-        print(f"[{company['name']}] fetch failed: {e}")
+        log.warning("[%s] fetch failed: %s", company["name"], e)
         health["status"] = "error"
         health["error"] = str(e)[:200]
         return company, [], health
@@ -65,7 +66,7 @@ def fetch_all(companies: list[dict]) -> list[tuple[dict, list[dict], dict]]:
                 results.append(future.result())
             except Exception as e:                  # the worker itself blew up
                 company = futures[future]
-                print(f"[{company['name']}] worker failed: {e}")
+                log.warning("[%s] worker failed: %s", company["name"], e)
                 results.append((company, [], {"fetched": 0, "kept": 0,
                                               "status": "error",
                                               "error": str(e)[:200]}))

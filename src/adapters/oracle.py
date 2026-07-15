@@ -2,6 +2,7 @@
 import time
 import httpx
 from .base import SourceAdapter
+from src.logs import log
 
 
 class OracleAdapter(SourceAdapter):
@@ -27,7 +28,7 @@ class OracleAdapter(SourceAdapter):
                 r.raise_for_status()
                 data = r.json()
             except Exception as e:
-                print(f"  [Oracle {site}] offset {offset} failed: {e}")
+                log.warning("[Oracle %s] offset %s failed: %s", site, offset, e)
                 break
 
             items = data.get("items", [])

@@ -2,6 +2,7 @@
 import time
 import httpx
 from .base import SourceAdapter
+from src.logs import log
 
 
 class WorkdayAdapter(SourceAdapter):
@@ -29,7 +30,7 @@ class WorkdayAdapter(SourceAdapter):
                 r.raise_for_status()
                 data = r.json()
             except Exception as e:
-                print(f"  [Workday {tenant}] offset {offset} failed: {e}")
+                log.warning("[Workday %s] offset %s failed: %s", tenant, offset, e)
                 break
 
             postings = data.get("jobPostings", [])

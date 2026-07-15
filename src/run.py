@@ -25,6 +25,7 @@ from src.scoring.rerank import (
 from src import store, notify
 from src.paths import DEFAULT_SCORE_THRESHOLD, NOTIFY_MIN_SCORE, FETCH_CONCURRENCY
 from src.logs import log
+from src.env import load_env
 
 
 def _fetch_one(company: dict) -> tuple[dict, list[dict], dict]:
@@ -74,6 +75,7 @@ def fetch_all(companies: list[dict]) -> list[tuple[dict, list[dict], dict]]:
 
 
 def run():
+    load_env()
     start_ts = time.time()
     new_scored = []                 # jobs worth surfacing in the run summary
 

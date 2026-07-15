@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from src import store, notify
 from src.paths import DEFAULT_RUN_INTERVAL_HOURS as DEFAULT_HOURS, SCHEDULER_POLL_SECONDS as POLL_SECONDS
 from src.logs import log
+from src.env import load_env
 
 _state = {"running": False, "last_run": None, "last_summary": None, "next_run": None}
 _lock = threading.Lock()
@@ -211,5 +212,6 @@ def _loop():
 
 
 def start():
+    load_env()
     threading.Thread(target=_loop, daemon=True).start()
     log.info("[scheduler] started")

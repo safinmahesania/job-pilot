@@ -1,20 +1,28 @@
 """Telegram notifications — silent no-op if not configured."""
 import os
 import httpx
-from dotenv import load_dotenv
 from src.logs import log
-load_dotenv()
 
-TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+
+# Read at call time, not import time. Reading these at import forced load_dotenv() to
+# run on import too, which in tests dragged a developer's real .env into the process
+# and, once, leaked a password into the suite. The values are looked up when actually
+# needed, so importing this module has no side effect and sets nothing from the
+# environment behind the caller's back.
+def _token() -> str | None:
+    return os.environ.get("TELEGRAM_BOT_TOKEN")
+
+
+def _chat_id() -> str | None:
+    return os.environ.get("TELEGRAM_CHAT_ID")
 
 def send(text: str) -> bool:
     if not enabled():
         return False
     try:
         r = httpx.post(
-            f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-            json={"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML",
+            f"https://api.telegram.org/bot{_token()}/sendMessage",
+            json={"chat_id": _chat_id(), "text": text, "parse_mode": "HTML",
                   "disable_web_page_preview": True},
             timeout=15,
         )
@@ -53,7 +61,7 @@ def run_summary(stats: dict, elapsed_s: float, model: str, new_jobs: list[dict])
     return "\n".join(lines)
 
 def enabled() -> bool:
-    if not (TOKEN and CHAT_ID):
+    if not (_token() and _chat_id()):
         return False
     # DB setting check (default on)
     try:

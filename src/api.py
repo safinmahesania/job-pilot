@@ -16,7 +16,22 @@ from src.deps import (_db_dep, _get_setting,
                       COLS, TAB_WHERE, ALLOWED_STATUS)
 from src.logs import log
 from src import __version__
+from src.env import load_env
+load_env()
+from src.paths import (RATE_LIMIT_GENERATION, RATE_LIMIT_IMPORT, RATE_LIMIT_DEFAULT)
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 app = FastAPI(title="JobPilot", version=__version__)
+
+# Rate limiting. Keyed by client address, with a generous global default; the
+# expensive endpoints (generation, import) get tighter per-route limits via the
+# @limiter.limit decorator. A single real user never approaches these — they exist so
+# a public tunnel URL cannot be turned into free LLM compute or a parse-DoS by a bot.
+limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT_DEFAULT])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # The browser extension runs on ATS pages and calls this API from a
 # chrome-extension:// origin, so those requests must be allowed through.
@@ -589,7 +604,7 @@ def set_model(body: ModelUpdate, conn=Depends(_db_dep)):
 def get_notify(conn=Depends(_db_dep)):
     from src import notify
     enabled = _get_setting(conn, "notify_enabled", "1") == "1"
-    return {"enabled": enabled, "configured": bool(notify.TOKEN and notify.CHAT_ID)}
+    return {"enabled": enabled, "configured": bool(notify._token() and notify._chat_id())}
 
 
 class NotifyUpdate(BaseModel):
@@ -741,7 +756,8 @@ def _generation_http_error(e: Exception) -> HTTPException:
 
 
 @app.post("/api/jobs/{job_id}/cover-letter")
-def cover_letter(job_id: int, conn=Depends(_db_dep)):
+@limiter.limit(RATE_LIMIT_GENERATION)
+def cover_letter(request: Request, job_id: int, conn=Depends(_db_dep)):
     """Generate a grounded cover letter for one job."""
     if _get_setting(conn, "generation_enabled", "1") != "1":
         raise HTTPException(
@@ -775,7 +791,8 @@ def cover_letter(job_id: int, conn=Depends(_db_dep)):
 
 
 @app.post("/api/jobs/{job_id}/resume")
-def tailored_resume(job_id: int, conn=Depends(_db_dep)):
+@limiter.limit(RATE_LIMIT_GENERATION)
+def tailored_resume(request: Request, job_id: int, conn=Depends(_db_dep)):
     """Tailor the resume template to one job."""
     if _get_setting(conn, "generation_enabled", "1") != "1":
         raise HTTPException(
@@ -1051,7 +1068,8 @@ async def _read_capped(file) -> bytes:
 
 
 @app.post("/api/import/file")
-async def import_file(file: UploadFile = File(...)):
+@limiter.limit(RATE_LIMIT_IMPORT)
+async def import_file(request: Request, file: UploadFile = File(...)):
     """Import jobs from a CSV or Excel file."""
     from src import importers
     data = await _read_capped(file)
@@ -1075,7 +1093,8 @@ class PastedJob(BaseModel):
 
 
 @app.post("/api/import/text")
-def import_text(body: PastedJob, conn=Depends(_db_dep)):
+@limiter.limit(RATE_LIMIT_IMPORT)
+def import_text(request: Request, body: PastedJob, conn=Depends(_db_dep)):
     """Paste a whole job posting; the model pulls the fields out of it."""
     if _get_setting(conn, "generation_enabled", "1") != "1":
         raise HTTPException(403, "On-demand AI is off — enable it in Settings.")
@@ -1095,7 +1114,8 @@ def import_text(body: PastedJob, conn=Depends(_db_dep)):
 
 
 @app.post("/api/import/email-file")
-async def import_email_file(file: UploadFile = File(...)):
+@limiter.limit(RATE_LIMIT_IMPORT)
+async def import_email_file(request: Request, file: UploadFile = File(...)):
     """Import jobs from a job-alert email you exported (.eml or .html).
 
     JobPilot has no mail credentials and no IMAP client. It reads the file you

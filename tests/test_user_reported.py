@@ -130,3 +130,35 @@ class TestUploadsAreSizeCapped:
 
         assert r.status_code == 413
         assert "too large" in r.json()["detail"].lower()
+
+
+class TestExpensiveEndpointsAreRateLimited:
+    """The generation and import endpoints each cost an LLM call or a file parse. On a
+    public tunnel they are the expensive surface, so they carry per-route limits a real
+    user never reaches and a bot does."""
+
+    def test_hammering_cover_letter_eventually_429s(self, client, written_profile):
+        import sqlite3
+        from src.paths import DB_PATH
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute(
+            "INSERT INTO jobs (dedupe_hash, title, company, description, status, score) "
+            "VALUES ('rl', 'Dev', 'Acme', 'A Flutter role.', 'surfaced', 90)")
+        conn.commit()
+        jid = conn.execute("SELECT id FROM jobs WHERE dedupe_hash='rl'").fetchone()[0]
+        conn.close()
+
+        # The generation limit is 20/minute; well within a burst of 30.
+        saw_429 = False
+        for _ in range(30):
+            r = client.post(f"/api/jobs/{jid}/cover-letter")
+            if r.status_code == 429:
+                saw_429 = True
+                break
+        assert saw_429
+
+    def test_a_normal_number_of_requests_is_fine(self, client, written_profile):
+        # A handful of imports in a row must never be rate-limited.
+        for _ in range(5):
+            r = client.post("/api/import/text", json={"text": "x"})
+            assert r.status_code != 429

@@ -14,7 +14,6 @@ import os
 from datetime import datetime, timezone
 
 import httpx
-from dotenv import load_dotenv
 
 from src import store
 from src.paths import (
@@ -23,7 +22,6 @@ from src.paths import (
     PRIVACY_MODE,
 )
 
-load_dotenv()
 
 # Settings keys used to persist the UI's provider controls.
 ORDER_KEY = "llm_provider_order"        # e.g. "gemini,cerebras,ollama"

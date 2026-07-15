@@ -338,3 +338,13 @@ PROJECTS_IN_LETTER = 2         # how many make it into the letter
 # into memory, so a single large POST is an easy denial of service. 10 MB is orders
 # of magnitude above any real import and still safe.
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+
+# ── Rate limiting ──
+# The generation endpoints (resume, cover letter) and imports each cost an LLM call
+# or a file parse, so on a public tunnel they are the expensive surface. A single user
+# never hits these fast; a bot or a runaway script can. These are generous ceilings
+# that a person will never notice and abuse will.
+RATE_LIMIT_GENERATION = "20/minute"   # resume + cover-letter
+RATE_LIMIT_IMPORT = "30/minute"       # file / text / email imports
+RATE_LIMIT_DEFAULT = "120/minute"     # everything else, as a backstop

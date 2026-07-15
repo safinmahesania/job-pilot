@@ -30,3 +30,4 @@ pypdf>=4.0        # tests: read back the PDF we generated, without a system bina
 
 # ── Local LLM scoring (requires Ollama running separately) ──
 ollama>=0.3
+slowapi>=0.1.9

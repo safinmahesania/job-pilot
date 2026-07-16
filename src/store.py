@@ -24,7 +24,12 @@ def _tune(conn: sqlite3.Connection) -> sqlite3.Connection:
 
 
 def connect():
-    return _tune(sqlite3.connect(DB))
+    # check_same_thread=False: this connection is used from FastAPI's threadpool and
+    # from the scheduler's background thread, neither of which guarantees the creating
+    # thread is the using thread. Each caller gets its own connection and doesn't share
+    # it concurrently, so this is safe; without it every DB call raises "SQLite objects
+    # created in a thread can only be used in that same thread".
+    return _tune(sqlite3.connect(DB, check_same_thread=False))
 
 
 def already_seen(conn, dedupe_hash: str) -> bool:

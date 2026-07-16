@@ -27,6 +27,8 @@ def get_adapter(company: dict) -> SourceAdapter:
     from .phenom import PhenomAdapter
     from .ashby import AshbyAdapter
     from .generic import GenericCareersAdapter
+    from .smartrecruiters import SmartRecruitersAdapter
+    from .workable import WorkableAdapter
 
     ats = company.get("ats")
     registry = {
@@ -41,6 +43,8 @@ def get_adapter(company: dict) -> SourceAdapter:
         "oracle": OracleAdapter,
         "phenom": PhenomAdapter,
         "ashby": AshbyAdapter,
+        "smartrecruiters": SmartRecruitersAdapter,
+        "workable": WorkableAdapter,
         # HTML-scrape sources with no JSON API — all served by one generic adapter that
         # pulls job links out of a careers page. Best-effort by nature (see generic.py).
         "custom": GenericCareersAdapter,
@@ -59,5 +63,6 @@ def get_adapter(company: dict) -> SourceAdapter:
 KNOWN_ATS = frozenset({
     "greenhouse", "lever", "themuse", "remotive", "workday", "remoteok",
     "weworkremotely", "jobspresso", "oracle", "phenom", "ashby",
+    "smartrecruiters", "workable",
     "custom", "aggregator", "successfactors",
 })

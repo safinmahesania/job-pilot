@@ -47,15 +47,19 @@ def _fetch_one(company: dict) -> tuple[dict, list[dict], dict]:
         return company, [], health
 
 
-def fetch_all(companies: list[dict]) -> list[tuple[dict, list[dict], dict]]:
+def fetch_all(companies: list[dict],
+              respect_active: bool = True) -> list[tuple[dict, list[dict], dict]]:
     """Fetch every active board at once.
 
     Concurrency is capped (FETCH_CONCURRENCY) because a dozen of our companies
     share a single ATS host — hammering it would be both rude and likely to earn
     a rate limit. With the cap, a run takes about as long as the slowest board
     rather than the sum of all of them.
+
+    respect_active=False is for a selective run, where the caller has already picked
+    the exact sources by name and wants them fetched even if their active flag is off.
     """
-    active = [c for c in companies if c.get("active")]
+    active = [c for c in companies if c.get("active")] if respect_active else companies
     if not active:
         return []
 
@@ -74,13 +78,22 @@ def fetch_all(companies: list[dict]) -> list[tuple[dict, list[dict], dict]]:
     return results
 
 
-def run():
+def run(only: list[str] | None = None):
     load_env()
     start_ts = time.time()
     new_scored = []                 # jobs worth surfacing in the run summary
 
     profile = load_profile()
     companies = load_companies()
+
+    # Selective run: if `only` is given, fetch just those sources (matched by name),
+    # ignoring their active flag — so you can pull from one or two boards on demand
+    # without disturbing the set that a full scheduled run uses. A full run passes
+    # only=None and behaves exactly as before (every active source).
+    if only:
+        wanted = {n.strip().lower() for n in only}
+        companies = [c for c in companies
+                     if (c.get("name") or "").strip().lower() in wanted]
     conn = store.connect()
 
     # Scoring model: honour the saved preference, but always start the run on it
@@ -107,7 +120,7 @@ def run():
 
     # ── Fetch every board in parallel ───────────────────────────────────────
     fetch_started = time.time()
-    fetched = fetch_all(companies)
+    fetched = fetch_all(companies, respect_active=not only)
     print(f"  fetched {len(fetched)} sources in {time.time() - fetch_started:.1f}s")
 
     # ── Then process serially ───────────────────────────────────────────────

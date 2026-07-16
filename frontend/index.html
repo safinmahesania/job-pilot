@@ -314,9 +314,28 @@
           <span class="text-xs text-gray-400">Workday and Phenom need tenant/host/site or base — edit companies.yaml for those.</span>
         </div>
       </div>
+      <div x-show="selectedSources.length" x-cloak
+           class="mb-3 flex items-center gap-2 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2.5">
+        <i class="ti ti-player-play text-brand"></i>
+        <span class="text-sm text-gray-700">
+          <span x-text="selectedSources.length"></span>
+          source<span x-show="selectedSources.length!==1">s</span> selected
+        </span>
+        <button @click="runSelected()" :disabled="running"
+                class="ml-auto text-[13px] h-8 px-4 rounded-md bg-brand text-white disabled:opacity-50">
+          Run selected only
+        </button>
+        <button @click="clearSelected()"
+                class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">
+          Clear
+        </button>
+      </div>
       <div class="card divide-y divide-gray-100">
         <template x-for="s in sourceCfg" :key="s.index">
           <div class="flex items-center gap-3 px-3 sm:px-4 py-3">
+            <input type="checkbox" :checked="isSelected(s.name)" @change="toggleSelected(s.name)"
+                   class="shrink-0 w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand/40 cursor-pointer"
+                   title="Tick to include in a selective run">
             <button @click="toggleSource(s)" class="sw" :class="s.active ? 'on' : 'off'"><span></span></button>
             <!-- health dot -->
             <span class="shrink-0 w-2 h-2 rounded-full"

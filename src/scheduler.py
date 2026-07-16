@@ -40,7 +40,7 @@ def _stamp_last_run(when: datetime):
     conn.close()
 
 
-def _run_once():
+def _run_once(only=None):
     from src.run import run as run_pipeline
 
     with _lock:
@@ -49,8 +49,8 @@ def _run_once():
         _state["running"] = True
 
     try:
-        run_pipeline()
-        _state["last_summary"] = "completed"
+        run_pipeline(only=only)
+        _state["last_summary"] = ("completed (selective)" if only else "completed")
     except Exception as e:
         # A pipeline crash used to live in a print() and this dict, and the next
         # restart erased both. Now it is a row you can read, and a message on your
@@ -76,11 +76,15 @@ def _run_once():
     return True
 
 
-def trigger_async() -> bool:
-    """Fire a run in the background. False if one is already going."""
+def trigger_async(only=None) -> bool:
+    """Fire a run in the background. False if one is already going.
+
+    `only` is an optional list of source names to fetch just those (a selective run);
+    None means a normal full run over every active source.
+    """
     if _state["running"]:
         return False
-    threading.Thread(target=_run_once, daemon=True).start()
+    threading.Thread(target=_run_once, kwargs={"only": only}, daemon=True).start()
     return True
 
 

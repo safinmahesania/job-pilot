@@ -7,6 +7,7 @@ function jobpilot() {
     cover: null,   // { loading, text, provider, title, company }
     edit: null,    // { id, title, company, location, description, apply_url, ... } when editing a job by hand
     sourceTest: null,  // { name, loading, ok, count, jobs, error, elapsed_ms } when testing a source
+    selectedSources: [],  // source names ticked for a selective run
     llm: { providers: [], available: 0, total: 0, combined_tokens: 0, combined_limit: 0 },
     ai: { scoring: true, generation: true },
     cfgFiles: [],
@@ -785,12 +786,39 @@ function jobpilot() {
       }
     },
 
-    async runNow() {
-      const r = await fetch('/api/run', { method:'POST' });
+    async runNow(only = null) {
+      const body = only && only.length ? { only } : {};
+      const r = await fetch('/api/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
       if (r.status === 409) { this.showSnack('Already running', 'error'); return; }
       this.running = true;
-      this.blocking = { label: 'Fetching and scoring jobs…' };
+      this.blocking = {
+        label: only && only.length
+          ? `Fetching ${only.length} selected source${only.length > 1 ? 's' : ''}…`
+          : 'Fetching and scoring jobs…',
+      };
       this.poll();
+    },
+
+    // ── Selective run: pick sources, fetch just those (active state untouched) ──
+    toggleSelected(name) {
+      const i = this.selectedSources.indexOf(name);
+      if (i === -1) this.selectedSources.push(name);
+      else this.selectedSources.splice(i, 1);
+    },
+    isSelected(name) { return this.selectedSources.includes(name); },
+    clearSelected() { this.selectedSources = []; },
+    async runSelected() {
+      if (!this.selectedSources.length) {
+        this.showSnack('Tick at least one source first', 'error');
+        return;
+      }
+      const picked = [...this.selectedSources];
+      await this.runNow(picked);
+      this.selectedSources = [];
     },
 
     poll() {

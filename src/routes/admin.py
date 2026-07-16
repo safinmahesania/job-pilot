@@ -94,11 +94,18 @@ def runs_list(limit: int = 50, conn=Depends(_db_dep)):
 
 # ── Manual pipeline trigger ──
 
+class RunRequest(BaseModel):
+    # Optional list of source names to fetch just those (a selective run). Omit for a
+    # normal full run over every active source.
+    only: list[str] | None = None
+
+
 @router.post("/api/run")
-def trigger_run():
-    if not scheduler.trigger_async():
+def trigger_run(body: RunRequest | None = None):
+    only = body.only if body else None
+    if not scheduler.trigger_async(only=only):
         raise HTTPException(409, "pipeline already running")
-    return {"started": True}
+    return {"started": True, "selective": bool(only), "sources": only or []}
 
 
 @router.get("/api/run/status")

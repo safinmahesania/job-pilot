@@ -34,7 +34,9 @@ function jobpilot() {
 
     sourceCfg: [], newSource: { name: '', ats: 'greenhouse', identifier: '', query: '', active: true },
     atsTypes: ['greenhouse','lever','ashby','workday','oracle','phenom',
-               'themuse','remotive','remoteok','weworkremotely','jobspresso'],
+               'themuse','smartrecruiters','workable','remotive','remoteok',
+               'weworkremotely','jobspresso','custom','aggregator','successfactors'],
+    detectUrl: '', detecting: false,
 
     profile: null, profileRaw: '', rawMode: false, profileDirty: false,
     seniorityOpts: ['intern','junior','entry','mid','senior'],
@@ -221,9 +223,32 @@ function jobpilot() {
       await this.loadSources();
       this.showSnack(`${s.name} ${s.active ? 'disabled' : 'enabled'}`);
     },
+    async detectFromUrl() {
+      const url = (this.detectUrl || '').trim();
+      if (!url) { this.showSnack('Paste a careers-page URL first', 'error'); return; }
+      this.detecting = true;
+      try {
+        const r = await fetch('/api/sources/detect', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const d = await r.json();
+        // Pre-fill whatever the detector worked out; leave the name for the user.
+        this.newSource.ats = d.ats || this.newSource.ats;
+        this.newSource.identifier = d.identifier || d.tenant || '';
+        if (d.careers_url) this.newSource.identifier = d.careers_url;
+        if (d.needs_detail) {
+          this.showSnack(d.note || 'Detected — but this ATS needs extra fields (edit companies.yaml)', 'error');
+        } else {
+          this.showSnack(`Detected: ${d.ats}${d.identifier ? ' · ' + d.identifier : ''}`);
+        }
+      } catch (e) {
+        this.showSnack('Could not detect', 'error');
+      }
+      this.detecting = false;
+    },
     async addSource() {
-      if (!this.newSource.name.trim()) { this.showSnack('Name required', 'error'); return; }
-      const r = await fetch('/api/sources', {
+      if (!this.newSource.name.trim()) { this.showSnack('Name required', 'error'); return; }      const r = await fetch('/api/sources', {
         method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(this.newSource),
       });
       if (!r.ok) { this.showSnack('Failed to add', 'error'); return; }

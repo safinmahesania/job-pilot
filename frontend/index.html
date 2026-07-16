@@ -287,6 +287,18 @@
       <div class="text-xs text-gray-400 mb-4">Toggle boards on and off. Saved to companies.yaml; takes effect on the next run.</div>
       <div class="card p-4 mb-5">
         <div class="text-sm font-medium mb-3">Add a source</div>
+        <!-- Detect from a careers URL — pre-fills ats + identifier below -->
+        <div class="mb-3">
+          <label class="lbl">Paste a careers-page URL (optional — auto-detects ATS)</label>
+          <div class="flex gap-2">
+            <input x-model="detectUrl" placeholder="https://boards.greenhouse.io/company"
+                   @keydown.enter="detectFromUrl()" class="fld flex-1">
+            <button @click="detectFromUrl()" :disabled="detecting"
+                    class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1 disabled:opacity-60">
+              <i class="ti" :class="detecting ? 'ti-loader-2 animate-spin' : 'ti-wand'"></i> Detect
+            </button>
+          </div>
+        </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
           <div><label class="lbl">Company name</label><input x-model="newSource.name" class="fld"></div>
           <div><label class="lbl">ATS</label>

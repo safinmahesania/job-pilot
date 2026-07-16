@@ -94,14 +94,38 @@ def sources_list(conn=Depends(_db_dep)):
 
 
 @router.get("/api/sources/config")
-def sources_config():
+def sources_config(conn=Depends(_db_dep)):
     data = configio.read_yaml("companies.yaml") or {}
+
+    # Pull the health verdict for every board once, keyed by name, so each configured
+    # source can carry its own last-run health inline — fetched/kept counts, an ok/broken
+    # status, and the detail line. This is the same data the Health view shows; surfacing
+    # it next to the source config means you see, in one place, both what a source is and
+    # whether it's actually working.
+    from src import health
+    try:
+        health_by_name = {h["name"]: h for h in health.assess(conn)}
+    except Exception:
+        health_by_name = {}
+
     out = []
     for i, c in enumerate(data.get("companies", [])):
-        out.append({"index": i, "name": c.get("name"), "ats": c.get("ats"),
-                    "active": bool(c.get("active")),
-                    "identifier": c.get("identifier") or c.get("tenant") or c.get("base") or "",
-                    "query": c.get("query", "")})
+        name = c.get("name")
+        h = health_by_name.get(name)
+        entry = {"index": i, "name": name, "ats": c.get("ats"),
+                 "active": bool(c.get("active")),
+                 "identifier": c.get("identifier") or c.get("tenant") or c.get("base") or "",
+                 "query": c.get("query", ""),
+                 "health": None}
+        if h:
+            entry["health"] = {
+                "verdict": h["verdict"],        # ok | wobbling | silent | never_worked | erroring
+                "fetched": h["fetched"],
+                "kept": h["kept"],
+                "detail": h["detail"],
+                "last_run": str(h["last_run"])[:19] if h["last_run"] else None,
+            }
+        out.append(entry)
     return out
 
 

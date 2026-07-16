@@ -306,6 +306,10 @@
         <template x-for="s in sourceCfg" :key="s.index">
           <div class="flex items-center gap-3 px-3 sm:px-4 py-3">
             <button @click="toggleSource(s)" class="sw" :class="s.active ? 'on' : 'off'"><span></span></button>
+            <!-- health dot -->
+            <span class="shrink-0 w-2 h-2 rounded-full"
+                  :class="!s.health ? 'bg-gray-200' : (s.health.verdict==='ok' ? 'bg-green-500' : (s.health.verdict==='wobbling' ? 'bg-amber-400' : 'bg-red-500'))"
+                  :title="s.health ? s.health.detail : 'No run yet'"></span>
             <div class="flex-1 min-w-0">
               <div class="text-sm font-medium truncate" :class="!s.active && 'text-gray-400'" x-text="s.name"></div>
               <div class="text-xs text-gray-400 truncate">
@@ -313,6 +317,14 @@
                 <span x-show="s.identifier"> · <span x-text="s.identifier"></span></span>
                 <span x-show="s.query"> · q=<span x-text="s.query"></span></span>
               </div>
+              <!-- error / broken detail, only when there's a problem -->
+              <div x-show="s.health && s.health.verdict!=='ok' && s.health.detail"
+                   class="text-xs text-red-500 truncate mt-0.5" x-text="s.health.detail"></div>
+            </div>
+            <!-- fetched / kept counts -->
+            <div x-show="s.health" class="shrink-0 text-right text-xs leading-tight mr-1">
+              <div><span class="font-semibold text-gray-700" x-text="s.health?.fetched ?? 0"></span> <span class="text-gray-400">fetched</span></div>
+              <div><span class="font-semibold text-gray-700" x-text="s.health?.kept ?? 0"></span> <span class="text-gray-400">kept</span></div>
             </div>
             <button @click="testSource(s)" class="shrink-0 text-gray-400 hover:text-brand flex items-center gap-1 text-xs h-8 px-2 rounded-md border border-gray-200 hover:border-brand/40" title="Fetch this source now, without a full run"><i class="ti ti-player-play"></i><span class="hidden sm:inline">Test</span></button>
             <button @click="deleteSource(s)" class="shrink-0 text-gray-300 hover:text-red-500"><i class="ti ti-trash"></i></button>

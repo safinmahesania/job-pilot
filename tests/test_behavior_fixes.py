@@ -112,3 +112,74 @@ class TestManualJobEdit:
 
     def test_editing_a_missing_job_is_404(self, client):
         assert client.patch("/api/jobs/999999", json={"title": "x"}).status_code == 404
+
+
+# ── Fix 4b: editing a scoring-relevant field re-scores the job immediately ──
+
+class TestRescoreOnEdit:
+    def _job(self, db, score=60):
+        conn = sqlite3.connect(db)
+        conn.execute("INSERT INTO jobs (dedupe_hash, title, company, description, "
+                     "status, score) VALUES ('r1', 'Old', 'X', 'half', 'surfaced', ?)",
+                     (score,))
+        conn.commit()
+        jid = conn.execute("SELECT id FROM jobs WHERE dedupe_hash='r1'").fetchone()[0]
+        conn.close()
+        return jid
+
+    def _stub_scorer(self, monkeypatch, value=88):
+        from src.scoring import rerank
+        from src.scoring.rerank import ScoreResult
+
+        def fake(job, profile, calibration=""):
+            return ScoreResult(skills_score=value, seniority_score=value,
+                               domain_score=value, overall=value, rationale="ok")
+        monkeypatch.setattr(rerank, "score_job", fake)
+        monkeypatch.setattr(rerank, "build_calibration", lambda: "")
+        from src import configio
+        monkeypatch.setattr(configio, "read_yaml",
+                            lambda name: {"skills": ["Python"]} if "profile" in name else {})
+
+    def test_editing_description_rescoures(self, client, db, monkeypatch):
+        self._stub_scorer(monkeypatch, value=88)
+        jid = self._job(db, score=60)
+        r = client.patch(f"/api/jobs/{jid}", json={"description": "A full description."})
+        assert r.json()["rescored"] == 88
+        assert r.json()["job"]["score"] == 88
+
+    def test_editing_a_non_scoring_field_does_not_rescore(self, client, db, monkeypatch):
+        self._stub_scorer(monkeypatch, value=88)
+        jid = self._job(db, score=60)
+        r = client.patch(f"/api/jobs/{jid}", json={"apply_url": "https://x.com/apply"})
+        assert r.json()["rescored"] is None
+        assert r.json()["job"]["score"] == 60          # unchanged
+
+    def test_edit_survives_a_scoring_failure(self, client, db, monkeypatch):
+        # If every provider is down, the edit must still stand and the old score is kept.
+        from src.scoring import rerank
+        from src import configio
+
+        def boom(job, profile, calibration=""):
+            raise RuntimeError("all providers failed")
+        monkeypatch.setattr(rerank, "score_job", boom)
+        monkeypatch.setattr(rerank, "build_calibration", lambda: "")
+        monkeypatch.setattr(configio, "read_yaml", lambda name: {"skills": ["Python"]})
+
+        jid = self._job(db, score=60)
+        r = client.patch(f"/api/jobs/{jid}", json={"title": "New Title"})
+        assert r.status_code == 200
+        assert r.json()["job"]["title"] == "New Title"
+        assert r.json()["rescored"] is None
+        assert r.json()["job"]["score"] == 60          # old score preserved
+
+    def test_no_rescore_when_scoring_disabled(self, client, db, monkeypatch):
+        self._stub_scorer(monkeypatch, value=99)
+        jid = self._job(db, score=60)
+        conn = sqlite3.connect(db)
+        conn.execute("INSERT INTO settings (key, value) VALUES ('scoring_enabled', '0') "
+                     "ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+        conn.commit()
+        conn.close()
+        r = client.patch(f"/api/jobs/{jid}", json={"description": "New text."})
+        assert r.json()["rescored"] is None
+        assert r.json()["job"]["score"] == 60

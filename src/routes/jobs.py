@@ -221,12 +221,62 @@ def edit_job(job_id: int, body: JobEdit, conn=Depends(_db_dep)):
     conn.execute(f"UPDATE jobs SET {assignments} WHERE id=?", values)
     conn.commit()
 
+    # Re-score right away if the edit touched something the score actually depends on.
+    # A fixed title or a description that was half-fetched changes the match; a
+    # corrected apply link or a date does not, so those don't trigger the model. This
+    # is best-effort: if scoring is off, or every provider is down, the edit still
+    # stands — the job just keeps its old score (or stays unscored) rather than the
+    # correction being lost because the model wasn't reachable.
+    rescored = None
+    SCORING_FIELDS = {"title", "company", "description"}
+    scoring_on = _get_setting(conn, "scoring_enabled", "1") == "1"
+    if scoring_on and (set(changes) & SCORING_FIELDS):
+        rescored = _rescore_one(conn, job_id)
+
     row = conn.execute(
         "SELECT id, title, company, location, description, apply_url, source_url, "
-        "job_type, posted_date, deadline, remote, salary_min, salary_max "
+        "job_type, posted_date, deadline, remote, salary_min, salary_max, score "
         "FROM jobs WHERE id=?", (job_id,)
     ).fetchone()
-    return {"updated": list(changes), "job": dict(row)}
+    return {"updated": list(changes), "rescored": rescored, "job": dict(row)}
+
+
+def _rescore_one(conn, job_id: int):
+    """Score a single edited job now, and persist the result. Returns the new score,
+    or None if scoring couldn't run (no model available, profile missing, etc.) — in
+    which case the job's existing score is left untouched and the edit is unaffected."""
+    try:
+        from src import configio
+        from src.scoring.rerank import score_job, build_calibration
+
+        profile = configio.read_yaml("profile.yaml") or {}
+        if not profile:
+            return None
+
+        job = conn.execute(
+            "SELECT title, company, location, description, job_type FROM jobs WHERE id=?",
+            (job_id,)
+        ).fetchone()
+        if not job:
+            return None
+
+        calibration = build_calibration()
+        result = score_job(dict(job), profile, calibration)
+        if result is None:
+            return None
+
+        conn.execute(
+            "UPDATE jobs SET score=?, skills_score=?, seniority_score=?, "
+            "domain_score=?, rationale=? WHERE id=?",
+            (result.overall, result.skills_score, result.seniority_score,
+             result.domain_score, result.rationale, job_id),
+        )
+        conn.commit()
+        return round(result.overall)
+    except Exception:
+        import traceback
+        traceback.print_exc()          # full trace to the console; the edit still stands
+        return None
 
 
 # ── Matching a browser page to a stored job (used by the extension) ──

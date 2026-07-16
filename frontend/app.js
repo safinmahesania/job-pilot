@@ -726,9 +726,16 @@ function jobpilot() {
           this.edit.busy = false;
           return;
         }
+        const data = await r.json().catch(() => ({}));
         this.edit = null;
         await this.load();          // pull the corrected job back into the list
-        this.showSnack('Job updated');
+        // If the edit changed something the score depends on, the job was re-scored
+        // on the spot — say so, with the new number.
+        if (data.rescored != null) {
+          this.showSnack(`Job updated · re-scored to ${data.rescored}`);
+        } else {
+          this.showSnack('Job updated');
+        }
       } catch (e) {
         this.showSnack('Could not save', 'error');
         this.edit.busy = false;

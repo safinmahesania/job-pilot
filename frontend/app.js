@@ -35,7 +35,7 @@ function jobpilot() {
 
     sourceCfg: [], newSource: { name: '', ats: 'greenhouse', identifier: '', query: '', active: true },
     atsTypes: ['greenhouse','lever','ashby','workday','oracle','phenom',
-               'themuse','smartrecruiters','workable','jsearch','remotive','remoteok',
+               'themuse','smartrecruiters','workable','jsearch','adzuna','remotive','remoteok',
                'weworkremotely','jobspresso','custom','aggregator','successfactors'],
     detectUrl: '', detecting: false,
 

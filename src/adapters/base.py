@@ -30,6 +30,7 @@ def get_adapter(company: dict) -> SourceAdapter:
     from .smartrecruiters import SmartRecruitersAdapter
     from .workable import WorkableAdapter
     from .jsearch import JSearchAdapter
+    from .adzuna import AdzunaAdapter
 
     ats = company.get("ats")
     registry = {
@@ -47,6 +48,7 @@ def get_adapter(company: dict) -> SourceAdapter:
         "smartrecruiters": SmartRecruitersAdapter,
         "workable": WorkableAdapter,
         "jsearch": JSearchAdapter,
+        "adzuna": AdzunaAdapter,
         # HTML-scrape sources with no JSON API — all served by one generic adapter that
         # pulls job links out of a careers page. Best-effort by nature (see generic.py).
         "custom": GenericCareersAdapter,
@@ -65,6 +67,6 @@ def get_adapter(company: dict) -> SourceAdapter:
 KNOWN_ATS = frozenset({
     "greenhouse", "lever", "themuse", "remotive", "workday", "remoteok",
     "weworkremotely", "jobspresso", "oracle", "phenom", "ashby",
-    "smartrecruiters", "workable", "jsearch",
+    "smartrecruiters", "workable", "jsearch", "adzuna",
     "custom", "aggregator", "successfactors",
 })

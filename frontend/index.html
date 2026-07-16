@@ -1085,7 +1085,50 @@
             <button @click="genDoc(detail,'cover')" class="text-sm h-9 px-4 rounded-md border border-brand text-brand hover:bg-brand/5 flex items-center gap-1"><i class="ti ti-file-text"></i> Cover letter</button>
             <button @click="genDoc(detail,'resume')" class="text-sm h-9 px-4 rounded-md border border-brand text-brand hover:bg-brand/5 flex items-center gap-1"><i class="ti ti-file-cv"></i> Resume</button>
             <button @click="setStatus(detail,'saved'); detail=null" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Save</button>
+            <button @click="openEdit(detail); detail=null" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1" title="Fix a wrong or half-fetched job"><i class="ti ti-edit"></i> Edit</button>
             <a :href="detail.source_url" target="_blank" class="text-sm h-9 px-4 rounded-md text-gray-500 hover:bg-gray-50 flex items-center sm:ml-auto">View posting <i class="ti ti-external-link ml-1"></i></a>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ══ Edit job modal ══ -->
+  <div x-show="edit" x-cloak @click="cancelEdit()" class="fixed inset-0 z-[72] bg-black/40 flex items-start justify-center p-2 sm:p-4 overflow-y-auto">
+    <div @click.stop class="bg-white rounded-xl max-w-2xl w-full my-4 sm:my-8 shadow-xl">
+      <template x-if="edit">
+        <div>
+          <div class="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100">
+            <div class="font-semibold text-base sm:text-lg flex items-center gap-2"><i class="ti ti-edit text-brand"></i> Edit job</div>
+            <button @click="cancelEdit()" class="text-gray-400 hover:text-gray-700"><i class="ti ti-x text-xl"></i></button>
+          </div>
+          <div class="p-4 sm:p-5 space-y-3 max-h-[70vh] overflow-y-auto">
+            <p class="text-xs text-gray-500 -mt-1">Fix anything the fetch got wrong — a truncated description, the wrong title, a missing apply link. Only what you change is saved.</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label class="block"><span class="text-xs font-medium text-gray-600">Title</span>
+                <input x-model="edit.title" class="mt-1 w-full h-9 px-3 rounded-md border border-gray-200 text-sm"></label>
+              <label class="block"><span class="text-xs font-medium text-gray-600">Company</span>
+                <input x-model="edit.company" class="mt-1 w-full h-9 px-3 rounded-md border border-gray-200 text-sm"></label>
+              <label class="block"><span class="text-xs font-medium text-gray-600">Location</span>
+                <input x-model="edit.location" class="mt-1 w-full h-9 px-3 rounded-md border border-gray-200 text-sm"></label>
+              <label class="block"><span class="text-xs font-medium text-gray-600">Job type</span>
+                <input x-model="edit.job_type" placeholder="Full-time, Internship…" class="mt-1 w-full h-9 px-3 rounded-md border border-gray-200 text-sm"></label>
+              <label class="block"><span class="text-xs font-medium text-gray-600">Posted date</span>
+                <input x-model="edit.posted_date" placeholder="2026-07-01" class="mt-1 w-full h-9 px-3 rounded-md border border-gray-200 text-sm"></label>
+              <label class="block"><span class="text-xs font-medium text-gray-600">Deadline</span>
+                <input x-model="edit.deadline" placeholder="2026-08-01" class="mt-1 w-full h-9 px-3 rounded-md border border-gray-200 text-sm"></label>
+            </div>
+            <label class="block"><span class="text-xs font-medium text-gray-600">Apply URL</span>
+              <input x-model="edit.apply_url" class="mt-1 w-full h-9 px-3 rounded-md border border-gray-200 text-sm"></label>
+            <label class="block"><span class="text-xs font-medium text-gray-600">Posting URL</span>
+              <input x-model="edit.source_url" class="mt-1 w-full h-9 px-3 rounded-md border border-gray-200 text-sm"></label>
+            <label class="block"><span class="text-xs font-medium text-gray-600">Description</span>
+              <textarea x-model="edit.description" rows="8" class="mt-1 w-full px-3 py-2 rounded-md border border-gray-200 text-sm leading-relaxed"></textarea></label>
+          </div>
+          <div class="flex items-center gap-2 p-4 sm:p-5 border-t border-gray-100">
+            <button @click="saveEdit()" :disabled="edit.busy" class="text-sm h-9 px-5 rounded-md bg-brand text-white flex items-center gap-1 disabled:opacity-60">
+              <i class="ti" :class="edit.busy ? 'ti-loader-2 animate-spin' : 'ti-check'"></i> Save changes</button>
+            <button @click="cancelEdit()" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Cancel</button>
           </div>
         </div>
       </template>

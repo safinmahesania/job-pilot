@@ -350,10 +350,23 @@ def _profile_vocabulary(profile: dict) -> str:
     """
     parts = [str(profile.get("summary") or "")]
 
+    # skills comes in two shapes in the wild: a tiered dict
+    # ({"expert": [...], "proficient": [...]}) and a flat list (["Python", ...]).
+    # Only the dict form was read here, so a profile that used a plain list had an
+    # empty skills vocabulary — and then every technology the cover letter named,
+    # including ones straight off the person's own skills list, was flagged as
+    # fabricated and the letter was refused every time. Both shapes are read now.
     skills = profile.get("skills") or {}
     if isinstance(skills, dict):
         for tier in skills.values():
-            parts.extend(str(s) for s in (tier or []))
+            if isinstance(tier, (list, tuple)):
+                parts.extend(str(s) for s in tier)
+            else:
+                parts.append(str(tier))
+    elif isinstance(skills, (list, tuple)):
+        parts.extend(str(s) for s in skills)
+    else:
+        parts.append(str(skills))
 
     for group in profile.get("skill_categories") or []:
         if isinstance(group, dict):

@@ -89,13 +89,23 @@ def stats(conn=Depends(_db_dep)):
 @router.get("/api/jobs")
 def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all", conn=Depends(_db_dep)):
     threshold = int(_get_setting(conn, "score_threshold", 70))
+    scoring_on = _get_setting(conn, "scoring_enabled", "1") == "1"
 
     # An unknown tab used to fall back to the feed, which quietly showed the wrong
     # list instead of signalling the mistake. A tab the app does not define returns
     # nothing — a visibly empty list is a clearer "that is not a real tab" than a
     # screenful of feed under the wrong heading.
     if tab == "feed":
-        where = f"status='surfaced' AND score IS NOT NULL AND score >= {threshold}"
+        if scoring_on:
+            # Normal case: the feed is the ranked shortlist — scored jobs at or above
+            # the threshold.
+            where = f"status='surfaced' AND score IS NOT NULL AND score >= {threshold}"
+        else:
+            # Scoring is turned off, so nothing gets a score and the threshold filter
+            # would hide every surfaced job — the feed would look empty even though the
+            # jobs are right there. With no scores to rank by, show all surfaced jobs
+            # instead of an empty page.
+            where = "status = 'surfaced'"
     elif tab in TAB_WHERE:
         where = TAB_WHERE[tab]
     else:
@@ -108,7 +118,7 @@ def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all", conn=
 
     order = {"score": "score DESC", "newest": "posted_date DESC",
              "company": "company ASC"}.get(sort, "score DESC")   # whitelist, safe
-    if tab == "unscored" and sort == "score":
+    if sort == "score" and (tab == "unscored" or (tab == "feed" and not scoring_on)):
         order = "id DESC"          # nothing to rank by; show the newest first
 
     rows = conn.execute(f"SELECT {COLS} FROM jobs WHERE {where} ORDER BY {order}",
@@ -147,6 +157,76 @@ def set_notes(job_id: int, body: NotesUpdate, conn=Depends(_db_dep)):
     conn.execute("UPDATE jobs SET notes=? WHERE id=?", (body.notes, job_id))
     conn.commit()
     return {"ok": True}
+
+
+# ── Manual edit (fix a job the fetcher got wrong) ──
+
+# Only the descriptive fields a person would correct by hand. The pipeline's own
+# bookkeeping — id, dedupe_hash, source, score and the rest — is deliberately not here:
+# editing those would either corrupt de-duplication or silently fake a score the model
+# never gave. Everything a bad scrape actually gets wrong (a truncated description, a
+# title that grabbed the wrong line, a missing apply link) is editable.
+EDITABLE_FIELDS = {
+    "title": str,
+    "company": str,
+    "location": str,
+    "description": str,
+    "apply_url": str,
+    "source_url": str,
+    "job_type": str,
+    "posted_date": str,
+    "deadline": str,
+    "remote": int,           # 0 / 1
+    "salary_min": int,
+    "salary_max": int,
+}
+
+
+class JobEdit(BaseModel):
+    title: str | None = None
+    company: str | None = None
+    location: str | None = None
+    description: str | None = None
+    apply_url: str | None = None
+    source_url: str | None = None
+    job_type: str | None = None
+    posted_date: str | None = None
+    deadline: str | None = None
+    remote: int | None = None
+    salary_min: int | None = None
+    salary_max: int | None = None
+
+
+@router.patch("/api/jobs/{job_id}")
+def edit_job(job_id: int, body: JobEdit, conn=Depends(_db_dep)):
+    """Correct a job's fields by hand — for when a fetch grabbed the wrong text or
+    only half a description. Only the fields you actually send are changed; anything
+    left out keeps its current value."""
+    exists = conn.execute("SELECT 1 FROM jobs WHERE id=?", (job_id,)).fetchone()
+    if not exists:
+        raise HTTPException(404, "job not found")
+
+    # Only the fields the caller explicitly set — model_dump(exclude_unset) keeps this
+    # a true partial edit, so sending {"title": "..."} touches the title and nothing
+    # else. Every key is checked against the whitelist, so the column list can never
+    # be steered from the request body.
+    changes = body.model_dump(exclude_unset=True)
+    changes = {k: v for k, v in changes.items() if k in EDITABLE_FIELDS}
+    if not changes:
+        raise HTTPException(400, "no editable fields provided")
+
+    assignments = ", ".join(f"{col}=?" for col in changes)   # col names from whitelist
+    values = list(changes.values())
+    values.append(job_id)
+    conn.execute(f"UPDATE jobs SET {assignments} WHERE id=?", values)
+    conn.commit()
+
+    row = conn.execute(
+        "SELECT id, title, company, location, description, apply_url, source_url, "
+        "job_type, posted_date, deadline, remote, salary_min, salary_max "
+        "FROM jobs WHERE id=?", (job_id,)
+    ).fetchone()
+    return {"updated": list(changes), "job": dict(row)}
 
 
 # ── Matching a browser page to a stored job (used by the extension) ──

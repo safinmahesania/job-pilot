@@ -5,6 +5,7 @@ function jobpilot() {
     sort: 'score', source: 'all', sources: [],
     busy: null, snack: null, blocking: null, confirmBox: null,
     cover: null,   // { loading, text, provider, title, company }
+    edit: null,    // { id, title, company, location, description, apply_url, ... } when editing a job by hand
     llm: { providers: [], available: 0, total: 0, combined_tokens: 0, combined_limit: 0 },
     ai: { scoring: true, generation: true },
     cfgFiles: [],
@@ -686,6 +687,52 @@ function jobpilot() {
         body: JSON.stringify({ notes: job.notes || '' }),
       });
       this.showSnack('Note saved');
+    },
+
+    // ── Manual edit — fix a job the fetcher got wrong ──
+    openEdit(job) {
+      // Copy the editable fields into a working object so Cancel really cancels
+      // (the card isn't mutated until Save succeeds).
+      this.edit = {
+        id: job.id,
+        title: job.title || '',
+        company: job.company || '',
+        location: job.location || '',
+        description: job.description || '',
+        apply_url: job.apply_url || '',
+        source_url: job.source_url || '',
+        job_type: job.job_type || '',
+        posted_date: job.posted_date || '',
+        deadline: job.deadline || '',
+        busy: false,
+      };
+    },
+
+    cancelEdit() { this.edit = null; },
+
+    async saveEdit() {
+      if (!this.edit) return;
+      this.edit.busy = true;
+      const { id, busy, ...fields } = this.edit;   // don't send id/busy in the body
+      try {
+        const r = await fetch(`/api/jobs/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fields),
+        });
+        if (!r.ok) {
+          const msg = (await r.json().catch(() => ({}))).detail || 'Could not save';
+          this.showSnack(typeof msg === 'string' ? msg : 'Could not save', 'error');
+          this.edit.busy = false;
+          return;
+        }
+        this.edit = null;
+        await this.load();          // pull the corrected job back into the list
+        this.showSnack('Job updated');
+      } catch (e) {
+        this.showSnack('Could not save', 'error');
+        this.edit.busy = false;
+      }
     },
 
     async runNow() {

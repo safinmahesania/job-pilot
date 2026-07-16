@@ -6,6 +6,7 @@ function jobpilot() {
     busy: null, snack: null, blocking: null, confirmBox: null,
     cover: null,   // { loading, text, provider, title, company }
     edit: null,    // { id, title, company, location, description, apply_url, ... } when editing a job by hand
+    sourceTest: null,  // { name, loading, ok, count, jobs, error, elapsed_ms } when testing a source
     llm: { providers: [], available: 0, total: 0, combined_tokens: 0, combined_limit: 0 },
     ai: { scoring: true, generation: true },
     cfgFiles: [],
@@ -236,6 +237,23 @@ function jobpilot() {
       await this.loadSources();
       this.showSnack(`${s.name} removed`);
     },
+    async testSource(s) {
+      // Fetch just this one source and show what it pulls — no save, no scoring, no
+      // full run. The fast way to check a source is wired up right.
+      this.sourceTest = { name: s.name, loading: true, jobs: [] };
+      try {
+        const r = await fetch('/api/sources/test', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ index: s.index }),
+        });
+        const d = await r.json();
+        this.sourceTest = { ...d, loading: false };
+      } catch (e) {
+        this.sourceTest = { name: s.name, loading: false, ok: false,
+                            error: 'Request failed', jobs: [] };
+      }
+    },
+    closeSourceTest() { this.sourceTest = null; },
 
     // ───────── jobs ─────────
     formatJD(text) {

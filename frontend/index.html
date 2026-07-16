@@ -314,6 +314,7 @@
                 <span x-show="s.query"> · q=<span x-text="s.query"></span></span>
               </div>
             </div>
+            <button @click="testSource(s)" class="shrink-0 text-gray-400 hover:text-brand flex items-center gap-1 text-xs h-8 px-2 rounded-md border border-gray-200 hover:border-brand/40" title="Fetch this source now, without a full run"><i class="ti ti-player-play"></i><span class="hidden sm:inline">Test</span></button>
             <button @click="deleteSource(s)" class="shrink-0 text-gray-300 hover:text-red-500"><i class="ti ti-trash"></i></button>
           </div>
         </template>
@@ -1087,6 +1088,73 @@
             <button @click="setStatus(detail,'saved'); detail=null" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Save</button>
             <button @click="openEdit(detail); detail=null" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1" title="Fix a wrong or half-fetched job"><i class="ti ti-edit"></i> Edit</button>
             <a :href="detail.source_url" target="_blank" class="text-sm h-9 px-4 rounded-md text-gray-500 hover:bg-gray-50 flex items-center sm:ml-auto">View posting <i class="ti ti-external-link ml-1"></i></a>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ══ Source test modal ══ -->
+  <div x-show="sourceTest" x-cloak @click="closeSourceTest()" class="fixed inset-0 z-[72] bg-black/40 flex items-start justify-center p-2 sm:p-4 overflow-y-auto">
+    <div @click.stop class="bg-white rounded-xl max-w-2xl w-full my-4 sm:my-8 shadow-xl">
+      <template x-if="sourceTest">
+        <div>
+          <div class="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100">
+            <div class="font-semibold text-base sm:text-lg flex items-center gap-2">
+              <i class="ti ti-player-play text-brand"></i>
+              Test: <span x-text="sourceTest.name"></span>
+            </div>
+            <button @click="closeSourceTest()" class="text-gray-400 hover:text-gray-700"><i class="ti ti-x text-xl"></i></button>
+          </div>
+          <div class="p-4 sm:p-5">
+            <!-- loading -->
+            <div x-show="sourceTest.loading" class="py-10 text-center text-gray-400">
+              <i class="ti ti-loader-2 animate-spin text-2xl"></i>
+              <div class="text-sm mt-2">Fetching this source…</div>
+            </div>
+
+            <!-- error -->
+            <div x-show="!sourceTest.loading && sourceTest.ok === false" class="py-6">
+              <div class="flex items-start gap-2 text-red-600 bg-red-50 rounded-lg p-3">
+                <i class="ti ti-alert-triangle mt-0.5"></i>
+                <div class="text-sm">
+                  <div class="font-medium">This source didn't fetch.</div>
+                  <div class="text-red-500 mt-1 break-words" x-text="sourceTest.error"></div>
+                  <div class="text-xs text-red-400 mt-2" x-show="sourceTest.stage">Failed at: <span x-text="sourceTest.stage"></span> stage</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- success -->
+            <div x-show="!sourceTest.loading && sourceTest.ok === true">
+              <div class="flex items-center gap-3 text-sm mb-3 flex-wrap">
+                <span class="px-2 py-1 rounded-md bg-green-50 text-green-700 font-medium"><span x-text="sourceTest.count"></span> jobs found</span>
+                <span class="text-gray-400" x-show="sourceTest.count > sourceTest.shown">showing first <span x-text="sourceTest.shown"></span></span>
+                <span class="text-gray-400" x-show="sourceTest.elapsed_ms">· <span x-text="sourceTest.elapsed_ms"></span>ms</span>
+              </div>
+              <div x-show="sourceTest.count === 0" class="py-6 text-center text-gray-400 text-sm">
+                Fetched cleanly, but no jobs matched. Check the identifier/URL, or the board may have no open roles.
+              </div>
+              <div class="divide-y divide-gray-100 max-h-[55vh] overflow-y-auto">
+                <template x-for="(j, i) in sourceTest.jobs" :key="i">
+                  <div class="py-2.5">
+                    <div class="flex items-start gap-2">
+                      <div class="flex-1 min-w-0">
+                        <a :href="j.url" target="_blank" class="text-sm font-medium text-gray-800 hover:text-brand truncate block" x-text="j.title"></a>
+                        <div class="text-xs text-gray-400 flex items-center gap-2 mt-0.5">
+                          <span x-show="j.location" x-text="j.location"></span>
+                          <span x-show="j.has_description" class="text-green-500" title="Description present"><i class="ti ti-file-text"></i></span>
+                          <span x-show="!j.has_description" class="text-gray-300" title="No description — will be fetched on a real run"><i class="ti ti-file-off"></i></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+          <div class="p-4 sm:p-5 border-t border-gray-100 text-xs text-gray-400">
+            This is a preview only — nothing was saved or scored. Run the pipeline to actually import.
           </div>
         </div>
       </template>

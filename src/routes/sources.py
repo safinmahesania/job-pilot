@@ -14,6 +14,79 @@ from src.deps import _db_dep
 router = APIRouter()
 
 
+# ── Test a single source (dry run — no save, no scoring) ──
+
+class SourceProbe(BaseModel):
+    # Either point at an existing configured source by its index, or pass an inline
+    # source config to try before adding it. Inline wins if both are given.
+    index: int | None = None
+    source: dict | None = None
+    limit: int = 15          # cap the preview so a huge board doesn't flood the UI
+
+
+@router.post("/api/sources/test")
+def test_source(body: SourceProbe):
+    """Fetch one source right now and return what it found — without saving anything,
+    scoring anything, or running the rest of the pipeline. This is the fast way to check
+    that a source is configured correctly (right ats, right identifier/URL) before
+    committing to a full run: you see the jobs it pulls, or the exact error it hits."""
+    from src.adapters.base import get_adapter
+
+    # Resolve which source to test.
+    if body.source is not None:
+        company = dict(body.source)
+    elif body.index is not None:
+        data = configio.read_yaml("companies.yaml") or {}
+        items = data.get("companies", [])
+        if not 0 <= body.index < len(items):
+            raise HTTPException(404, "source not found")
+        company = dict(items[body.index])
+    else:
+        raise HTTPException(400, "pass either an index or an inline source config")
+
+    if not company.get("name"):
+        company["name"] = company.get("ats", "test") + " source"
+
+    # Build the adapter — a bad ats is a clean, expected failure, not a 500.
+    try:
+        adapter = get_adapter(company)
+    except ValueError as e:
+        return {"ok": False, "stage": "adapter", "error": str(e),
+                "name": company.get("name"), "ats": company.get("ats"),
+                "count": 0, "jobs": []}
+
+    # Run the fetch. Any network / parse error is caught and reported rather than raised,
+    # exactly as a real run would treat it — so testing a flaky board never 500s.
+    import time
+    started = time.time()
+    try:
+        raw = adapter.fetch()
+    except Exception as e:
+        return {"ok": False, "stage": "fetch", "error": f"{type(e).__name__}: {e}",
+                "name": company.get("name"), "ats": company.get("ats"),
+                "count": 0, "jobs": [], "elapsed_ms": round((time.time() - started) * 1000)}
+
+    elapsed = round((time.time() - started) * 1000)
+    preview = []
+    for j in raw[: max(1, body.limit)]:
+        preview.append({
+            "title": j.get("title"),
+            "location": j.get("location") or "",
+            "url": j.get("source_url") or j.get("apply_url") or "",
+            "has_description": bool((j.get("description") or "").strip()),
+        })
+
+    return {
+        "ok": True,
+        "name": company.get("name"),
+        "ats": company.get("ats"),
+        "count": len(raw),
+        "shown": len(preview),
+        "elapsed_ms": elapsed,
+        "jobs": preview,
+    }
+
+
 @router.get("/api/sources")
 def sources_list(conn=Depends(_db_dep)):
     rows = conn.execute("SELECT DISTINCT source FROM jobs ORDER BY source").fetchall()

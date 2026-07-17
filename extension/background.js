@@ -21,7 +21,15 @@
  * `ensureInjected` puts it there on demand, for that one tab, on your say-so.
  */
 
-const API = "http://localhost:8000";
+// Where JobPilot is reachable. Defaults to localhost, but can be changed in the popup
+// (Settings > Server URL) — e.g. to 127.0.0.1 if localhost is blocked, or to your
+// tunnel URL. Read fresh on every call so a change takes effect without reloading.
+const DEFAULT_API = "http://localhost:8000";
+
+async function apiBase() {
+  const { serverUrl } = await chrome.storage.local.get("serverUrl");
+  return (serverUrl || DEFAULT_API).replace(/\/+$/, "");   // trim trailing slash
+}
 
 // tabId -> { id, title, company, confidence }
 const bindings = new Map();
@@ -36,13 +44,13 @@ async function authHeaders(extra = {}) {
 }
 
 async function getJSON(path) {
-  const r = await fetch(`${API}${path}`, { headers: await authHeaders() });
+  const r = await fetch(`${await apiBase()}${path}`, { headers: await authHeaders() });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
 
 async function postJSON(path, body) {
-  const r = await fetch(`${API}${path}`, {
+  const r = await fetch(`${await apiBase()}${path}`, {
     method: "POST",
     headers: await authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
@@ -56,7 +64,7 @@ async function postJSON(path, body) {
 
 /** Fetch a saved document as base64 — extension messaging can't carry binary. */
 async function fetchFile(jobId, kind) {
-  const r = await fetch(`${API}/api/jobs/${jobId}/materials/${kind}/file?format=pdf`,
+  const r = await fetch(`${await apiBase()}/api/jobs/${jobId}/materials/${kind}/file?format=pdf`,
                         { headers: await authHeaders() });
   if (!r.ok) {
     const err = await r.json().catch(() => ({}));

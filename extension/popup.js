@@ -246,6 +246,21 @@ for (const [key, el] of Object.entries(toggles)) {
     paintToggles();
   });
 
+  // The server URL. Saved as you type; background.js reads it on every call. Changing
+  // it re-checks the connection so you see immediately whether the new address works.
+  const urlInput = document.getElementById("serverUrl");
+  if (urlInput) {
+    chrome.storage.local.get("serverUrl", ({ serverUrl }) => {
+      urlInput.value = serverUrl || "http://localhost:8000";
+    });
+    let urlTimer = null;
+    urlInput.addEventListener("input", () => {
+      chrome.storage.local.set({ serverUrl: urlInput.value.trim() });
+      clearTimeout(urlTimer);
+      urlTimer = setTimeout(() => location.reload(), 600);   // re-run health check
+    });
+  }
+
   // The app password, if the app is locked. Saved as you type; sent by
   // background.js as the x-jobpilot-key header on every call.
   const keyInput = document.getElementById("apiKey");
@@ -253,8 +268,11 @@ for (const [key, el] of Object.entries(toggles)) {
     chrome.storage.local.get("apiKey", ({ apiKey }) => {
       if (apiKey) keyInput.value = apiKey;
     });
+    let keyTimer = null;
     keyInput.addEventListener("input", () => {
       chrome.storage.local.set({ apiKey: keyInput.value.trim() });
+      clearTimeout(keyTimer);
+      keyTimer = setTimeout(() => location.reload(), 600);   // re-check with new password
     });
   }
 
@@ -265,12 +283,13 @@ for (const [key, el] of Object.entries(toggles)) {
       statusText.textContent = "Password needed";
       foot.textContent = "Your JobPilot is locked — enter its password below.";
       jobTitle.textContent = "—";
-      jobWhy.textContent = "Enter the password (JOBPILOT_PASSWORD) to connect.";
+      jobWhy.textContent = "Enter the password (JOBPILOT_PASSWORD) below to connect.";
     } else {
-      statusText.textContent = "JobPilot not running on :8000";
-      foot.textContent = "Start it with: uvicorn src.api:app";
+      const url = urlInput?.value || "http://localhost:8000";
+      statusText.textContent = "Can't reach JobPilot";
+      foot.textContent = `Tried ${url}. Is it running? Check the Server URL below.`;
       jobTitle.textContent = "—";
-      jobWhy.textContent = "Can't check the job until JobPilot is running.";
+      jobWhy.textContent = "Start JobPilot, or fix the Server URL, then reopen this.";
     }
     return;
   }

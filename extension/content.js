@@ -29,8 +29,6 @@ if (window.__jobpilotLoaded) {
   window.__jobpilotLoaded = true;
 }
 
-const API = "http://localhost:8000";
-
 // Fields we never touch, whatever their label says.
 const SKIP_TYPES = new Set([
   "password", "file", "hidden", "submit", "button", "image", "reset", "search",
@@ -251,7 +249,7 @@ async function fillPage({ silent = false } = {}) {
     if (!answers) {
       const res = await send({ type: "getAnswers" });
       if (!res?.ok) {
-        if (!silent) toast("Can't reach JobPilot — is it running on :8000?", "error");
+        if (!silent) toast("Can't reach JobPilot — is it running?", "error");
         return { filled: 0, skipped: 0 };
       }
       answers = res.data.answers;

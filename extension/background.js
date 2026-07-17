@@ -128,8 +128,20 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
     try {
       switch (msg.type) {
         case "health":
-          await getJSON("/api/autofill/data");
-          respond({ ok: true });
+          try {
+            await getJSON("/api/autofill/data");
+            respond({ ok: true });
+          } catch (e) {
+            // A 401/403 means the server is up but the password is missing or wrong —
+            // a completely different fix from "server not running". Tell them apart so
+            // the popup can show the right message.
+            const m = String(e && e.message || "");
+            if (m.includes("401") || m.includes("403")) {
+              respond({ ok: false, reason: "auth" });
+            } else {
+              respond({ ok: false, reason: "down" });
+            }
+          }
           return;
 
         // The popup asks for this before it tries to fill or attach.

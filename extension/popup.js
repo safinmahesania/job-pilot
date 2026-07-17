@@ -261,10 +261,17 @@ for (const [key, el] of Object.entries(toggles)) {
   const health = await send({ type: "health" });
   if (!health?.ok) {
     dot.classList.add("bad");
-    statusText.textContent = "JobPilot not running on :8000";
-    foot.textContent = "Start it with: uvicorn src.api:app";
-    jobTitle.textContent = "—";
-    jobWhy.textContent = "Can't check the job until JobPilot is running.";
+    if (health?.reason === "auth") {
+      statusText.textContent = "Password needed";
+      foot.textContent = "Your JobPilot is locked — enter its password below.";
+      jobTitle.textContent = "—";
+      jobWhy.textContent = "Enter the password (JOBPILOT_PASSWORD) to connect.";
+    } else {
+      statusText.textContent = "JobPilot not running on :8000";
+      foot.textContent = "Start it with: uvicorn src.api:app";
+      jobTitle.textContent = "—";
+      jobWhy.textContent = "Can't check the job until JobPilot is running.";
+    }
     return;
   }
 

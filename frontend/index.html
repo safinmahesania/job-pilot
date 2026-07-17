@@ -1279,9 +1279,9 @@
               <span x-text="cover.saved ? 'Saved to job' : 'Save to job'"></span>
             </button>
             <button @click="copyCover()" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1"><i class="ti ti-copy"></i> Copy</button>
-            <!-- Word first for the resume: most ATS parse .docx at least as well as
-                 PDF, and several parse it better. -->
-            <button x-show="cover.kind==='resume'" @click="downloadCover('docx')" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1"><i class="ti ti-file-type-docx"></i> Word</button>
+            <!-- Word for both now: a cover letter is often pasted into an application
+                 form, and a .docx attaches better than a PDF. -->
+            <button @click="downloadCover('docx')" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1"><i class="ti ti-file-type-docx"></i> Word</button>
             <button @click="downloadCover('pdf')" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1"><i class="ti ti-file-type-pdf"></i> PDF</button>
             <button @click="genDoc({id: cover.jobId, title: cover.title, company: cover.company}, cover.kind)" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1 sm:ml-auto"><i class="ti ti-refresh"></i> Regenerate</button>
           </div>

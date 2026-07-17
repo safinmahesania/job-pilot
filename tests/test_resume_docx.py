@@ -14,7 +14,6 @@ someone adds one back.
 import io
 import zipfile
 
-import pytest
 
 from src.resume_docx import to_docx, _split_right
 
@@ -173,12 +172,14 @@ Replace the placeholders. Keep the @@ convention.
 
 
 class TestMaterialsIntegration:
-    def test_the_cover_letter_is_not_offered_as_word(self):
-        """A letter is prose. It has no dates to pin to a margin, and .docx buys
-        it nothing a PDF doesn't."""
+    def test_the_cover_letter_renders_as_word(self):
+        """People asked for the cover letter as .docx too — pasting a PDF into an
+        application form is worse than attaching a Word file. It renders as plain,
+        clean prose."""
         from src import materials
-        with pytest.raises(ValueError):
-            materials.to_docx("Dear Hiring Manager,", "cover")
+        data = materials.to_docx(
+            "Dear Hiring Manager,\n\nI am excited to apply.\n\nSincerely,\nSam", "cover")
+        assert data[:2] == b"PK"          # a valid .docx (zip) file
 
     def test_the_resume_renders_through_materials(self):
         from src import materials

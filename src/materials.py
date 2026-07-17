@@ -133,13 +133,52 @@ def _pdf_line_with_right(pdf, left: str, right: str, body_size: float,
 def to_docx(content: str, kind: str) -> bytes:
     """Render to a Word document.
 
-    Only the resume gets this. A cover letter is prose — it has no dates to pin to
-    a margin and nothing a .docx buys it that a PDF doesn't.
+    The resume gets its full structured layout. The cover letter is prose, so it gets a
+    plain, clean Word document — the paragraphs as written, in a readable font with
+    normal margins — because people asked to download it as .docx too, and pasting a PDF
+    into an application form is worse than attaching a Word file.
     """
-    if kind != "resume":
-        raise ValueError("Word export is for the resume; the cover letter is a PDF.")
-    from src.resume_docx import to_docx as render
-    return render(content)
+    if kind == "resume":
+        from src.resume_docx import to_docx as render
+        return render(content)
+    return _prose_to_docx(content)
+
+
+def _prose_to_docx(content: str) -> bytes:
+    """A cover letter (or any prose) as a simple, clean Word document."""
+    import io
+
+    from docx import Document
+    from docx.shared import Pt, Inches
+
+    doc = Document()
+    for section in doc.sections:
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1)
+        section.right_margin = Inches(1)
+
+    style = doc.styles["Normal"]
+    style.font.name = "Calibri"
+    style.font.size = Pt(11)
+
+    # Blank lines separate paragraphs; single newlines inside a block are kept as line
+    # breaks (so an address block or sign-off stays tight).
+    for block in content.replace("\r\n", "\n").split("\n\n"):
+        block = block.strip("\n")
+        if not block.strip():
+            continue
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(10)
+        lines = block.split("\n")
+        for i, line in enumerate(lines):
+            run = p.add_run(line)
+            if i < len(lines) - 1:
+                run.add_break()
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
 
 
 def to_pdf(content: str, kind: str) -> bytes:

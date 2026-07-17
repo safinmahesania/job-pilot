@@ -379,16 +379,17 @@ function jobpilot() {
         if (!r.ok) {
           const err = await r.json().catch(() => ({}));
           const d = err.detail;
+          const noun = kind === 'cover' ? 'cover letter' : 'resume';
 
           // Two failures deserve more than a red toast, because both mean the
           // document you were about to send would have been false.
           if (d && d.error === 'profile_incomplete') {
             this.cover = null;
             this.guardError = {
-              title: 'Your profile is too empty to write a resume from',
+              title: `Your profile is too empty to write a ${noun} from`,
               why: 'With these missing, the model has only the job posting to ' +
-                   'write from — and it will write from it, inventing an employer, ' +
-                   'a degree, and a name taken from the job title.',
+                   'write from — and it will write from it, inventing details ' +
+                   'you never gave it.',
               items: d.missing,
               fix: 'Fill these into config/profile.yaml, then try again.',
             };
@@ -399,9 +400,9 @@ function jobpilot() {
             this.guardError = {
               title: "You can't honestly apply to this one",
               why: 'Only ' + d.score + '% of what this job asks for appears anywhere ' +
-                   'in your profile. A resume tailored to it would have to invent the ' +
-                   'rest — and a model asked to tailor it will, fluently, and you ' +
-                   'would be the one sending it. Nothing was generated.',
+                   'in your profile. A ' + noun + ' tailored to it would have to ' +
+                   'invent the rest — and a model asked to tailor it will, fluently, ' +
+                   'and you would be the one sending it. Nothing was generated.',
               items: d.matched.length
                 ? ['All this job wants that you actually have: ' + d.matched.join(', ')]
                 : ['Nothing this job asks for appears in your profile at all.'],
@@ -413,13 +414,15 @@ function jobpilot() {
           if (d && d.error === 'fabricated') {
             this.cover = null;
             this.guardError = {
-              title: 'The model invented facts — the resume was refused',
-              why: 'Nothing was returned to you. A resume claiming an employer ' +
-                   'you never worked for is one careless send away from a ' +
+              title: `The model invented facts — the ${noun} was refused`,
+              why: 'Nothing was returned to you. A ' + noun + ' claiming something ' +
+                   'that is not in your profile is one careless send away from a ' +
                    'conversation you cannot recover from.',
               items: d.problems,
-              fix: 'This usually means config/profile.yaml is thin. The fuller it ' +
-                   'is, the less room there is for the model to invent.',
+              fix: 'This usually means config/profile.yaml is thin, or a skill named ' +
+                   'in the letter isn\'t listed there. The fuller your profile, the ' +
+                   'less room there is for the model to invent — and the fewer false ' +
+                   'refusals you\'ll see.',
             };
             return;
           }

@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from src import maintenance, scheduler, store
-from src.deps import _db_dep
+from src.deps import _db_dep, _get_setting
 
 router = APIRouter()
 
@@ -20,6 +20,29 @@ router = APIRouter()
 @router.post("/api/maint/rescore")
 def maint_rescore():
     return maintenance.rescore_all()
+
+
+class ScoreRequest(BaseModel):
+    job_ids: list[int]
+
+
+@router.post("/api/jobs/score")
+def score_jobs(body: ScoreRequest, conn=Depends(_db_dep)):
+    """Score specific jobs on demand — for unscored imports, or to re-run a few.
+
+    Unlike 'rescore everything', this targets only the ids you pass, so you can score
+    one job from its card, or a selection, without churning the whole database. Returns
+    per-job results so the UI can update just those rows.
+    """
+    if _get_setting(conn, "scoring_enabled", "1") != "1":
+        raise HTTPException(403, "Scoring is off — enable it in Settings first.")
+
+    from src.routes.jobs import _rescore_one
+    results = {}
+    for jid in body.job_ids[:200]:          # cap a single request
+        results[jid] = _rescore_one(conn, jid)
+    scored = sum(1 for v in results.values() if v is not None)
+    return {"requested": len(body.job_ids), "scored": scored, "results": results}
 
 
 @router.post("/api/maint/cleanup")

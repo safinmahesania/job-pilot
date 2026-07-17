@@ -1,7 +1,7 @@
 """The config path guard.
 
 configio writes YAML files by name, and the name reaches it from API request bodies
-(profile.yaml, companies.yaml). If a caller could pass "../../etc/something" or a
+(profile.yaml, companies-backup.yaml). If a caller could pass "../../etc/something" or a
 name ending in a non-YAML extension, a write could land outside the config directory.
 _path() is the guard that prevents that, and it had no test — so a refactor could
 quietly weaken it and nothing would notice. These pin the guarantee: the resolved

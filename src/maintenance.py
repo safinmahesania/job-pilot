@@ -79,7 +79,7 @@ def export_csv() -> str:
 
 
 def reload_config():
-    """Force re-read of profile.yaml + companies.yaml (validates them)."""
+    """Force re-read of profile.yaml + companies-backup.yaml (validates them)."""
     p = load_profile()
     c = load_companies()
     return {"profile_ok": bool(p), "companies": len(c)}
@@ -154,7 +154,7 @@ def nuclear_reset():
     Deletes: jobs, the seen/dedupe log, source health, run history and AI quota
     tracking; empties the backups directory and the Python cache.
 
-    Preserves: your config files (config/profile.yaml, config/companies.yaml),
+    Preserves: your config files (config/profile.yaml, config/companies-backup.yaml),
     your .env, and your settings (threshold, schedule, provider order) — so the
     app starts fresh but still behaves the way you configured it.
     """

@@ -50,7 +50,7 @@ pip install -r requirements.txt
 # 2. configure
 cp .env.example .env                        # optional: Telegram notifications
 cp config/profile.example.yaml config/profile.yaml     # then edit with your details
-cp config/companies.example.yaml config/companies.yaml # then choose your boards
+cp config/companies.example.yaml config/companies-backup.yaml # then choose your boards
 
 # 3. create the database
 python data/init_db.py

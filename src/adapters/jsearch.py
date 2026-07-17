@@ -5,7 +5,7 @@ JSearch is a *search* source: you give it keywords and it returns matching jobs 
 from LinkedIn, Indeed, Glassdoor, ZipRecruiter and the rest, via Google for Jobs. So one
 entry can cover the entire market for a set of roles.
 
-Config (in companies.yaml):
+Config (in companies-backup.yaml):
 
     - name: JSearch — dev roles
       ats: jsearch

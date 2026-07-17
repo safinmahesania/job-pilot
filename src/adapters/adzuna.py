@@ -5,7 +5,7 @@ returns matching jobs from Adzuna's aggregated database (thousands of sources), 
 a country. It adds salary data and an IT-jobs category filter, which JSearch doesn't
 expose as cleanly. One entry with a list of keywords covers the whole market.
 
-Config (in companies.yaml):
+Config (in companies-backup.yaml):
 
     - name: Adzuna — Canada dev
       ats: adzuna

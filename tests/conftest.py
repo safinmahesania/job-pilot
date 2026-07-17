@@ -238,7 +238,7 @@ def written_profile(tmp_path, monkeypatch):
         "constraints": {"locations": ["Remote"]},
         "search": {"role_levels": ["junior"]},
     }), encoding="utf-8")
-    (tmp_path / "companies.yaml").write_text(
+    (tmp_path / "companies-backup.yaml").write_text(
         _yaml.safe_dump({"companies": []}), encoding="utf-8")
 
     monkeypatch.setattr("src.paths.CONFIG_DIR", tmp_path)

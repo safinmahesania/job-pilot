@@ -9,7 +9,7 @@ import sqlite3
 
 
 class TestAddingASourceIsValidated:
-    """A source with no name or an unknown ats used to be written to companies.yaml,
+    """A source with no name or an unknown ats used to be written to companies-backup.yaml,
     where it did nothing but produce a blank-named 'No adapter' error on the next
     fetch. Now the form refuses it."""
 

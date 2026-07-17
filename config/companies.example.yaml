@@ -1,8 +1,8 @@
 # ============================================================
 #  JobPilot — sources config (TEMPLATE)
 #
-#  Copy this file to companies.yaml and fill in your own boards.
-#  companies.yaml is gitignored (it's your personal source list); this
+#  Copy this file to companies-backup.yaml and fill in your own boards.
+#  companies-backup.yaml is gitignored (it's your personal source list); this
 #  template documents the format for every supported ATS.
 #
 #  Available adapters:

@@ -1,6 +1,7 @@
 # ── Secrets & personal config ──
 .env
 config/profile.yaml
+config/companies-backup.yaml
 config/companies.yaml
 backups/
 

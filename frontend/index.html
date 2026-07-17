@@ -65,29 +65,31 @@
   </aside>
 
   <!-- ══ Desktop sidebar ══ -->
-  <aside class="hidden md:flex w-56 shrink-0 border-r border-gray-200 flex-col px-3 py-5">
-    <div class="flex items-center gap-2 px-2 pb-5 cursor-pointer" @click="go('feed')">
+  <aside class="hidden md:flex w-56 shrink-0 border-r border-gray-200 flex-col px-3 py-5 h-screen sticky top-0">
+    <div class="flex items-center gap-2 px-2 pb-5 cursor-pointer shrink-0" @click="go('feed')">
       <svg viewBox="0 0 48 48" class="w-8 h-8"><rect width="48" height="48" rx="12" fill="#B4791A"/><circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/><path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/><path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/><path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/><path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/><circle cx="24" cy="24" r="1.8" fill="#fff"/></svg>
       <span class="text-lg font-semibold">JobPilot</span>
     </div>
-    <div class="text-[11px] text-gray-400 px-2 py-1">Jobs</div>
-    <template x-for="n in jobsNav" :key="n.k">
-      <div class="nav" :class="tab===n.k && 'active'" @click="go(n.k)">
-        <i class="ti" :class="n.icon"></i><span class="flex-1" x-text="n.label"></span>
-        <span x-show="n.k==='applied' && counts.followups"
-          class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-brand text-white"
-          x-text="counts.followups"></span>
-        <span class="text-xs" :class="tab===n.k ? 'text-branddark' : 'text-gray-400'" x-text="counts[n.k] != null ? counts[n.k] : ''"></span>
-      </div>
-    </template>
-    <div class="h-px bg-gray-200 mx-2 my-3"></div>
-    <div class="text-[11px] text-gray-400 px-2 py-1">System</div>
-    <template x-for="n in sysNav" :key="n.k">
-      <div class="nav" :class="tab===n.k && 'active'" @click="go(n.k)">
-        <i class="ti" :class="n.icon"></i><span x-text="n.label"></span>
-      </div>
-    </template>
-    <div class="mt-auto px-1">
+    <div class="flex-1 min-h-0 overflow-y-auto">
+      <div class="text-[11px] text-gray-400 px-2 py-1">Jobs</div>
+      <template x-for="n in jobsNav" :key="n.k">
+        <div class="nav" :class="tab===n.k && 'active'" @click="go(n.k)">
+          <i class="ti" :class="n.icon"></i><span class="flex-1" x-text="n.label"></span>
+          <span x-show="n.k==='applied' && counts.followups"
+            class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-brand text-white"
+            x-text="counts.followups"></span>
+          <span class="text-xs" :class="tab===n.k ? 'text-branddark' : 'text-gray-400'" x-text="counts[n.k] != null ? counts[n.k] : ''"></span>
+        </div>
+      </template>
+      <div class="h-px bg-gray-200 mx-2 my-3"></div>
+      <div class="text-[11px] text-gray-400 px-2 py-1">System</div>
+      <template x-for="n in sysNav" :key="n.k">
+        <div class="nav" :class="tab===n.k && 'active'" @click="go(n.k)">
+          <i class="ti" :class="n.icon"></i><span x-text="n.label"></span>
+        </div>
+      </template>
+    </div>
+    <div class="shrink-0 px-1 pt-3">
       <button @click="runNow()" :disabled="running" class="w-full h-9 rounded-lg bg-brand text-white text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
         <i class="ti" :class="running ? 'ti-loader-2 animate-spin' : 'ti-player-play'"></i>
         <span x-text="running ? 'Running…' : 'Run now'"></span>
@@ -131,7 +133,15 @@
       <div class="flex flex-col gap-3">
         <div x-show="tab==='unscored'" class="text-xs rounded-md px-3 py-2.5 mb-3 flex gap-2" style="background:#F7EDD8; color:#7A4E0C;">
           <i class="ti ti-info-circle mt-0.5 shrink-0"></i>
-          <span>These came from an import whose job description couldn't be read — usually a LinkedIn or Indeed listing behind a login wall. They were deliberately <b>not scored</b>: a number from a title alone would be meaningless. Open the posting to judge it yourself.</span>
+          <span>These came from an import whose job description couldn't be read — usually a LinkedIn or Indeed listing behind a login wall. They were deliberately <b>not scored</b>: a number from a title alone would be meaningless. Open the posting to judge it yourself, or score them if they do have a description.</span>
+        </div>
+        <div x-show="tab==='unscored' && jobs.length" class="flex items-center justify-between gap-2 mb-3 -mt-1">
+          <span class="text-xs text-gray-400" x-text="`${jobs.length} unscored`"></span>
+          <button @click="scoreAllUnscored()" :disabled="scoring"
+            class="text-[13px] h-8 px-3 rounded-md border border-brand/40 text-brand hover:bg-brand/5 disabled:opacity-50 flex items-center gap-1.5">
+            <i class="ti" :class="scoring ? 'ti-loader-2 animate-spin' : 'ti-sparkles'"></i>
+            <span x-text="scoring ? 'Scoring…' : 'Score all now'"></span>
+          </button>
         </div>
         <!-- Follow-ups: applications that have gone quiet -->
         <template x-if="tab==='applied' && fu.items.length">

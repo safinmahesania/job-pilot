@@ -57,7 +57,7 @@ def main():
         print("No profile.yaml found — nothing to filter against.")
         return
 
-    companies = (configio.read_yaml("companies.yaml") or {}).get("companies", [])
+    companies = (configio.read_yaml("companies-backup.yaml") or {}).get("companies", [])
     active = [c for c in companies if c.get("active")]
     if args.limit:
         active = active[: args.limit]

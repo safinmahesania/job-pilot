@@ -4,7 +4,7 @@ A timestamp-free ``.bak`` copy is written to the backups directory before every
 save, so a bad edit from the UI can always be recovered.
 
 Caveat: ``yaml.safe_dump`` does not preserve comments. The first time the
-frontend writes ``companies.yaml``, the section headers and inline notes in that
+frontend writes ``companies-backup.yaml``, the section headers and inline notes in that
 file are lost — the data survives, the commentary does not. Keep the annotated
 copy in git.
 """
@@ -38,7 +38,7 @@ def read_yaml(name: str):
     """Parse a config file and return the data structure, or None if it is not there.
 
     A missing config file is a normal state, not an error: on a fresh install there is
-    no companies.yaml until the first source is added, and callers already handle a
+    no companies-backup.yaml until the first source is added, and callers already handle a
     None with `or {...}`. Raising FileNotFoundError here instead turned that first-ever
     add into a crash."""
     try:

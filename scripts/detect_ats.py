@@ -4,14 +4,14 @@ ATS auto-detector for JobPilot.
 Reads a seed list (Company Name | careers URL), visits each careers page,
 detects which ATS the company uses, extracts the board token/identifier,
 verifies it against the ATS public API where possible, and writes
-config-ready companies.yaml entries.
+config-ready companies-backup.yaml entries.
 
 Usage:
     python scripts/detect_ats.py                 # uses canadian_companies.txt
     python scripts/detect_ats.py mylist.txt      # custom seed file
 
 Output:
-    discovered_companies.yaml   -> paste the entries into your companies.yaml
+    discovered_companies.yaml   -> paste the entries into your companies-backup.yaml
     (unresolved companies are printed at the end for manual checking)
 
 Adapters you already have: greenhouse, lever, workday, oracle, phenom.

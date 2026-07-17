@@ -9,6 +9,7 @@ function jobpilot() {
     sourceTest: null,  // { name, loading, ok, count, jobs, error, elapsed_ms } when testing a source
     selectedSources: [],  // source names ticked for a selective run
     restarting: false,    // true while the server restarts and we wait for it to return
+    scoring: false,       // true while scoring unscored jobs on demand
     llm: { providers: [], available: 0, total: 0, combined_tokens: 0, combined_limit: 0 },
     ai: { scoring: true, generation: true },
     cfgFiles: [],
@@ -824,6 +825,31 @@ function jobpilot() {
       const picked = [...this.selectedSources];
       await this.runNow(picked);
       this.selectedSources = [];
+    },
+
+    async scoreAllUnscored() {
+      const ids = this.jobs.map(j => j.id);
+      if (!ids.length) return;
+      this.scoring = true;
+      try {
+        const r = await fetch('/api/jobs/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job_ids: ids }),
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          this.showSnack(err.detail || 'Scoring failed — is a model available?', 'error');
+          return;
+        }
+        const data = await r.json();
+        this.showSnack(`Scored ${data.scored} of ${data.requested}`, data.scored ? 'success' : 'info');
+        await this.load();          // refresh — scored jobs leave the unscored tab, counts update too
+      } catch (e) {
+        this.showSnack('Scoring failed — check the server', 'error');
+      } finally {
+        this.scoring = false;
+      }
     },
 
     async restartServer() {

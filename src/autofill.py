@@ -146,8 +146,36 @@ COMMITMENT AND LOGISTICS QUESTIONS — reason, do not guess:
       answer "Yes".
 - Never over-promise. If the profile does not support a commitment, answer "No"
   rather than "Yes" — a broken commitment is worse than a rejected application.
-- For free-text questions (e.g. "why do you want to work here"), write 2-3 honest
-  sentences in the first person, grounded only in the profile. No clichés.
+
+DURATION / "HOW LONG HAVE YOU WORKED WITH X" QUESTIONS:
+- These ask for years of experience with a specific technology (React, Python,
+  Node, Django, etc.). Answer from the profile:
+    * If a project or job in the profile uses that technology, estimate the span
+      from its dates, or from application.years_of_experience if no dates are given.
+    * Prefer a modest, honest number. "2 years", "1 year", "Less than 1 year".
+    * If the technology appears in skills but nowhere in the work/projects, answer
+      with a small honest figure (e.g. "1 year") or the option that means the least,
+      not the most.
+    * If the technology is nowhere in the profile at all, answer "" (blank) or, for
+      an options field, the option meaning "none"/"no experience". NEVER claim
+      experience with a tool the profile does not mention.
+
+FREE-TEXT / ESSAY QUESTIONS ("why are you interested in this role", "why this
+company", "tell us about yourself"):
+- Write in the first person, grounded ONLY in the profile and the job context.
+- Match the length the question asks for. "In 3-5 sentences" means 3-5 real
+  sentences, not one and not ten. If no length is given, 2-3 sentences.
+- Be specific: name a real project or skill from the profile that connects to what
+  this job actually does. No clichés ("passionate", "fast-paced", "team player").
+- If there is no job context and the question needs it, still answer generally from
+  the profile rather than leaving it blank.
+
+SALARY QUESTIONS ("expected salary", "compensation range"):
+- If application.salary_expectation has a value, use it. If it is blank, return ""
+  — do not invent a number.
+
+- For other free-text questions, write 2-3 honest first-person sentences grounded
+  only in the profile. No clichés.
 - Never answer voluntary demographic questions (gender, race, veteran status,
   disability) unless the profile explicitly provides a value.
 

@@ -219,15 +219,22 @@ def _unlock_app(monkeypatch):
     monkeypatch.delenv("JOBPILOT_PASSWORD", raising=False)
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def written_profile(tmp_path, monkeypatch):
-    """Write a minimal profile.yaml and point the config loaders at it.
+    """Write a minimal profile.yaml + companies.yaml and point the config loaders at a
+    temp directory — for EVERY test (autouse).
 
-    Some endpoints (job import, generation) call load_profile(), which reads a real
-    file. That file is gitignored and absent on a clean checkout, so any test that
-    exercises those paths needs one written for it — otherwise the test depends on
-    whether the developer happens to have a profile.yaml, which is exactly the kind of
-    environment coupling CI exists to remove."""
+    This is autouse on purpose. Some endpoints write to config: POST /api/sources
+    appends to companies.yaml. Without the redirect, running the suite would append
+    test fixtures ("Acme", "B", ...) to the developer's REAL config/companies.yaml —
+    which is exactly the bug that made those two placeholders reappear every time
+    `pytest` was run. Redirecting CONFIG_DIR to tmp_path for all tests makes it
+    impossible for any test to touch the real file.
+
+    Some endpoints (job import, generation) also call load_profile(), which reads a
+    real file that's gitignored and absent on a clean checkout, so this also removes
+    that environment coupling from CI.
+    """
     import yaml as _yaml
     (tmp_path / "profile.yaml").write_text(_yaml.safe_dump({
         "identity": {"name": "Test User", "seniority": "junior"},
@@ -238,7 +245,7 @@ def written_profile(tmp_path, monkeypatch):
         "constraints": {"locations": ["Remote"]},
         "search": {"role_levels": ["junior"]},
     }), encoding="utf-8")
-    (tmp_path / "companies-backup.yaml").write_text(
+    (tmp_path / "companies.yaml").write_text(
         _yaml.safe_dump({"companies": []}), encoding="utf-8")
 
     monkeypatch.setattr("src.paths.CONFIG_DIR", tmp_path)

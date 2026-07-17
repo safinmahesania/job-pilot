@@ -312,11 +312,20 @@ async function fillPage({ silent = false } = {}) {
             : [],
         }));
 
-        const res = await send({
-          type: "resolve",
-          fields: payload,
-          jobId: settings.jobId,
-        });
+        // This is the slow part: the AI writes answers for fields no rule matched
+        // (essays, per-tech experience). On a local model it can take 20-40s, so show
+        // a persistent loader — otherwise it looks frozen and people give up or refill.
+        showLoader(`JobPilot is writing ${pending.length} answer${pending.length === 1 ? "" : "s"}…`);
+        let res;
+        try {
+          res = await send({
+            type: "resolve",
+            fields: payload,
+            jobId: settings.jobId,
+          });
+        } finally {
+          hideLoader();
+        }
 
         if (res?.ok) {
           const mapped = res.data.answers || {};
@@ -325,6 +334,8 @@ async function fillPage({ silent = false } = {}) {
             aiCache.set(item.text, answer);       // remember, even if blank
             if (answer && applyValue(item.el, answer)) filled++;
           });
+        } else if (res && res.reason === "auth") {
+          if (!silent) toast("JobPilot needs its password — set it in the extension popup", "error");
         }
       }
     }
@@ -514,6 +525,49 @@ function send(message) {
       else resolve(response);
     });
   });
+}
+
+// A persistent loader for the slow AI phase. Unlike a toast (which auto-dismisses),
+// this stays until hideLoader() is called, with a spinner so it's clearly "working",
+// not "stuck". One is injected once; showLoader just updates its text and shows it.
+function showLoader(message) {
+  let el = document.getElementById("jobpilot-loader");
+  if (!el) {
+    // The spinner keyframes, injected once.
+    if (!document.getElementById("jobpilot-loader-style")) {
+      const style = document.createElement("style");
+      style.id = "jobpilot-loader-style";
+      style.textContent =
+        "@keyframes jobpilot-spin{to{transform:rotate(360deg)}}";
+      document.head.appendChild(style);
+    }
+    el = document.createElement("div");
+    el.id = "jobpilot-loader";
+    Object.assign(el.style, {
+      position: "fixed", bottom: "20px", right: "20px", zIndex: 2147483647,
+      background: "#16284f", color: "#fff", padding: "12px 16px",
+      borderRadius: "10px", fontSize: "13px",
+      fontFamily: "system-ui, sans-serif", boxShadow: "0 4px 18px rgba(0,0,0,.28)",
+      display: "flex", alignItems: "center", gap: "10px", maxWidth: "320px",
+    });
+    const spinner = document.createElement("div");
+    Object.assign(spinner.style, {
+      width: "16px", height: "16px", borderRadius: "50%",
+      border: "2px solid rgba(255,255,255,.35)", borderTopColor: "#fff",
+      animation: "jobpilot-spin .7s linear infinite", flexShrink: "0",
+    });
+    const text = document.createElement("span");
+    text.id = "jobpilot-loader-text";
+    el.appendChild(spinner);
+    el.appendChild(text);
+    document.body.appendChild(el);
+  }
+  document.getElementById("jobpilot-loader-text").textContent = message || "JobPilot is thinking…";
+  el.style.display = "flex";
+}
+
+function hideLoader() {
+  document.getElementById("jobpilot-loader")?.remove();
 }
 
 function toast(message, kind = "info") {

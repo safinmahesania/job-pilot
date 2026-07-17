@@ -18,6 +18,8 @@ const jobBox = $("jobBox"), jobTitle = $("jobTitle"),
 const changeJob = $("changeJob"), picker = $("picker"),
       search = $("search"), results = $("results");
 const fillBtn = $("fillBtn"), attachBtn = $("attachBtn");
+const askInput = $("askInput"), askBtn = $("askBtn"), askResult = $("askResult"),
+      askAnswer = $("askAnswer"), askCopy = $("askCopy");
 const toggles = { autoFill: $("autoFill"), useAI: $("useAI") };
 
 const DEFAULTS = { enabled: true, autoFill: false, useAI: true };
@@ -232,6 +234,45 @@ for (const [key, el] of Object.entries(toggles)) {
     chrome.tabs.sendMessage(tabId, { type: "settings", settings }, () => {
       void chrome.runtime.lastError;
     });
+  });
+}
+
+// Ask a question — paste any application question, get an answer from your profile
+// (grounded, first-person) to copy into the form. Uses the same resolve endpoint as
+// autofill, so it obeys the same "never invent a fact" rules.
+if (askBtn) {
+  askBtn.addEventListener("click", async () => {
+    const q = (askInput.value || "").trim();
+    if (!q) { askInput.focus(); return; }
+    const finish = withButton(askBtn, "Thinking…", "Generate answer");
+    askResult.style.display = "none";
+    const res = await send({ type: "ask", question: q });
+    finish("Generate answer");
+    if (res?.ok && res.answer) {
+      askAnswer.value = res.answer;
+      askResult.style.display = "block";
+    } else if (res?.reason === "auth") {
+      foot.textContent = "JobPilot needs its password — enter it below.";
+    } else if (res?.answer === "") {
+      askAnswer.value = "(Your profile doesn't answer this one — add the detail to your profile and try again.)";
+      askResult.style.display = "block";
+    } else {
+      foot.textContent = "Couldn't generate an answer. Is JobPilot running?";
+    }
+  });
+}
+
+if (askCopy) {
+  askCopy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(askAnswer.value);
+      const orig = askCopy.textContent;
+      askCopy.textContent = "Copied ✓";
+      setTimeout(() => { askCopy.textContent = orig; }, 1500);
+    } catch {
+      askAnswer.select();          // fallback: select so the user can Ctrl+C
+      document.execCommand("copy");
+    }
   });
 }
 

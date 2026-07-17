@@ -162,13 +162,34 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
           return;
 
         case "resolve":
-          respond({
-            ok: true,
-            data: await postJSON("/api/autofill/resolve", {
-              fields: msg.fields,
+          try {
+            respond({
+              ok: true,
+              data: await postJSON("/api/autofill/resolve", {
+                fields: msg.fields,
+                job_id: bindings.get(tabId)?.id ?? null,
+              }),
+            });
+          } catch (e) {
+            const m = String(e && e.message || "");
+            respond({ ok: false, reason: (m.includes("401") || m.includes("403")) ? "auth" : "down" });
+          }
+          return;
+
+        // A single question pasted into the popup. Runs through the same resolve
+        // endpoint as autofill (one field), so the answer is grounded in the profile
+        // and the job, and invents nothing.
+        case "ask":
+          try {
+            const data = await postJSON("/api/autofill/resolve", {
+              fields: [{ id: "q", label: msg.question, type: "textarea", options: [] }],
               job_id: bindings.get(tabId)?.id ?? null,
-            }),
-          });
+            });
+            respond({ ok: true, answer: (data.answers && data.answers.q) || "" });
+          } catch (e) {
+            const m = String(e && e.message || "");
+            respond({ ok: false, reason: (m.includes("401") || m.includes("403")) ? "auth" : "down" });
+          }
           return;
 
         // Which job is this page? Called when the popup opens.

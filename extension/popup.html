@@ -106,6 +106,20 @@
   <button class="primary" id="fillBtn" disabled>Fill this page</button>
   <button class="ghost" id="attachBtn" disabled>Attach resume &amp; cover letter</button>
 
+  <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+    <div class="label">Ask a question</div>
+    <div class="hint">Paste any application question. Get an answer from your profile to copy.</div>
+    <textarea id="askInput" rows="2"
+      placeholder="e.g. Why are you interested in this role?"
+      style="width:100%;box-sizing:border-box;margin-top:6px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;font-size:12px;resize:vertical;font-family:inherit"></textarea>
+    <button class="ghost" id="askBtn" style="width:100%;margin-top:6px">Generate answer</button>
+    <div id="askResult" style="display:none;margin-top:8px">
+      <textarea id="askAnswer" rows="4" readonly
+        style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card,transparent);color:inherit;font-size:12px;resize:vertical;font-family:inherit"></textarea>
+      <button class="ghost" id="askCopy" style="width:100%;margin-top:6px">Copy answer</button>
+    </div>
+  </div>
+
   <div class="row">
     <div>
       <div class="label">Auto-fill</div>

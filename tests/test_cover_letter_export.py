@@ -40,3 +40,22 @@ class TestCoverLetterExports:
     def test_empty_cover_letter_does_not_crash(self):
         data = materials.to_docx("", "cover")
         assert data[:2] == b"PK"          # still a valid (near-empty) doc
+
+
+class TestCoverLetterPdfIsProse:
+    """The cover letter PDF must use the plain prose renderer, not the resume's markdown
+    parser — a letter has no # headings, @@ dates, or bullets to interpret."""
+
+    def test_prose_pdf_renders_paragraphs(self):
+        letter = ("Dear Hiring Manager,\n\n" + "I am a developer. " * 20 +
+                  "\n\nSincerely,\nSam")
+        data = materials.to_pdf(letter, "cover")
+        assert data[:4] == b"%PDF"
+        assert len(data) > 2000
+
+    def test_cover_pdf_does_not_crash_on_markdownish_text(self):
+        # Even if the letter happens to contain a '#', it's treated as prose, not a
+        # heading — no resume parsing.
+        letter = "Dear Team,\n\nI love C# and .NET.\n\nBest,\nSam"
+        data = materials.to_pdf(letter, "cover")
+        assert data[:4] == b"%PDF"

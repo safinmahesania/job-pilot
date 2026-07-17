@@ -15,4 +15,10 @@ if (Test-Path .env) {
   }
 }
 
-.\.venv\Scripts\uvicorn.exe src.api:app --host 127.0.0.1 --port 8000
+# The server can restart itself (Admin > Restart server, or after a crash). This loop
+# respawns it so a restart actually comes back up. Ctrl-C twice to stop for real.
+while ($true) {
+  .\.venv\Scripts\uvicorn.exe src.api:app --host 127.0.0.1 --port 8000
+  Write-Host "`nServer stopped. Restarting in 2s… (Ctrl-C to quit)" -ForegroundColor Yellow
+  Start-Sleep -Seconds 2
+}

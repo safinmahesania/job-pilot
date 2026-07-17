@@ -8,6 +8,7 @@ function jobpilot() {
     edit: null,    // { id, title, company, location, description, apply_url, ... } when editing a job by hand
     sourceTest: null,  // { name, loading, ok, count, jobs, error, elapsed_ms } when testing a source
     selectedSources: [],  // source names ticked for a selective run
+    restarting: false,    // true while the server restarts and we wait for it to return
     llm: { providers: [], available: 0, total: 0, combined_tokens: 0, combined_limit: 0 },
     ai: { scoring: true, generation: true },
     cfgFiles: [],
@@ -375,11 +376,7 @@ function jobpilot() {
                      jobId: job.id, title: job.title, company: job.company,
                      requirements: [], projects_used: [], overruns: [] };
       try {
-        // The cover letter runs two model calls (draft + revise); behind a proxy that
-        // times out long requests, that can 524. `fast` skips the revise — the draft is
-        // already grounded and guarded, and it's editable here anyway.
-        const qs = kind === 'cover' ? '?fast=true' : '';
-        const r = await fetch(`/api/jobs/${job.id}/${meta.url}${qs}`, { method: 'POST' });
+        const r = await fetch(`/api/jobs/${job.id}/${meta.url}`, { method: 'POST' });
         if (!r.ok) {
           const err = await r.json().catch(() => ({}));
           const d = err.detail;
@@ -826,6 +823,30 @@ function jobpilot() {
       const picked = [...this.selectedSources];
       await this.runNow(picked);
       this.selectedSources = [];
+    },
+
+    async restartServer() {
+      if (!confirm('Restart the server? It will reconnect in a few seconds.')) return;
+      this.restarting = true;
+      try {
+        await fetch('/api/maint/restart', { method: 'POST' });
+      } catch (e) { /* the process may drop the connection mid-reply — that's expected */ }
+
+      // Poll until the server answers again, then reload the page onto the fresh process.
+      const deadline = Date.now() + 30000;
+      const ping = async () => {
+        try {
+          const r = await fetch('/api/run/status', { cache: 'no-store' });
+          if (r.ok) { this.showSnack('Server is back', 'success'); location.reload(); return; }
+        } catch (e) { /* still down */ }
+        if (Date.now() < deadline) {
+          setTimeout(ping, 1500);
+        } else {
+          this.restarting = false;
+          this.showSnack('Server did not come back — check the terminal', 'error');
+        }
+      };
+      setTimeout(ping, 2500);   // give it a moment to actually go down first
     },
 
     poll() {

@@ -85,6 +85,29 @@ def reload_config():
     return {"profile_ok": bool(p), "companies": len(c)}
 
 
+def schedule_restart():
+    """Restart the whole process a moment after replying.
+
+    We reply first so the browser gets a clean 200, then re-exec on a short timer.
+    os.execv replaces the current process image with a fresh one — same command line —
+    so it works whether or not there's a supervisor, as long as something keeps the
+    terminal open (the loop script does). The delay lets this response flush before the
+    process is replaced.
+    """
+    import os
+    import sys
+    import threading
+
+    def _restart():
+        # Replace this process with a fresh interpreter running the same argv. On
+        # Windows, execv works; the tunnel reconnects once the port is back.
+        python = sys.executable
+        os.execv(python, [python] + sys.argv)
+
+    threading.Timer(0.5, _restart).start()
+    return {"restarting": True}
+
+
 def clean_cache():
     """Delete Python cache and any *.log files. Jobs and config untouched."""
     removed_dirs = 0

@@ -926,6 +926,12 @@
             <div><div class="text-sm font-medium">Reload config</div><div class="text-xs text-gray-400 mt-0.5">Re-read profile.yaml + companies.yaml.</div></div>
             <button @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Reload</button>
           </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Restart server</div><div class="text-xs text-gray-400 mt-0.5">Full process restart — use after pulling new code or if it's wedged. Reconnects in a few seconds.</div></div>
+            <button @click="restartServer()" :disabled="restarting" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-amber-200 text-amber-700 hover:bg-amber-50 self-start disabled:opacity-50">
+              <span x-text="restarting ? 'Restarting…' : 'Restart'"></span>
+            </button>
+          </div>
         </div>
       </div>
 

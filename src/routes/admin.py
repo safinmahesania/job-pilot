@@ -48,6 +48,21 @@ def maint_reload():
     return maintenance.reload_config()
 
 
+@router.post("/api/maint/restart")
+def maint_restart():
+    """Restart the server process.
+
+    Config reload re-reads the YAML files but keeps the running code and any stuck
+    in-memory state. A full restart re-execs the process, which is what you want after
+    pulling new code or when the server is wedged. It replies first, then restarts a
+    moment later so this request completes cleanly (the browser then reconnects on its
+    own). If the server is run under a supervisor that respawns it, or with --reload,
+    this comes back on its own; a bare `uvicorn` call will not, so run it from the
+    provided loop script.
+    """
+    return maintenance.schedule_restart()
+
+
 @router.post("/api/maint/clean-cache")
 def maint_clean_cache():
     return maintenance.clean_cache()

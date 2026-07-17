@@ -181,6 +181,51 @@ def _prose_to_docx(content: str) -> bytes:
     return buf.getvalue()
 
 
+def _prose_to_pdf(content: str) -> bytes:
+    """A cover letter (or any prose) as a clean PDF — matching _prose_to_docx.
+
+    Each blank-line-separated block is written as ONE multi_cell so fpdf wraps it into a
+    flowing paragraph. Writing line by line is what broke it before: a paragraph came out
+    as three stranded lines instead of a justified block. A single-newline inside a block
+    (an address, a sign-off) is preserved as a soft break.
+    """
+    from fpdf import FPDF
+
+    from src import resume_pdf
+
+    pdf = FPDF(format="letter", unit="mm")
+    pdf.set_margins(25, 22, 25)                 # ~1 inch, letter-like
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+    pdf.set_text_color(0, 0, 0)
+
+    face, unicode_ok = resume_pdf.resolve_font(pdf)
+    prepare = (lambda t: t) if unicode_ok else resume_pdf.latin1_safe
+    pdf.set_font(face, "", 11)
+
+    blocks = content.replace("\r\n", "\n").split("\n\n")
+    for block in blocks:
+        block = block.strip("\n")
+        if not block.strip():
+            continue
+        lines = [ln.strip() for ln in block.split("\n") if ln.strip()]
+        # A real paragraph is one flowing block: join its lines with spaces and let
+        # multi_cell wrap and justify it. A short multi-line block (address / sign-off)
+        # stays as separate left-aligned lines.
+        if len(lines) == 1 or (len(lines) > 1 and len(block) > 120):
+            para = " ".join(lines)
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(0, 6, prepare(para), align="J")
+        else:
+            for ln in lines:
+                pdf.set_x(pdf.l_margin)
+                pdf.multi_cell(0, 6, prepare(ln), align="L")
+        pdf.ln(3)
+
+    out = pdf.output()
+    return bytes(out) if not isinstance(out, (bytes, bytearray)) else bytes(out)
+
+
 def to_pdf(content: str, kind: str) -> bytes:
     """Render to PDF, matching the Word file rather than approximating it.
 
@@ -195,6 +240,12 @@ def to_pdf(content: str, kind: str) -> bytes:
         raise RuntimeError(
             "PDF export needs fpdf2. Install it with: pip install fpdf2"
         ) from e
+
+    # A cover letter is prose, not a resume. Running it through the resume's markdown
+    # parser (# headings, @@ dates, bullets) mangles it — a letter has none of that, and
+    # its paragraphs came out as stranded single lines. It gets a clean prose renderer.
+    if kind != "resume":
+        return _prose_to_pdf(content)
 
     from src import resume_pdf
     from src.resume_docx import BODY_PT, MARGIN_IN, NAME_PT

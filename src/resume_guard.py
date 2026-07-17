@@ -581,27 +581,35 @@ _COVER_LETTER_NON_TECH = {
     "junior", "senior", "intern", "internship", "entry", "level", "new", "grad",
     "projects", "project", "work", "worked", "building", "built", "developed",
     "created", "designed", "delivered", "shipped", "led", "managed", "collaborated",
+    # Places a posting names as a location, not a technology. Cities in particular get
+    # capitalised and often sit in a JD ("... in Toronto"), so anchor-on-JD alone would
+    # still flag them. Common Canadian tech hubs plus the country/province words.
+    "toronto", "montreal", "vancouver", "calgary", "ottawa", "edmonton", "winnipeg",
+    "waterloo", "kitchener", "mississauga", "hamilton", "quebec", "ontario", "alberta",
+    "canada", "canadian", "remote", "hybrid", "onsite", "office",
 }
 
 
-def check_cover_letter_prose(text: str, profile: dict, target_company: str = "") -> list[str]:
-    """Every technology a cover letter claims must be one you actually have.
+def check_cover_letter_prose(text: str, profile: dict, target_company: str = "",
+                             job_description: str = "") -> list[str]:
+    """Flag only technologies the letter *claims from the job* that you don't have.
 
-    The resume was made safe by construction — it SELECTS from your background and can
-    only reorder what is already true. The cover letter still WRITES prose, which is
-    exactly where invention moved to once the resume closed the door:
+    The point of this check is narrow: a cover letter must not claim a skill it pulled
+    from the job posting when that skill is nowhere in your profile ("three years with
+    React and AWS" when you have neither). That is a lie sent to a named human.
 
-        "In my three years with React and AWS at a fintech startup..."
+    The old approach flagged *every* capitalised word not on a hand-maintained allowlist,
+    which meant every company subsidiary, product name, city, and buzzword became a new
+    false refusal to patch one at a time. The fix is to anchor on the job description:
+    a token is only a fabrication risk if it (a) looks like a technology, (b) is not in
+    your profile, AND (c) actually appears in the job posting. A capitalised word that
+    isn't in the posting can't have been "taken from the posting" — it's a company name,
+    a place, or ordinary prose, and it's left alone. Real invented claims ("AWS" lifted
+    from a posting that lists AWS) are still caught; the whole class of false positives
+    is not.
 
-    None of that is in the profile. It reads perfectly, it is a lie, and it goes to a
-    named human who can check. This is the same grounding the resume summary gets: pull
-    every technology the letter names, and if one is not anywhere in your profile, it
-    came from the job description and you do not have it.
-
-    A cover letter opens with capitalised sentences and names the target company by
-    design, so both are excluded from the check — the company you are writing TO is not
-    a claim about your background, and a sentence-initial capital is grammar, not a
-    tool.
+    When no job_description is given, it falls back to the old profile-only behaviour so
+    existing callers keep working.
     """
     vocabulary = _profile_vocabulary(profile)
 
@@ -609,8 +617,15 @@ def check_cover_letter_prose(text: str, profile: dict, target_company: str = "")
     own = {part.lower() for part in str(ident.get("name") or "").split() if part}
 
     # The company you are applying to is named all over a cover letter, legitimately.
-    # It is not a claim about your history, so it must not read as an invented tool.
     company_words = {w.lower() for w in re.split(r"\W+", str(target_company)) if len(w) > 1}
+
+    # The technologies the job posting itself names. A claim is only a "fabrication from
+    # the posting" if the posting actually contains it. Built from the same extractor so
+    # the two agree on what counts as a technology.
+    jd_techs = None
+    if job_description and job_description.strip():
+        jd_techs = {t.lower().rstrip("'").removesuffix("'s")
+                    for t in named_technologies(job_description, sentence_start=True)}
 
     problems = []
     seen = set()
@@ -619,15 +634,17 @@ def check_cover_letter_prose(text: str, profile: dict, target_company: str = "")
         if low in seen:
             continue
         seen.add(low)
-        # A cover letter writes the company's name in the possessive constantly —
-        # "PolicyMe's team", "Shopify's platform". The apostrophe-s is grammar, not a
-        # different word, so strip it before checking: "policyme's" must match the
-        # company "PolicyMe" just as "policyme" does.
+        # Strip a possessive 's ("PolicyMe's" -> "policyme") before every comparison.
         base = low[:-2] if low.endswith("'s") else low.rstrip("'")
         if (low in vocabulary or low in own or low in company_words
                 or base in vocabulary or base in own or base in company_words):
             continue
         if low in _COVER_LETTER_NON_TECH or base in _COVER_LETTER_NON_TECH:
+            continue
+        # The anchor: if we know the job's technologies, only flag a token that the job
+        # actually asked for. Anything else capitalised is not a claim lifted from the
+        # posting — it's a name or prose — so it is not a fabrication.
+        if jd_techs is not None and low not in jd_techs and base not in jd_techs:
             continue
         problems.append(
             f'"{token}" appears in the cover letter, but it is nowhere in your '

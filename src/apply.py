@@ -242,16 +242,37 @@ def extract_requirements(job: dict, limit: int = 8) -> list[str]:
 
 # ── Step 2: which of my recent projects evidence those requirements? ────────
 
+def _score_project_against_job(project: dict, job_text: str) -> int:
+    """A deterministic relevance score: how many of the project's own words (its name,
+    tech, and description) appear in the job text. No model call, so the same job and
+    profile always rank the projects the same way — which is what lets the resume and
+    the cover letter feature the *same* projects instead of two independent LLM guesses.
+    """
+    job_low = job_text.lower()
+    parts = [project.get("name", ""), project.get("description", "")]
+    tech = project.get("tech") or project.get("technologies") or project.get("stack") or []
+    if isinstance(tech, str):
+        parts.append(tech)
+    elif isinstance(tech, (list, tuple)):
+        parts.extend(str(t) for t in tech)
+    words = {w for w in re.split(r"\W+", " ".join(parts).lower()) if len(w) > 2}
+    return sum(1 for w in words if w in job_low)
+
+
 def select_relevant_projects(job: dict,
                              top_n: int = COVER_LETTER_PROJECTS_USED,
                              requirements: list[str] | None = None,
                              pool: int = COVER_LETTER_PROJECT_POOL) -> list[int]:
     """Rank my REAL projects against the job and return their indices.
 
-    Only the `pool` most recent projects are considered — profile.yaml lists
-    projects newest-first, so older work never crowds out current work. Of those,
-    the `top_n` most relevant are returned. Nothing is invented; the model only
-    reorders indices that already exist.
+    Only the `pool` most recent projects are considered — profile.yaml lists projects
+    newest-first, so older work never crowds out current work. Of those, the `top_n`
+    most relevant are returned. Nothing is invented; only indices that already exist.
+
+    The ranking is deterministic (keyword overlap between each project and the job), so
+    the same job always picks the same projects. That consistency is deliberate: the
+    resume and the cover letter both call this, and they must feature the same projects
+    rather than two different LLM guesses for one application.
     """
     profile = load_profile()
     projects = profile.get("projects", []) or []
@@ -262,29 +283,17 @@ def select_relevant_projects(job: dict,
     if len(pool_idx) <= top_n:
         return pool_idx
 
-    reqs = "\n".join(f"- {r}" for r in (requirements or [])) or \
-        _strip_html(job.get("description", ""))[:2500]
+    job_text = " ".join([
+        job.get("title", ""), job.get("company", ""),
+        "\n".join(requirements or []),
+        _strip_html(job.get("description", ""))[:2500],
+    ])
 
-    system = ("You rank a candidate's real projects by how well they evidence a "
-              "job's requirements. Return ONLY a JSON array of integer indices, "
-              "most relevant first. Use only the indices shown. Invent nothing.")
-    user = (f"JOB: {job.get('title', '')} at {job.get('company', '')}\n"
-            f"REQUIREMENTS:\n{reqs}\n\n"
-            f"MY MOST RECENT PROJECTS:\n"
-            f"{_format_projects(projects, indices=set(pool_idx))}\n\n"
-            f"Return the {top_n} most relevant indices as a JSON array, e.g. [2,0].")
-    try:
-        # Carries my project list -> local only.
-        text, _ = llm.generate(system, user, personal=True)
-        match = re.search(r"\[[\d,\s]*\]", text)
-        if match:
-            idxs = json.loads(match.group(0))
-            picked = [i for i in idxs if isinstance(i, int) and i in pool_idx][:top_n]
-            if picked:
-                return picked
-    except Exception:
-        pass
-    return pool_idx[:top_n]         # fallback: most recent, in profile order
+    # Deterministic rank: score each pooled project, most relevant first. Ties keep
+    # profile order (newest first) because the sort is stable.
+    ranked = sorted(pool_idx, key=lambda i: _score_project_against_job(projects[i], job_text),
+                    reverse=True)
+    return ranked[:top_n]
 
 
 # ── Step 3: write the draft ─────────────────────────────────────────────────
@@ -476,7 +485,8 @@ Rewrite it. Output only the final letter.""",
     # not returned — the same fatal stance as an invented employer on a resume, since
     # a cover letter goes to a named human who can check.
     problems = resume_guard.check_cover_letter_prose(
-        text, profile, target_company=job.get("company", ""))
+        text, profile, target_company=job.get("company", ""),
+        job_description=job.get("description", ""))
     if problems:
         raise resume_guard.FabricationError(problems)
 

@@ -128,6 +128,37 @@ def _span(start, end) -> str:
 
 
 
+def _profile_skill_names(profile: dict) -> list[str]:
+    """The profile's own skills as a flat list of names — used to tell the model exactly
+    which technologies it may name, so it never reaches for one from the posting that
+    isn't ours. Reads both skill shapes (tiered dict and flat list)."""
+    skills = profile.get("skills") or {}
+    names: list[str] = []
+    if isinstance(skills, dict):
+        for v in skills.values():
+            if isinstance(v, (list, tuple)):
+                names.extend(str(s) for s in v)
+            elif isinstance(v, str):
+                names.append(v)
+    elif isinstance(skills, (list, tuple)):
+        names.extend(str(s) for s in skills)
+    # Also surface technologies named in the projects, since those are real too.
+    for p in (profile.get("projects") or []):
+        tech = p.get("tech") or p.get("technologies") or p.get("stack") or []
+        if isinstance(tech, str):
+            names.append(tech)
+        elif isinstance(tech, (list, tuple)):
+            names.extend(str(t) for t in tech)
+    # De-dupe, keep order.
+    seen, out = set(), []
+    for n in names:
+        n = n.strip()
+        if n and n.lower() not in seen:
+            seen.add(n.lower())
+            out.append(n)
+    return out
+
+
 def _profile_facts(profile: dict) -> str:
     """The profile as a compact fact sheet. Only fields that exist are included,
     so the model has no blanks to fill in.
@@ -422,6 +453,23 @@ def generate_cover_letter(job: dict, fast: bool = False) -> dict:
     jd = _strip_html(job.get("description", ""))[:5000]
     reqs_block = "\n".join(f"- {r}" for r in requirements) or "(see description below)"
 
+    # The single biggest source of false refusals: the model, told to "name the specific
+    # technologies", reaches into the JOB POSTING and names ones we don't have (React,
+    # AWS, PostgreSQL…). Give it the explicit, closed list of OUR technologies and forbid
+    # any other. This fixes the problem at the source — the letter comes out clean the
+    # first time — instead of refusing it after the fact.
+    my_tech = _profile_skill_names(profile)
+    tech_rule = ""
+    if my_tech:
+        tech_rule = (
+            "\nTECHNOLOGIES I MAY NAME (this list is exhaustive — name ONLY these, and "
+            "never a technology from the job posting that is not on this list, even if "
+            "the job asks for it):\n"
+            + ", ".join(my_tech)
+            + "\nIf the job wants something I don't have, write about transferable "
+            "experience in general terms — never claim the specific tool.\n"
+        )
+
     structure = _STRUCTURE.format(
         name=name,
         relocation=_RELOCATION_LINE if COVER_LETTER_MENTION_RELOCATION else "",
@@ -431,7 +479,7 @@ def generate_cover_letter(job: dict, fast: bool = False) -> dict:
                                  words=COVER_LETTER_WORDS)
     user = f"""MY PROFILE — the only facts I may use:
 {_profile_facts(profile)}
-
+{tech_rule}
 MY MOST RELEVANT PROJECTS for this job (feature these; invent no others):
 {_format_projects(projects, indices=set(picked))}
 
@@ -493,8 +541,54 @@ Rewrite it. Output only the final letter.""",
     problems = resume_guard.check_cover_letter_prose(
         text, profile, target_company=job.get("company", ""),
         job_description=job.get("description", ""))
+
+    # A cover letter should never be refused outright — that leaves you with nothing.
+    # If the draft named a technology from the posting that isn't in your profile, try
+    # ONCE to regenerate with those names explicitly forbidden. If it still slips one in,
+    # return the letter anyway with a non-blocking note, so you can edit it here rather
+    # than being handed a wall of red. The guard's job is to warn, not to withhold.
+    warnings: list[str] = []
     if problems:
-        raise resume_guard.FabricationError(problems)
+        bad = resume_guard.fabricated_terms(
+            text, profile, target_company=job.get("company", ""),
+            job_description=job.get("description", ""))
+        if bad:
+            retry_user = user + (
+                "\n\nIMPORTANT: your previous draft named these technologies, which I do "
+                "NOT have and must NOT appear anywhere in the letter: "
+                + ", ".join(bad)
+                + ". Rewrite the letter without naming any of them — write about "
+                "transferable experience in general terms instead."
+            )
+            try:
+                retry, provider_r = llm.generate(system, retry_user, personal=True)
+                retry = _clean_output(retry)
+                if len(retry) > 200:
+                    still = resume_guard.fabricated_terms(
+                        retry, profile, target_company=job.get("company", ""),
+                        job_description=job.get("description", ""))
+                    text, provider = retry, provider_r
+                    if still:
+                        warnings.append(
+                            "This letter still mentions "
+                            + ", ".join(still)
+                            + ", which aren't in your profile. Edit those out before "
+                            "sending, or add them to your profile if you do have them."
+                        )
+                else:
+                    warnings.append(
+                        "Heads up: this letter mentions "
+                        + ", ".join(bad)
+                        + ", which aren't in your profile. Edit them out or add them "
+                        "to your profile."
+                    )
+            except Exception:
+                warnings.append(
+                    "Heads up: this letter mentions "
+                    + ", ".join(bad)
+                    + ", which aren't in your profile. Edit them out or add them to "
+                    "your profile."
+                )
 
     text = fill_contact(text, profile)      # identifiers restored, on this machine
 
@@ -504,6 +598,7 @@ Rewrite it. Output only the final letter.""",
         "requirements": requirements,
         "projects_used": [projects[i].get("name", "") for i in picked
                           if i < len(projects)],
+        "warnings": warnings,
     }
 
 

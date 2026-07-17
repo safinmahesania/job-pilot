@@ -129,3 +129,41 @@ class TestFastModeSkipsRevise:
 
     def test_full_uses_two_calls(self):
         assert self._count_calls(fast=False) == 2
+
+
+class TestCoverLetterNeverRefuses:
+    """A cover letter must never be refused outright — that leaves the person with
+    nothing. If the draft names a technology from the posting that isn't in the profile,
+    it's regenerated once with that name forbidden; if it still slips through, the letter
+    is returned with a non-blocking warning to edit, not a wall of red.
+    """
+    PROFILE = {"identity": {"name": "Sam"}, "skills": {"expert": ["Python"]},
+               "projects": [{"name": "P", "tech": ["Python"], "description": "x"}]}
+    JOB = {"title": "Dev", "company": "X",
+           "description": "Need React, AWS, PostgreSQL, Python."}
+
+    def _run(self, draft_text):
+        from unittest.mock import patch
+        from src import apply
+
+        def fake_gen(system, user, personal=False):
+            return (draft_text, "gemini")
+
+        with patch.object(apply, "load_profile", return_value=self.PROFILE), \
+             patch.object(apply, "llm") as mllm, \
+             patch.object(apply, "redacting", return_value=False), \
+             patch.object(apply, "fill_contact", side_effect=lambda t, p: t), \
+             patch.object(apply, "extract_requirements", return_value=["React", "AWS"]):
+            mllm.generate = fake_gen
+            return apply.generate_cover_letter(self.JOB, fast=True)
+
+    def test_letter_with_fabrication_is_returned_not_refused(self):
+        # Model stubbornly keeps naming React/AWS even on retry -> still returns a letter.
+        result = self._run("Dear Hiring Manager,\n\nI love React and AWS. " * 6)
+        assert result["text"]                       # a letter, not an exception
+        assert result["warnings"]                   # with a heads-up
+
+    def test_clean_letter_has_no_warnings(self):
+        result = self._run("Dear Hiring Manager,\n\nI build with Python daily. " * 6)
+        assert result["text"]
+        assert result["warnings"] == []

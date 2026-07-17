@@ -590,6 +590,39 @@ _COVER_LETTER_NON_TECH = {
 }
 
 
+def fabricated_terms(text: str, profile: dict, target_company: str = "",
+                     job_description: str = "") -> list[str]:
+    """Just the technology names a cover letter claims from the posting but the profile
+    doesn't have — the raw terms, not the full problem sentences. Used to tell the model
+    exactly what to remove on a retry, and to warn without blocking."""
+    vocabulary = _profile_vocabulary(profile)
+    ident = profile.get("identity") or {}
+    own = {part.lower() for part in str(ident.get("name") or "").split() if part}
+    company_words = {w.lower() for w in re.split(r"\W+", str(target_company)) if len(w) > 1}
+
+    jd_techs = None
+    if job_description and job_description.strip():
+        jd_techs = {t.lower().rstrip("'").removesuffix("'s")
+                    for t in named_technologies(job_description, sentence_start=True)}
+
+    out, seen = [], set()
+    for token in named_technologies(text, sentence_start=False):
+        low = token.lower()
+        if low in seen:
+            continue
+        seen.add(low)
+        base = low[:-2] if low.endswith("'s") else low.rstrip("'")
+        if (low in vocabulary or low in own or low in company_words
+                or base in vocabulary or base in own or base in company_words):
+            continue
+        if low in _COVER_LETTER_NON_TECH or base in _COVER_LETTER_NON_TECH:
+            continue
+        if jd_techs is not None and low not in jd_techs and base not in jd_techs:
+            continue
+        out.append(token)
+    return out
+
+
 def check_cover_letter_prose(text: str, profile: dict, target_company: str = "",
                              job_description: str = "") -> list[str]:
     """Flag only technologies the letter *claims from the job* that you don't have.

@@ -1246,6 +1246,16 @@
                   class="w-full text-[13px] leading-relaxed px-3 py-2.5 border border-gray-200 rounded-md outline-none focus:border-brand resize-y font-mono bg-gray-50"></textarea>
                 <!-- Length is measured against the real page, so this is what
                      the resume will actually do — not what the model thinks. -->
+                <template x-if="cover.warnings && cover.warnings.length">
+                  <div class="mt-2 text-xs rounded-md px-3 py-2 flex gap-1.5" style="background:#FEF3C7; color:#92400E;">
+                    <i class="ti ti-alert-triangle mt-0.5 shrink-0"></i>
+                    <div>
+                      <template x-for="(w, i) in cover.warnings" :key="i">
+                        <div x-text="w"></div>
+                      </template>
+                    </div>
+                  </div>
+                </template>
                 <template x-if="cover.overruns && cover.overruns.length">
                   <div class="mt-2 text-xs rounded-md px-3 py-2 flex gap-1.5" style="background:#FEF3C7; color:#92400E;">
                     <i class="ti ti-ruler-measure mt-0.5 shrink-0"></i>

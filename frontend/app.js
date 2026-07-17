@@ -435,6 +435,7 @@ function jobpilot() {
         this.cover.requirements = data.requirements || [];
         this.cover.projects_used = data.projects_used || [];
         this.cover.overruns = data.overruns || [];
+        this.cover.warnings = data.warnings || [];
         this.cover.saved = false;
         this.loadLLM();                  // usage just changed
         this.saveMaterial();             // bind it to this job for the extension

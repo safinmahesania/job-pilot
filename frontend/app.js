@@ -60,7 +60,7 @@ function jobpilot() {
       { k:'settings', label:'Settings', icon:'ti-settings' },
     ],
 
-    isJobView() { return ['feed','saved','applied','dismissed'].includes(this.tab); },
+    isJobView() { return ['feed','unscored','saved','applied','dismissed'].includes(this.tab); },
     tabLabel() {
       const all = [...this.jobsNav, ...this.sysNav].find(n => n.k === this.tab);
       return all ? all.label : this.tab;

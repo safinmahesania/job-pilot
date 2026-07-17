@@ -619,9 +619,15 @@ def check_cover_letter_prose(text: str, profile: dict, target_company: str = "")
         if low in seen:
             continue
         seen.add(low)
-        if low in vocabulary or low in own or low in company_words:
+        # A cover letter writes the company's name in the possessive constantly —
+        # "PolicyMe's team", "Shopify's platform". The apostrophe-s is grammar, not a
+        # different word, so strip it before checking: "policyme's" must match the
+        # company "PolicyMe" just as "policyme" does.
+        base = low[:-2] if low.endswith("'s") else low.rstrip("'")
+        if (low in vocabulary or low in own or low in company_words
+                or base in vocabulary or base in own or base in company_words):
             continue
-        if low in _COVER_LETTER_NON_TECH:
+        if low in _COVER_LETTER_NON_TECH or base in _COVER_LETTER_NON_TECH:
             continue
         problems.append(
             f'"{token}" appears in the cover letter, but it is nowhere in your '

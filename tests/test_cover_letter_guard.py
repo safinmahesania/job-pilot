@@ -7,7 +7,6 @@ with React and AWS..." reads perfectly, is a lie, and goes to a named human who 
 check. This guard holds the letter to the same standard as the resume summary: every
 technology it names must be one the profile actually contains.
 """
-import pytest
 
 from src import resume_guard
 
@@ -101,3 +100,37 @@ class TestYourOwnNameIsNotATechnology:
         problems = resume_guard.check_cover_letter_prose(text, PROFILE)
 
         assert not any("Test" in p or "User" in p for p in problems)
+
+
+class TestPossessiveCompanyName:
+    """A cover letter writes the company's name in the possessive constantly
+    ("PolicyMe's team", "Shopify's platform"). The apostrophe-s is grammar, not a
+    claim about the applicant's background, so it must not read as an invented tool.
+    Regression for a real false refusal.
+    """
+
+    def test_possessive_company_is_not_flagged(self):
+        from src import resume_guard
+        profile = {"identity": {"name": "Sam"}, "skills": ["Python"]}
+        letter = "I am excited to join PolicyMe's engineering team. I use Python."
+        problems = resume_guard.check_cover_letter_prose(
+            letter, profile, target_company="PolicyMe")
+        assert problems == []
+
+    def test_another_possessive_company(self):
+        from src import resume_guard
+        profile = {"identity": {"name": "Sam"}, "skills": ["Python"]}
+        letter = "Shopify's mission resonates with me."
+        problems = resume_guard.check_cover_letter_prose(
+            letter, profile, target_company="Shopify")
+        assert problems == []
+
+    def test_a_real_missing_technology_is_still_caught(self):
+        # The fix must not open the door: AWS, genuinely not in the profile, still flags.
+        from src import resume_guard
+        profile = {"identity": {"name": "Sam"}, "skills": ["Python"]}
+        letter = "I have years of AWS and Kubernetes experience."
+        problems = resume_guard.check_cover_letter_prose(
+            letter, profile, target_company="PolicyMe")
+        joined = " ".join(problems).lower()
+        assert "aws" in joined and "kubernetes" in joined

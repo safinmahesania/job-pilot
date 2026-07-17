@@ -430,7 +430,7 @@ def import_jobs(raw_jobs: list[dict], *, source: str = "import",
     calibration = build_calibration() if scoring_on else ""
 
     stats = {"seen": 0, "imported": 0, "scored": 0, "unscored": 0,
-             "duplicates": 0, "errors": 0}
+             "duplicates": 0, "errors": 0, "dropped": 0}
 
     for raw in raw_jobs:
         stats["seen"] += 1
@@ -448,6 +448,18 @@ def import_jobs(raw_jobs: list[dict], *, source: str = "import",
                 recovered = recover_description(job.get("apply_url") or "")
                 if recovered:
                     job["description"] = recovered
+
+            # Location gate — runs BEFORE scoring and even without a description,
+            # because alert emails always carry a location. A job that isn't in Canada
+            # and isn't remote is dropped now rather than parked in the unscored tab, so
+            # that tab only ever holds jobs actually worth your time. Scoring still needs
+            # a description; this filter needs only the location, which we always have.
+            from src.scoring.prefilter import _check_locations
+            allowed_locations = (profile.get("constraints") or {}).get("locations")
+            if allowed_locations and not _check_locations(job, allowed_locations):
+                store.mark_seen(conn, job["dedupe_hash"], "trashed")
+                stats["dropped"] = stats.get("dropped", 0) + 1
+                continue
 
             has_jd = bool((job.get("description") or "").strip())
 

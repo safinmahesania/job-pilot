@@ -398,10 +398,13 @@ no markdown, no preamble. If the draft is already strong, still return the lette
 (improved where you can), never a critique."""
 
 
-def generate_cover_letter(job: dict) -> dict:
+def generate_cover_letter(job: dict, fast: bool = False) -> dict:
     """Produce a grounded, first-person cover letter for one job.
 
     `job` needs: title, company, description.
+    `fast` skips the revise pass — one model call instead of two — to stay under a
+    proxy's request timeout (a Cloudflare Tunnel cuts at ~100s, which two slow local
+    calls can breach, surfacing as a 524).
     Returns {"text", "provider", "requirements", "projects_used"}.
     """
     profile = load_profile()
@@ -450,9 +453,12 @@ Write my finished cover letter now, in the first person."""
     draft, provider = llm.generate(system, user, personal=True)
     draft = _clean_output(draft)
 
-    # Step 4: critique + rewrite. If this fails for any reason, keep the draft.
+    # Step 4: critique + rewrite. A second full generation, so it roughly doubles the
+    # time. Behind a proxy with a request timeout (Cloudflare Tunnel cuts at ~100s), two
+    # slow local-model calls can exceed the limit and surface as a 524. `fast` skips it —
+    # the draft is already grounded and guarded; the revise only polishes.
     text = draft
-    if COVER_LETTER_REVISE:
+    if COVER_LETTER_REVISE and not fast:
         try:
             revised, provider2 = llm.generate(
                 _REVISE_SYSTEM.format(words=COVER_LETTER_WORDS),

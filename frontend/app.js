@@ -375,7 +375,11 @@ function jobpilot() {
                      jobId: job.id, title: job.title, company: job.company,
                      requirements: [], projects_used: [], overruns: [] };
       try {
-        const r = await fetch(`/api/jobs/${job.id}/${meta.url}`, { method: 'POST' });
+        // The cover letter runs two model calls (draft + revise); behind a proxy that
+        // times out long requests, that can 524. `fast` skips the revise — the draft is
+        // already grounded and guarded, and it's editable here anyway.
+        const qs = kind === 'cover' ? '?fast=true' : '';
+        const r = await fetch(`/api/jobs/${job.id}/${meta.url}${qs}`, { method: 'POST' });
         if (!r.ok) {
           const err = await r.json().catch(() => ({}));
           const d = err.detail;

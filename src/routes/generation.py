@@ -38,8 +38,13 @@ def _generation_http_error(e: Exception) -> HTTPException:
 
 @router.post("/api/jobs/{job_id}/cover-letter")
 @limiter.limit(RATE_LIMIT_GENERATION)
-def cover_letter(request: Request, job_id: int, conn=Depends(_db_dep)):
-    """Generate a grounded cover letter for one job."""
+def cover_letter(request: Request, job_id: int, fast: bool = False,
+                 conn=Depends(_db_dep)):
+    """Generate a grounded cover letter for one job.
+
+    `fast=true` skips the revise pass (one model call instead of two) — useful behind a
+    proxy that times out long requests, like a Cloudflare Tunnel.
+    """
     if _get_setting(conn, "generation_enabled", "1") != "1":
         raise HTTPException(
             403, "On-demand AI is off — enable it in Settings > AI features."
@@ -51,7 +56,7 @@ def cover_letter(request: Request, job_id: int, conn=Depends(_db_dep)):
         raise HTTPException(404, "job not found")
     try:
         from src import apply          # imported here so import errors surface
-        result = apply.generate_cover_letter(dict(row))
+        result = apply.generate_cover_letter(dict(row), fast=fast)
     except resume_guard.FabricationError as e:
         # The letter named something the profile does not contain. It was written and
         # then refused — the same fatal stance the resume takes. Do not hand it over.

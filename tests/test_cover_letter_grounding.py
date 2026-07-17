@@ -93,3 +93,39 @@ class TestDeterministicProjectSelection:
             resume_picks = apply.select_relevant_projects(job, top_n=3)
             cover_picks = apply.select_relevant_projects(job, top_n=2)
         assert cover_picks == resume_picks[:2]
+
+
+class TestFastModeSkipsRevise:
+    """Behind a proxy that times out long requests (a Cloudflare Tunnel cuts at ~100s),
+    the cover letter's two model calls could exceed the limit and surface as a 524.
+    Fast mode skips the revise pass — one call instead of two.
+    """
+    PROFILE = {"identity": {"name": "Sam"}, "skills": {"expert": ["Python"]},
+               "projects": [{"name": "P", "tech": ["Python"], "description": "x"}]}
+    JOB = {"title": "Dev", "company": "X", "description": "Python role"}
+
+    def _count_calls(self, fast):
+        from unittest.mock import patch
+        from src import apply
+        calls = []
+
+        def fake_gen(system, user, personal=False):
+            calls.append(1)
+            return ("Dear Hiring Manager,\n\nI am a Python developer. " * 8, "gemini")
+
+        with patch.object(apply, "load_profile", return_value=self.PROFILE), \
+             patch.object(apply, "llm") as mllm, \
+             patch.object(apply, "redacting", return_value=False), \
+             patch.object(apply, "fill_contact", side_effect=lambda t, p: t), \
+             patch.object(apply, "extract_requirements", return_value=["Python"]), \
+             patch.object(apply.resume_guard, "check_cover_letter_prose",
+                          return_value=[]):
+            mllm.generate = fake_gen
+            apply.generate_cover_letter(self.JOB, fast=fast)
+        return len(calls)
+
+    def test_fast_uses_one_call(self):
+        assert self._count_calls(fast=True) == 1
+
+    def test_full_uses_two_calls(self):
+        assert self._count_calls(fast=False) == 2

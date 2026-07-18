@@ -221,7 +221,15 @@ def parse_email_file(data: bytes, filename: str = "") -> list[dict]:
 
     if not html:
         return []
-    return _dedupe_by_url(_parse_alert_html(html, sender, subject))
+
+    # Two shapes of alert email, and one inbox usually gets both: aggregators (LinkedIn,
+    # Indeed…) link to their own walled listing, while employers (Deloitte, Celestica,
+    # Scotiabank…) link to a /job/ path on their own careers domain. Run both parsers and
+    # keep whatever each finds — an email is only ever one shape, so they don't overlap,
+    # and dedupe by URL cleans up any that do.
+    jobs = _parse_alert_html(html, sender, subject)
+    jobs += _parse_career_site_html(html, sender, subject)
+    return _dedupe_by_url(jobs)
 
 
 def read_mail_drop() -> tuple[list[dict], list[str]]:
@@ -269,6 +277,86 @@ def _email_html(msg) -> str:
 _JOB_LINK = re.compile(r"(linkedin\.com/(comm/)?jobs/view|indeed\.com/(rc/clk|viewjob|pagead)"
                        r"|glassdoor\.[a-z.]+/(job|partner)|ziprecruiter\.com/(jobs|c/))", re.I)
 
+# Company career sites (Deloitte, Celestica, Scotiabank, and every other site on the
+# jobs2web / SuccessFactors / Workday family) put the posting under a /job/ path on
+# their own domain: careers.example.com/job/Some-Title/12345/. Matching the path rather
+# than a list of companies means one rule covers every employer who sends these alerts —
+# and there are far more of them than there are aggregators.
+_CAREER_JOB_LINK = re.compile(r"/job(?:s)?/[^/?#]+", re.I)
+
+# Aggregators are handled by _JOB_LINK above and are behind login walls; never treat one
+# as a company career site.
+_WALLED_HOSTS = ("linkedin.com", "indeed.com", "glassdoor.", "ziprecruiter.com",
+                 "monster.", "simplyhired.")
+
+# Paths on a careers domain that are not postings.
+_NOT_A_JOB = re.compile(r"/(unsubscribe|social-matcher|privacy|search|login|alerts?)\b", re.I)
+
+# A location often trails the title on these sites: "Senior AI Engineer - Toronto, ON, CA".
+_LOCATION_TAIL = re.compile(
+    r"\s[-–]\s([A-Za-z .'/]+,\s*[A-Z]{2}(?:,\s*[A-Z]{2})?(?:,\s*[A-Z0-9]+)?)\s*$")
+
+
+def _company_from_host(url: str) -> str:
+    """Derive the employer from a careers domain: careers.deloitte.ca -> Deloitte."""
+    m = re.match(r"https?://([^/]+)", url or "")
+    if not m:
+        return ""
+    host = m.group(1).lower()
+    host = re.sub(r"^(careers?|jobs|recruiting|talent)\.", "", host)
+    host = re.sub(r"\.(com|ca|co\.uk|org|net|eu|io|jobs)$", "", host)
+    name = host.split(".")[0].replace("-", " ").strip()
+    return name.title() if name else ""
+
+
+def _parse_career_site_html(html: str, sender: str, subject: str) -> list[dict]:
+    """Pull postings out of an employer's own job-alert email.
+
+    These alerts (Deloitte, Celestica, Scotiabank, …) all come from the same family of
+    notification platforms and share one structure: each posting is an <a> whose href is
+    a /job/ path on the company's careers domain, with the title as the link text and the
+    location frequently appended to it. The employer is the domain itself.
+
+    The aggregator parser can't see these at all — its pattern only knows LinkedIn,
+    Indeed, Glassdoor and ZipRecruiter — so without this every company alert imported
+    zero jobs.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    out = []
+
+    for anchor in soup.find_all("a", href=True):
+        href = anchor["href"]
+        low = href.lower()
+        if any(w in low for w in _WALLED_HOSTS):
+            continue
+        if not _CAREER_JOB_LINK.search(href) or _NOT_A_JOB.search(href):
+            continue
+
+        text = anchor.get_text(" ", strip=True)
+        if not text or len(text) < 5 or len(text) > 160:
+            continue
+        if re.match(r"^(view|apply|see all|show more|unsubscribe|click here)", text, re.I):
+            continue
+
+        # Split "Job Title - Toronto, ON, CA" into its two halves when the tail really
+        # looks like a location; plenty of titles contain a dash and no location at all
+        # ("Software Engineer - Platform Engineering"), so the pattern has to be strict.
+        m = _LOCATION_TAIL.search(text)
+        title = (text[:m.start()] if m else text).strip()
+        location = m.group(1).strip() if m else ""
+
+        company = _company_from_host(href)
+        out.append({
+            "source": company.lower() or (sender.split(".")[0] if sender else "careers"),
+            "title": title,
+            "company": company or "(unknown)",
+            "location": location or "Not specified",
+            "apply_url": href,
+            "description": "",            # recovered later from the posting itself
+            "job_type": "Unknown",
+        })
+    return out
+
 
 def _parse_alert_html(html: str, sender: str, subject: str) -> list[dict]:
     """Pull job cards out of an alert email.
@@ -295,15 +383,36 @@ def _parse_alert_html(html: str, sender: str, subject: str) -> list[dict]:
             continue
 
         # Company and location live in the text just after the title link.
+        # Company and location sit together on their own line, separated by a middle
+        # dot: "SecureRx Technologies Inc. · Ontario, Canada (Remote)". Finding that line
+        # is far steadier than taking the first two lines by position — when the anchor
+        # text and the title line differ, position-based reading put the *title* in the
+        # company field, which is where entries like "Data Engineering Intern" as a
+        # company name came from.
         company, location = "", ""
         block = anchor.find_parent(["td", "div", "table"])
         if block:
             lines = [ln.strip() for ln in block.get_text("\n", strip=True).split("\n")
                      if ln.strip() and ln.strip() != title]
-            if lines:
+            for ln in lines:
+                if "·" in ln:
+                    left, _, right = ln.partition("·")
+                    company, location = left.strip()[:100], right.strip()[:100]
+                    break
+            if not company and lines:            # no dot -> fall back to the old reading
                 company = lines[0][:100]
-            if len(lines) > 1:
-                location = lines[1][:100]
+                if len(lines) > 1:
+                    location = lines[1][:100]
+
+        # The anchor text sometimes runs the whole card together — "Product Intern Sezzle
+        # · Canada (Remote) Easy Apply" — so cut the title back to what precedes the
+        # company, and drop the badges LinkedIn appends after it.
+        if company and company in title:
+            title = title.split(company)[0].strip(" -–·,")
+        title = re.sub(r"\s*(easy apply|be an early applicant|promoted|\d+ school alums?)\s*$",
+                       "", title, flags=re.I).strip()
+        if not title:
+            continue
 
         out.append({
             "source": source,
@@ -353,6 +462,29 @@ def follow_links_enabled() -> bool:
     return FOLLOW_JOB_LINKS
 
 
+def _is_readable(url: str) -> bool:
+    """Whether a posting at this URL may be read.
+
+    Two kinds of host qualify. The named ATS platforms below are the classic case. So is
+    an employer's own careers domain — careers.deloitte.ca, jobs.scotiabank.com — which
+    publishes its descriptions openly; that IS the site's purpose. Excluding them was
+    why every company job-alert import stayed unscored.
+
+    Aggregators are the exception in both directions: LinkedIn, Indeed and their peers
+    serve a login or bot wall to anything automated, so nothing is ever read from them.
+    """
+    low = (url or "").lower()
+    if any(w in low for w in _WALLED_HOSTS):
+        return False
+    if any(host in low for host in READABLE_HOSTS):
+        return True
+    # An employer's careers site: a /job/ path on a careers-ish host.
+    m = re.match(r"https?://([^/]+)", low)
+    host = m.group(1) if m else ""
+    looks_like_careers = bool(re.match(r"^(careers?|jobs|recruiting|talent)\.", host))
+    return looks_like_careers and bool(_CAREER_JOB_LINK.search(low))
+
+
 def recover_description(url: str, timeout: int = 15) -> str:
     """Read the posting behind a link, if the host publishes it openly.
 
@@ -376,7 +508,7 @@ def recover_description(url: str, timeout: int = 15) -> str:
     if not url:
         return ""
 
-    direct = any(host in url.lower() for host in READABLE_HOSTS)
+    direct = _is_readable(url)
 
     # A tracking link needs the redirect followed to reach the real posting.
     if not direct and not follow_links_enabled():
@@ -387,7 +519,7 @@ def recover_description(url: str, timeout: int = 15) -> str:
                       headers={"User-Agent": "Mozilla/5.0 (JobPilot)"})
 
         # Whatever the redirect chain, only read a host that publishes openly.
-        if not any(host in str(r.url).lower() for host in READABLE_HOSTS):
+        if not _is_readable(str(r.url)):
             return ""
         if r.status_code != 200:
             return ""

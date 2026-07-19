@@ -232,6 +232,32 @@ class JobDoesNotFitError(Exception):
         )
 
 
+#: Words that mark a posting as software work even when it names no stack. Kept
+#: deliberately concrete — things a job says when the work IS building software, and
+#: that a sales or finance posting has no reason to say.
+_SOFTWARE_WORK = (
+    "software engineer", "software developer", "software engineering",
+    "full-stack", "full stack", "back-end", "backend", "front-end", "frontend",
+    "codebase", "code base", "ship code", "write code", "writing code",
+    "source code", "code review", "pull request", "open-source", "open source",
+    "sdk", "api", "apis", "developer", "programming", "computer science",
+    "web development", "mobile development", "devops", "software development",
+)
+
+
+def _names_a_language(blob: str) -> bool:
+    """Whether this posting names ANY programming language — not just one of yours."""
+    return any(
+        re.search(rf"(?<![a-z0-9+#.]){re.escape(lang)}(?![a-z0-9+#])", blob)
+        for lang in _LANGUAGES
+    )
+
+
+def _is_software_work(blob: str) -> bool:
+    """Whether the posting is plainly about building software, stack unnamed."""
+    return sum(1 for word in _SOFTWARE_WORK if word in blob) >= 3
+
+
 def check_fit(job: dict, requirements: list[str], profile: dict) -> None:
     """Refuse before writing, not after.
 
@@ -298,6 +324,27 @@ def check_fit(job: dict, requirements: list[str], profile: dict) -> None:
     # your field — a DevOps role naming Azure and Docker, say. One cannot: "Agile" is
     # in every posting ever written.
     if len(wanted) >= FIT_MIN_TECHNOLOGIES:
+        return
+
+    # A posting that names NO language at all — not one of yours, not one of anyone's.
+    #
+    # These exist and they are real software jobs. Xsolla's AI engineering internship
+    # says "ship code", "build on our APIs and SDKs", "modern full-stack", and then
+    # states outright: "we care more about how fast you learn than what you already
+    # know cold." It never names a language, on purpose. Against such a posting the
+    # count above cannot pass no matter who is applying — the only thing it matched was
+    # "github", from "a link to a GitHub profile".
+    #
+    # That is the same position as the bare title handled at the top: there is no
+    # evidence about the stack, and refusing on absent evidence is the other error.
+    # So decide on what IS in evidence — that the work is building software, and that
+    # you build software. Both halves are required: without the second, a posting like
+    # this would open to anyone at all, which is exactly what this check exists to stop.
+    blob = f"{job.get('title', '')} {job.get('description', '')} " \
+           f"{' '.join(requirements or [])}".lower()
+    if (not _names_a_language(blob)
+            and _is_software_work(blob)
+            and my_technologies(profile) & _LANGUAGES):
         return
 
     score, _ = overlap(requirements, profile, job)

@@ -851,3 +851,79 @@ class TestAFieldIsNotATool:
         assert resume_fit.fields_wanted(sales, self.PROFILE) == set()
         with pytest.raises(resume_fit.JobDoesNotFitError):
             resume_fit.check_fit(sales, [], self.PROFILE)
+
+
+class TestPostingsThatNameNoStack:
+    """A real software job that names no language at all.
+
+    Xsolla's AI engineering internship says "ship code", "build on our APIs and SDKs",
+    "modern full-stack" — and then, deliberately: "we care more about how fast you
+    learn than what you already know cold." It never names a language. Against the
+    count, such a posting could not pass no matter who applied: the only thing it
+    matched was "github", out of "a link to a GitHub profile".
+
+    That is absent evidence about the stack, not evidence of a bad fit, and refusing on
+    absent evidence is the opposite error from the one this check exists to prevent.
+    """
+
+    STACK_FREE_DEV_JOB = {
+        "title": "AI-First Engineering Intern",
+        "company": "Xsolla",
+        "description": (
+            "You'll ship code that goes to customers, working closely with senior "
+            "engineers. Build applications and integrations on top of our APIs and "
+            "SDKs. Use agentic coding tools as your default way of working. Comfort "
+            "with developing modern full-stack solutions — we care more about how "
+            "fast you learn than what you already know cold. Side projects, hackathon "
+            "entries, open-source contributions. Open to graduates of a Computer "
+            "Science or Software Engineering program. Include a link to a GitHub "
+            "profile or anything else you've built."
+        ),
+    }
+
+    def test_a_developer_may_apply_to_it(self):
+        check_fit(self.STACK_FREE_DEV_JOB, [], DEVELOPER)        # no raise
+
+    def test_a_non_developer_still_may_not(self):
+        """Both halves are required. Without this, a posting naming no stack would open
+        to anyone at all — which is what the check exists to stop."""
+        sales_person = {
+            "identity": {"titles": ["Account Executive"]},
+            "skills": {"expert": ["Salesforce", "Cold calling", "Negotiation"]},
+            "skill_categories": [{"label": "Soft Skills", "skills": ["Communication"]}],
+        }
+        with pytest.raises(JobDoesNotFitError):
+            check_fit(self.STACK_FREE_DEV_JOB, [], sales_person)
+
+    def test_a_finance_posting_naming_no_stack_is_still_refused(self):
+        """Naming no language is not on its own a reason to pass. An investment banking
+        posting names none either, and it is not a job a developer can honestly apply
+        to — the difference is whether the work is building software."""
+        with pytest.raises(JobDoesNotFitError):
+            check_fit({"title": "GBM Investment Banking Internship",
+                       "company": "Scotiabank",
+                       "description": "Support live transactions, financial modelling, "
+                                      "valuation, pitch books and client presentations "
+                                      "for mining sector coverage."},
+                      [], DEVELOPER)
+
+    def test_supply_chain_is_still_refused(self):
+        with pytest.raises(JobDoesNotFitError):
+            check_fit({"title": "Manager, Strategic Supply Chain",
+                       "company": "Celestica",
+                       "description": "Lead supplier negotiations, inventory planning, "
+                                      "cost reduction and logistics across the "
+                                      "manufacturing network."},
+                      [], DEVELOPER)
+
+    def test_a_posting_that_does_name_a_language_is_judged_on_that(self):
+        """The new branch only applies when NO language is named. A posting that names
+        languages is still judged by whether they are yours."""
+        with pytest.raises(JobDoesNotFitError):
+            check_fit({"title": "Senior Rust Engineer", "company": "X",
+                       "description": "Deep Rust and Erlang experience building "
+                                      "distributed systems. Write code, review code, "
+                                      "ship software as part of our developer team."},
+                      [], {"skills": {"expert": ["Cobol"]},
+                           "skill_categories": [
+                               {"label": "Programming Languages", "skills": ["Cobol"]}]})

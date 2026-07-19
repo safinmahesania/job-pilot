@@ -50,6 +50,7 @@ class TestAdzunaFailsLoudly:
         monkeypatch.setenv("ADZUNA_APP_KEY", "key")
 
         class _R:
+            status_code = 200
             def raise_for_status(self): return None
             def json(self): return {"results": []}
 
@@ -73,6 +74,7 @@ class TestJSearchFailsLoudly:
         monkeypatch.setenv("JSEARCH_API_KEY", "k")
 
         class _R:
+            status_code = 200
             def raise_for_status(self): return None
             def json(self): return {"data": []}
 
@@ -186,6 +188,7 @@ class TestJSearchUsesTheCurrentEndpoint:
         calls = []
 
         class _R:
+            status_code = 200
             def __init__(self, p): self._p = p
             def raise_for_status(self): return None
             def json(self): return self._p
@@ -230,3 +233,85 @@ class TestJSearchUsesTheCurrentEndpoint:
                "job_apply_link": "http://x/1"}
         calls, _ = self._run([{"data": [job], "cursor": None}], pages=5)
         assert len(calls) == 1                     # nothing further to ask for
+
+
+class TestJSearchFindsThePathItself:
+    """This API has renamed its search endpoint more than once, and the two gateways
+    have not always renamed together. A 404 on a stale path reads exactly like a bad
+    key, and sends you to regenerate one that was fine."""
+
+    JOB = {"job_id": "a", "job_title": "Dev", "employer_name": "X",
+           "job_apply_link": "http://x/1"}
+
+    class _R:
+        def __init__(self, code, payload=None):
+            self.status_code = code
+            self._p = payload or {}
+            self.text = "not found" if code == 404 else ""
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise Exception(f"Client error '{self.status_code}'")
+
+        def json(self):
+            return self._p
+
+    def _run(self, working_path, **cfg):
+        import os
+        from src.adapters.jsearch import JSearchAdapter
+        os.environ["JSEARCH_API_KEY"] = "7a1b2c3demsh1f2e3d4c5b6a7f8p1a2b3cjsn4d5e6f7a8"
+        tried = []
+
+        def _fake(url, params=None, headers=None, timeout=None):
+            path = url.rsplit("/", 1)[1]
+            tried.append(path)
+            if path == working_path:
+                return self._R(200, {"data": [self.JOB], "cursor": None})
+            return self._R(404)
+
+        with patch("httpx.get", side_effect=_fake):
+            jobs = JSearchAdapter({"name": "JS", "ats": "jsearch",
+                                   "queries": ["dev"], **cfg}).fetch()
+        return tried, jobs
+
+    def test_the_first_path_that_answers_is_used(self):
+        tried, jobs = self._run("search-v2")
+        assert tried == ["search-v2"]        # no pointless probing past a hit
+        assert len(jobs) == 1
+
+    def test_a_404_moves_on_to_the_next_candidate(self):
+        tried, jobs = self._run("job-search")
+        assert tried == ["search-v2", "job-search"]
+        assert len(jobs) == 1
+
+    def test_an_explicit_endpoint_is_not_second_guessed(self):
+        tried, jobs = self._run("job-search", endpoint="job-search")
+        assert tried == ["job-search"]
+
+    def test_a_key_error_is_not_retried_across_paths(self):
+        """401 is about the key and would be true at every path. Retrying it three
+        times just triples the noise before the same answer."""
+        import os
+        from src.adapters.jsearch import JSearchAdapter
+        os.environ["JSEARCH_API_KEY"] = "7a1b2c3demsh1f2e3d4c5b6a7f8p1a2b3cjsn4d5e6f7a8"
+        tried = []
+
+        def _fake(url, params=None, headers=None, timeout=None):
+            tried.append(url.rsplit("/", 1)[1])
+            return self._R(401)
+
+        with patch("httpx.get", side_effect=_fake):
+            with pytest.raises(RuntimeError):
+                JSearchAdapter({"name": "JS", "ats": "jsearch",
+                                "queries": ["dev"]}).fetch()
+        assert tried == ["search-v2"]
+
+    def test_when_nothing_answers_the_error_names_what_was_tried(self):
+        import os
+        from src.adapters.jsearch import JSearchAdapter
+        os.environ["JSEARCH_API_KEY"] = "7a1b2c3demsh1f2e3d4c5b6a7f8p1a2b3cjsn4d5e6f7a8"
+
+        with patch("httpx.get", side_effect=lambda *a, **k: self._R(404)):
+            with pytest.raises(RuntimeError, match="search-v2"):
+                JSearchAdapter({"name": "JS", "ats": "jsearch",
+                                "queries": ["dev"]}).fetch()

@@ -27,8 +27,16 @@ from src.adapters.base import redact
 from src.logs import log
 
 # OpenWeb Ninja's direct endpoint (same shape as the RapidAPI one, simpler auth).
-API = "https://api.openwebninja.com/jsearch/search-v2"
-RAPIDAPI = "https://jsearch.p.rapidapi.com/search-v2"
+API_HOST = "https://api.openwebninja.com/jsearch"
+RAPIDAPI_HOST = "https://jsearch.p.rapidapi.com"
+
+#: Paths this API has served job search on, newest first. It has moved more than once —
+#: `/search` now answers 404, and the two gateways have not always renamed in step. A
+#: 404 on the wrong path is indistinguishable from a bad key to anyone reading the log,
+#: and sends them off to regenerate a key that was fine. So rather than hard-code one
+#: guess, the first request tries these in order and the rest of the run uses whichever
+#: answered. A source can pin one with `endpoint:` and skip the search entirely.
+SEARCH_PATHS = ("search-v2", "job-search", "search")
 
 #: What a RapidAPI key looks like: one long alphanumeric run with `msh` and `jsn` in
 #: it. OpenWeb Ninja issues a different shape, so the key itself says which host it is
@@ -53,6 +61,24 @@ def _why(response, error) -> str:
 
 
 class JSearchAdapter(SourceAdapter):
+    @staticmethod
+    def _request(host, paths, params, headers):
+        """Ask the first path that isn't a 404, and say which one that was.
+
+        Only a 404 moves on to the next candidate: it is the one status that means "this
+        path is not here". A 401 or 403 is about the key and would be true at every path,
+        so it is returned immediately rather than retried three times over.
+        """
+        response = None
+        for i, path in enumerate(paths):
+            response = httpx.get(f"{host}/{path}", params=params,
+                                 headers=headers, timeout=30)
+            if response.status_code != 404:
+                return response, (path if len(paths) > 1 else None)
+            if i == len(paths) - 1:
+                break                      # out of candidates; hand back the last 404
+        return response, None
+
     def fetch(self) -> list[dict]:
         key = os.environ.get("JSEARCH_API_KEY")
         if not key:
@@ -87,7 +113,9 @@ class JSearchAdapter(SourceAdapter):
         else:
             use_rapid = bool(_RAPIDAPI_KEY_SHAPE.match(key.strip()))
 
-        base = RAPIDAPI if use_rapid else API
+        host = RAPIDAPI_HOST if use_rapid else API_HOST
+        paths = ([c["endpoint"].strip("/")] if c.get("endpoint")
+                 else list(SEARCH_PATHS))
         host_name = "RapidAPI" if use_rapid else "OpenWeb Ninja"
         headers = ({"X-RapidAPI-Key": key, "X-RapidAPI-Host": "jsearch.p.rapidapi.com"}
                    if use_rapid else {"x-api-key": key})
@@ -113,7 +141,10 @@ class JSearchAdapter(SourceAdapter):
                     params["cursor"] = cursor
                 r = None
                 try:
-                    r = httpx.get(base, params=params, headers=headers, timeout=30)
+                    r, path_used = self._request(host, paths, params, headers)
+                    if path_used:
+                        # Settle on it: the rest of the run should not re-probe.
+                        paths = [path_used]
                     r.raise_for_status()
                     data = r.json()
                 except Exception as e:
@@ -160,14 +191,20 @@ class JSearchAdapter(SourceAdapter):
                     break        # the API handed back no next page, so there isn't one
 
         if not answered:
-            # Every request failed — a key that is valid for a different host answers
-            # 401 to all of them. An empty list would report that as "JSearch had no
-            # matches" and hide the real cause.
+            # Every request failed. Two causes look identical from here and need
+            # different fixes: a key valid at the other gateway (401 everywhere), and a
+            # path this API no longer serves (404 everywhere). Name both, and say what
+            # was tried, so the reader isn't left regenerating a key that was fine.
             other = "OpenWeb Ninja" if use_rapid else "RapidAPI"
+            tried = ", ".join(f"/{p}" for p in (
+                [c["endpoint"].strip("/")] if c.get("endpoint") else SEARCH_PATHS))
             raise RuntimeError(
                 f"{self.name}: every JSearch request failed against {host_name} — "
-                f"{last_error}. If your key is from {other}, set `host: "
-                f"{'openwebninja' if use_rapid else 'rapidapi'}` on this source."
+                f"{last_error}. Tried: {tried}. A 401 means the key belongs to "
+                f"{other} (set `host: "
+                f"{'openwebninja' if use_rapid else 'rapidapi'}`); a 404 means the "
+                f"path moved again — check the Endpoints tab and pin it with "
+                f"`endpoint: <name>` on this source."
             )
 
         return out

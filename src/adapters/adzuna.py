@@ -27,6 +27,7 @@ import os
 import httpx
 
 from .base import SourceAdapter
+from src.adapters.base import redact
 from src.logs import log
 
 API = "https://api.adzuna.com/v1/api/jobs/{country}/search/{page}"
@@ -52,6 +53,10 @@ class AdzunaAdapter(SourceAdapter):
         pages = int(c.get("pages", 1))
 
         seen: set[str] = set()
+
+        answered = False
+
+        last_error = None
         out: list[dict] = []
 
         for kw in queries:
@@ -72,9 +77,13 @@ class AdzunaAdapter(SourceAdapter):
                     r.raise_for_status()
                     data = r.json()
                 except Exception as e:
+                    # redact(): the exception carries the request URL, and that URL
+                    # carries app_id and app_key.
+                    last_error = redact(e)
                     log.warning("[adzuna %s] '%s' page %s failed: %s",
-                                self.name, kw, page, e)
+                                self.name, kw, page, last_error)
                     break
+                answered = True
 
                 results = data.get("results", []) if isinstance(data, dict) else []
                 if not results:
@@ -103,6 +112,13 @@ class AdzunaAdapter(SourceAdapter):
                         "posted_date": j.get("created") or "",
                         "job_type": _job_type(j),
                     })
+
+        if not answered:
+            # Every request failed — a wrong key answers 401 to all of them. Returning
+            # an empty list makes that look like "Adzuna had no matches", which sends
+            # the reader off to widen their search terms when the account is the
+            # problem. The health check keeps errors and quiet zeros apart on purpose.
+            raise RuntimeError(f"{self.name}: every Adzuna request failed — {last_error}")
 
         return out
 

@@ -22,6 +22,7 @@ import os
 import httpx
 
 from .base import SourceAdapter
+from src.adapters.base import redact
 from src.logs import log
 
 # OpenWeb Ninja's direct endpoint (same shape as the RapidAPI one, simpler auth).
@@ -55,6 +56,10 @@ class JSearchAdapter(SourceAdapter):
                    if use_rapid else {"x-api-key": key})
 
         seen: set[str] = set()
+
+        answered = False
+
+        last_error = None
         out: list[dict] = []
 
         for kw in queries:
@@ -66,9 +71,11 @@ class JSearchAdapter(SourceAdapter):
                     r.raise_for_status()
                     data = r.json()
                 except Exception as e:
+                    last_error = redact(e)
                     log.warning("[jsearch %s] '%s' page %s failed: %s",
-                                self.name, kw, page, e)
+                                self.name, kw, page, last_error)
                     break
+                answered = True
 
                 jobs = data.get("data", []) if isinstance(data, dict) else []
                 if not jobs:
@@ -101,5 +108,11 @@ class JSearchAdapter(SourceAdapter):
                         "job_type": j.get("job_employment_type"),
                         "remote": 1 if j.get("job_is_remote") else 0,
                     })
+
+        if not answered:
+            # Every request failed — a key that is valid for a different host answers
+            # 401 to all of them. An empty list would report that as "JSearch had no
+            # matches" and hide the real cause.
+            raise RuntimeError(f"{self.name}: every JSearch request failed — {last_error}")
 
         return out

@@ -1,5 +1,21 @@
 """Shared adapter interface + factory that routes by ATS type."""
 from abc import ABC, abstractmethod
+import re
+
+#: Query-string parameters that carry a credential. httpx puts the full request URL in
+#: the exception it raises for a bad status, so logging that exception verbatim writes
+#: your API keys into the log — and logs get pasted into chats and bug reports. This is
+#: not hypothetical: it happened, with a live key, the first time a source was diagnosed.
+_SECRET_PARAMS = ("app_key", "app_id", "api_key", "apikey", "key", "token",
+                  "access_token", "secret", "password")
+_SECRET_RE = re.compile(
+    r"(?i)\b(" + "|".join(_SECRET_PARAMS) + r")=([^&\s'\"]+)"
+)
+
+
+def redact(text) -> str:
+    """Error text with any credential in it replaced, safe to log or show."""
+    return _SECRET_RE.sub(r"\1=***", str(text))
 
 class SourceAdapter(ABC):
     def __init__(self, company: dict):

@@ -17,6 +17,7 @@ Config (in companies-backup.yaml):
 It needs a free API key in .env:  JSEARCH_API_KEY=...
 (from RapidAPI's JSearch, or OpenWeb Ninja — both expose the same x-api-key endpoint.)
 """
+import re
 import os
 
 import httpx
@@ -28,6 +29,11 @@ from src.logs import log
 # OpenWeb Ninja's direct endpoint (same shape as the RapidAPI one, simpler auth).
 API = "https://api.openwebninja.com/jsearch/search"
 RAPIDAPI = "https://jsearch.p.rapidapi.com/search"
+
+#: What a RapidAPI key looks like: one long alphanumeric run with `msh` and `jsn` in
+#: it. OpenWeb Ninja issues a different shape, so the key itself says which host it is
+#: for and nobody has to remember to write `host: rapidapi` in the source.
+_RAPIDAPI_KEY_SHAPE = re.compile(r"^[a-z0-9]{6,}msh[a-z0-9]+jsn[a-z0-9]+$", re.I)
 
 
 class JSearchAdapter(SourceAdapter):
@@ -48,10 +54,23 @@ class JSearchAdapter(SourceAdapter):
         pages = int(c.get("pages", 1))
         location = c.get("location", "")
 
-        # RapidAPI and OpenWeb Ninja use different hosts/headers for the same API.
-        # Detect which by the key shape isn't reliable, so allow an explicit `host`.
-        use_rapid = c.get("host", "").lower() == "rapidapi" or key.startswith("rapid_")
+        # RapidAPI and OpenWeb Ninja serve the same API on different hosts, with
+        # different auth headers. Sending a RapidAPI key to OpenWeb Ninja gets a 401
+        # that says nothing about the real problem — which is not a wrong key, but a
+        # key pointed at the wrong door.
+        #
+        # The two issue visibly different keys, so this reads the key rather than
+        # asking. A RapidAPI key is one long alphanumeric run with `msh` and `jsn`
+        # inside it (…4f2amsh8e1c…p1b9…jsn6d5c…); OpenWeb Ninja's has neither. An
+        # explicit `host:` in the source still wins, for the day that stops being true.
+        configured = c.get("host", "").lower()
+        if configured:
+            use_rapid = configured == "rapidapi"
+        else:
+            use_rapid = bool(_RAPIDAPI_KEY_SHAPE.match(key.strip()))
+
         base = RAPIDAPI if use_rapid else API
+        host_name = "RapidAPI" if use_rapid else "OpenWeb Ninja"
         headers = ({"X-RapidAPI-Key": key, "X-RapidAPI-Host": "jsearch.p.rapidapi.com"}
                    if use_rapid else {"x-api-key": key})
 
@@ -113,6 +132,11 @@ class JSearchAdapter(SourceAdapter):
             # Every request failed — a key that is valid for a different host answers
             # 401 to all of them. An empty list would report that as "JSearch had no
             # matches" and hide the real cause.
-            raise RuntimeError(f"{self.name}: every JSearch request failed — {last_error}")
+            other = "OpenWeb Ninja" if use_rapid else "RapidAPI"
+            raise RuntimeError(
+                f"{self.name}: every JSearch request failed against {host_name} — "
+                f"{last_error}. If your key is from {other}, set `host: "
+                f"{'openwebninja' if use_rapid else 'rapidapi'}` on this source."
+            )
 
         return out

@@ -78,3 +78,53 @@ class TestJSearchFailsLoudly:
 
         with patch("httpx.get", return_value=_R()):
             assert self._adapter().fetch() == []
+
+
+class TestJSearchPicksTheRightHost:
+    """RapidAPI and OpenWeb Ninja serve the same API behind different hosts and auth
+    headers. Sending a key to the wrong one returns 401 — which reads as a bad key, and
+    sends you off to regenerate a key that was fine. The key's own shape says which host
+    issued it, so nothing has to be remembered."""
+
+    def _adapter(self, **extra):
+        from src.adapters.jsearch import JSearchAdapter
+        return JSearchAdapter({"name": "JS", "ats": "jsearch",
+                               "queries": ["developer"], **extra})
+
+    def _host_used(self, monkeypatch, key, **extra):
+        monkeypatch.setenv("JSEARCH_API_KEY", key)
+        seen = {}
+
+        def _fake(url, **kw):
+            seen["url"] = url
+            seen["headers"] = kw.get("headers", {})
+            raise Exception("stop here")
+
+        with patch("httpx.get", side_effect=_fake):
+            with pytest.raises(RuntimeError):
+                self._adapter(**extra).fetch()
+        return seen
+
+    def test_a_rapidapi_shaped_key_goes_to_rapidapi(self, monkeypatch):
+        seen = self._host_used(
+            monkeypatch, "8f4a2c9d1emsh3b7e6f5a4c2d1b0p1a9b8cjsn7e6d5c4b3a2f")
+        assert "rapidapi.com" in seen["url"]
+        assert "X-RapidAPI-Key" in seen["headers"]
+
+    def test_another_shape_goes_to_openweb_ninja(self, monkeypatch):
+        seen = self._host_used(monkeypatch, "f1e2d3c4-b5a6-7890-1234-56789abcdef0")
+        assert "openwebninja.com" in seen["url"]
+        assert "x-api-key" in seen["headers"]
+
+    def test_an_explicit_host_overrides_the_guess(self, monkeypatch):
+        """The shape is a default, not a rule — a source can still say."""
+        seen = self._host_used(
+            monkeypatch, "8f4a2c9d1emsh3b7e6f5a4c2d1b0p1a9b8cjsn7e6d5c4b3a2f",
+            host="openwebninja")
+        assert "openwebninja.com" in seen["url"]
+
+    def test_the_failure_names_the_host_it_tried(self, monkeypatch):
+        monkeypatch.setenv("JSEARCH_API_KEY", "f1e2d3c4-b5a6-7890-1234-56789abcdef0")
+        with patch("httpx.get", side_effect=Exception("401 Unauthorized")):
+            with pytest.raises(RuntimeError, match="OpenWeb Ninja"):
+                self._adapter().fetch()

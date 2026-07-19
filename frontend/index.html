@@ -1013,20 +1013,67 @@
             <div class="text-xs text-gray-500 mt-2.5">
               In your mail client: open the alert → <b>Save as</b> / <b>Download message</b>
               (<code class="text-brand">.eml</code> or <code class="text-brand">.html</code>).
-              Then upload it here, or drop several into
+              Select as many as you like — they're imported one after another so you can
+              watch the queue. Or drop them into
               <code class="text-brand">data/mail_drop/</code> and read them in one go.
             </div>
 
             <div class="flex flex-wrap items-center gap-2 mt-3">
-              <label class="text-[13px] h-9 px-4 rounded-md bg-brand text-white flex items-center gap-1 cursor-pointer">
-                <i class="ti ti-mail-up"></i> Upload an email
-                <input type="file" accept=".eml,.html,.htm,.txt" class="hidden" @change="importEmailFile($event)">
+              <label class="text-[13px] h-9 px-4 rounded-md bg-brand text-white flex items-center gap-1 cursor-pointer" :class="imp.busy && 'opacity-40 pointer-events-none'">
+                <i class="ti ti-mail-up"></i> Upload emails
+                <input type="file" multiple accept=".eml,.html,.htm,.txt" class="hidden" @change="importEmailFile($event)">
               </label>
               <button @click="importMailDrop()" :disabled="imp.busy"
                 class="text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 flex items-center gap-1">
                 <i class="ti ti-folder"></i> Read data/mail_drop/
               </button>
             </div>
+
+            <!-- Import queue -->
+            <template x-if="impQueue.total">
+              <div class="mt-4 rounded-lg border border-gray-200 overflow-hidden">
+                <div class="flex items-center gap-3 px-3 py-2.5 bg-gray-50 border-b border-gray-200">
+                  <i class="ti shrink-0" :class="impQueue.running ? 'ti-loader-2 animate-spin text-brand' : 'ti-checks text-green-600'"></i>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-[13px] font-medium" x-text="impQueue.running ? `Importing ${impQueue.done + 1} of ${impQueue.total}…` : `Done — ${impQueue.total} file${impQueue.total===1?'':'s'}`"></div>
+                    <div class="h-1 rounded-full bg-gray-200 mt-1.5 overflow-hidden">
+                      <div class="h-full bg-brand transition-all duration-300"
+                        :style="`width: ${Math.round(impQueue.done / impQueue.total * 100)}%`"></div>
+                    </div>
+                  </div>
+                  <button x-show="!impQueue.running" @click="clearImportQueue()"
+                    class="shrink-0 text-gray-400 hover:text-gray-600 text-xs">Clear</button>
+                </div>
+
+                <div class="max-h-56 overflow-y-auto divide-y divide-gray-100">
+                  <template x-for="(f, i) in impQueue.items" :key="i">
+                    <div class="flex items-center gap-2.5 px-3 py-2 text-xs">
+                      <i class="ti shrink-0"
+                        :class="f.status==='done' ? 'ti-circle-check text-green-600'
+                              : f.status==='failed' ? 'ti-alert-circle text-red-500'
+                              : f.status==='running' ? 'ti-loader-2 animate-spin text-brand'
+                              : 'ti-clock text-gray-300'"></i>
+                      <span class="flex-1 truncate" :class="f.status==='pending' && 'text-gray-400'" x-text="f.name"></span>
+                      <span x-show="f.status==='done'" class="shrink-0 text-gray-500"
+                        x-text="`${f.imported} of ${f.found}`"></span>
+                      <span x-show="f.status==='failed'" class="shrink-0 text-red-500 truncate max-w-[45%]" x-text="f.error"></span>
+                      <span x-show="f.status==='pending'" class="shrink-0 text-gray-300">queued</span>
+                    </div>
+                  </template>
+                </div>
+
+                <template x-if="impQueue.totals && !impQueue.running">
+                  <div class="flex flex-wrap gap-x-4 gap-y-1 px-3 py-2.5 text-xs bg-gray-50 border-t border-gray-200">
+                    <span><span class="font-semibold text-gray-800" x-text="impQueue.totals.imported"></span> imported</span>
+                    <span><span class="font-semibold text-green-600" x-text="impQueue.totals.scored"></span> scored</span>
+                    <span><span class="font-semibold text-gray-500" x-text="impQueue.totals.unscored"></span> unscored</span>
+                    <span x-show="impQueue.totals.dropped"><span class="font-semibold text-gray-500" x-text="impQueue.totals.dropped"></span> dropped</span>
+                    <span><span class="font-semibold text-gray-500" x-text="impQueue.totals.duplicates"></span> already seen</span>
+                    <span x-show="impQueue.totals.errors"><span class="font-semibold text-red-500" x-text="impQueue.totals.errors"></span> errors</span>
+                  </div>
+                </template>
+              </div>
+            </template>
           </div>
 
           <!-- Last result -->

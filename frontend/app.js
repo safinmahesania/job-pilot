@@ -14,6 +14,10 @@ function jobpilot() {
     ai: { scoring: true, generation: true },
     cfgFiles: [],
     imp: { text: '', busy: false, result: null },
+    // Multi-file email import. Files are processed one at a time so you can watch the
+    // queue drain and see which file produced what — a single bulk call would hide
+    // which email failed, and would tie up the server for one long request.
+    impQueue: { items: [], running: false, done: 0, total: 0, totals: null },
     privacy: { mode: 'redacted', follow_job_links: true },
     fu: { items: [], total: 0, first: 0, second: 0, stale: 0 },
     digestPreview: '',
@@ -600,24 +604,54 @@ function jobpilot() {
     },
 
     async importEmailFile(event) {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      this.imp.busy = true; this.imp.result = null;
-      try {
-        const form = new FormData();
-        form.append('file', file);
-        const r = await fetch('/api/import/email-file', { method: 'POST', body: form });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
-        this.imp.result = data;
-        this.showSnack(`Imported ${data.imported} of ${data.found} jobs in that email`);
-        await this.load();
-      } catch (e) {
-        this.showSnack('Import failed: ' + e.message, 'error');
-      } finally {
-        this.imp.busy = false;
-        event.target.value = '';
+      const files = Array.from(event.target.files || []);
+      event.target.value = '';                 // let the same file be picked again
+      if (!files.length) return;
+
+      this.imp.result = null;
+      this.impQueue = {
+        items: files.map(f => ({ name: f.name, status: 'pending', found: 0, error: '' })),
+        running: true, done: 0, total: files.length,
+        totals: { found: 0, imported: 0, scored: 0, unscored: 0,
+                  dropped: 0, duplicates: 0, errors: 0 },
+      };
+      this.imp.busy = true;
+
+      for (let i = 0; i < files.length; i++) {
+        const item = this.impQueue.items[i];
+        item.status = 'running';
+        try {
+          const form = new FormData();
+          form.append('file', files[i]);
+          const r = await fetch('/api/import/email-file', { method: 'POST', body: form });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+          item.status = 'done';
+          item.found = data.found || 0;
+          item.imported = data.imported || 0;
+          for (const k of Object.keys(this.impQueue.totals)) {
+            this.impQueue.totals[k] += (data[k] || 0);
+          }
+        } catch (e) {
+          item.status = 'failed';
+          item.error = e.message;
+          this.impQueue.totals.errors += 1;
+        }
+        this.impQueue.done = i + 1;
       }
+
+      this.impQueue.running = false;
+      this.imp.busy = false;
+      const t = this.impQueue.totals;
+      const failed = this.impQueue.items.filter(x => x.status === 'failed').length;
+      this.showSnack(
+        `${t.imported} imported from ${files.length - failed} of ${files.length} file${files.length === 1 ? '' : 's'}`,
+        failed ? 'error' : 'success');
+      await this.load();
+    },
+
+    clearImportQueue() {
+      this.impQueue = { items: [], running: false, done: 0, total: 0, totals: null };
     },
 
     async importMailDrop() {

@@ -581,14 +581,21 @@ def import_jobs(raw_jobs: list[dict], *, source: str = "import",
                 if recovered:
                     job["description"] = recovered
 
-            # Location gate — runs BEFORE scoring and even without a description,
-            # because alert emails always carry a location. A job that isn't in Canada
-            # and isn't remote is dropped now rather than parked in the unscored tab, so
-            # that tab only ever holds jobs actually worth your time. Scoring still needs
-            # a description; this filter needs only the location, which we always have.
+            # Location gate — runs before scoring, and works without a description
+            # because alert emails carry a location. A job we can SEE is outside Canada
+            # and not remote is dropped now rather than parked in the unscored tab.
+            #
+            # It only fires on a location we actually have. Some employers' alerts
+            # (Deloitte's, for one) name no location at all, and those postings are on a
+            # Canadian careers site and perfectly relevant — dropping them for a missing
+            # field would silently throw away good jobs. Unknown location therefore means
+            # "keep and let scoring judge it", not "discard".
             from src.scoring.prefilter import _check_locations
             allowed_locations = (profile.get("constraints") or {}).get("locations")
-            if allowed_locations and not _check_locations(job, allowed_locations):
+            loc_known = (job.get("location") or "").strip().lower() not in (
+                "", "not specified", "unknown", "n/a", "-")
+            if (allowed_locations and loc_known
+                    and not _check_locations(job, allowed_locations)):
                 store.mark_seen(conn, job["dedupe_hash"], "trashed")
                 stats["dropped"] = stats.get("dropped", 0) + 1
                 continue

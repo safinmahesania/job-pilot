@@ -4,6 +4,25 @@ Sirf un checks chalte hain jinki key profile['constraints'] me present hai.
 Naya rule = profile.yaml me field + yahan ek check function. Bas.
 """
 from datetime import datetime, timezone
+import re
+
+
+# Canadian province and territory codes. Job boards write "Mississauga, ON, CA" far more
+# often than "Mississauga, Ontario, Canada", and matching only the full words silently
+# dropped every such posting — real Ontario jobs thrown away for a formatting choice.
+# None of these codes collides with a US state code, so a match is unambiguous evidence
+# the posting is Canadian. Matched on word boundaries: plain substring matching would
+# find "on" inside "London" and "Toronto".
+_CA_PROVINCE_CODES = ("on", "qc", "bc", "ab", "mb", "sk", "ns", "nb", "nl",
+                      "pe", "yt", "nt", "nu")
+_CA_CODE_RE = re.compile(r"\b(" + "|".join(_CA_PROVINCE_CODES) + r")\b")
+
+
+def _is_canadian(loc: str) -> bool:
+    """Whether a location string names somewhere in Canada, in any common format."""
+    if any(w in loc for w in ("canada", "canadian")):
+        return True
+    return bool(_CA_CODE_RE.search(loc))
 
 
 # ---------- constraint checks ----------
@@ -16,6 +35,12 @@ def _check_locations(job, allowed):
 
     # allowed Canadian place ka seedha match -> pass
     if any(a in loc for a in allowed if a != "remote"):
+        return True
+
+    # A Canadian posting written in code form — "Mississauga, ON, CA" — is in Canada
+    # just as much as one spelled "Mississauga, Ontario". Accept it before the stricter
+    # checks below, which only understand the spelled-out words.
+    if _is_canadian(loc):
         return True
 
     canada_words = ("canada", "canadian", "north america", "americas")

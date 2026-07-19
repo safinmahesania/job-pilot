@@ -60,6 +60,21 @@ def describe_config(c: dict) -> list[str]:
     for var in NEEDS_KEYS.get(ats, ()):
         notes.append(f"{var}={'set' if os.environ.get(var) else 'MISSING'}")
 
+    # For JSearch, the host is the thing that actually goes wrong, and it was invisible:
+    # the same key is valid at one host and a 401 at the other. Say which one it picked.
+    if ats == "jsearch":
+        key = (os.environ.get("JSEARCH_API_KEY") or "").strip()
+        if key:
+            from src.adapters.jsearch import _RAPIDAPI_KEY_SHAPE
+            configured = (c.get("host") or "").lower()
+            if configured:
+                host = "RapidAPI" if configured == "rapidapi" else "OpenWeb Ninja"
+                notes.append(f"host={host} (set in config)")
+            else:
+                rapid = bool(_RAPIDAPI_KEY_SHAPE.match(key))
+                notes.append(
+                    f"host={'RapidAPI' if rapid else 'OpenWeb Ninja'} (from key shape)")
+
     if ats in NEEDS_URL:
         url = c.get("careers_url") or c.get("base") or c.get("url")
         notes.append(f"careers_url={url or 'MISSING'}")

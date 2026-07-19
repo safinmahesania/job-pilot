@@ -33,3 +33,8 @@ Thumbs.db
 # Emails you hand to JobPilot. Your mail, never committed.
 data/mail_drop/*
 !data/mail_drop/.gitkeep
+# Node dependencies for the frontend sanitizer test. Installed by `npm install`
+# (and by CI on every run), never committed: 1800+ files of third-party code that
+# bloat the repo, get swept in by `git add -A`, and give the code scanners a mountain
+# of vendored JavaScript to chew through.
+node_modules/

@@ -173,3 +173,60 @@ class TestTheServersOwnExplanationIsKept:
             with pytest.raises(RuntimeError, match="timed out"):
                 JSearchAdapter({"name": "JS", "ats": "jsearch",
                                 "queries": ["dev"]}).fetch()
+
+
+class TestJSearchUsesTheCurrentEndpoint:
+    """The API moved to /search-v2 and page numbers gave way to cursors. The old path
+    answers 404 — which reads as "your key is wrong" and is not."""
+
+    def _run(self, pages_payload, **cfg):
+        import os
+        from src.adapters.jsearch import JSearchAdapter
+        os.environ["JSEARCH_API_KEY"] = "f1e2d3c4-b5a6-7890-1234-56789abcdef0"
+        calls = []
+
+        class _R:
+            def __init__(self, p): self._p = p
+            def raise_for_status(self): return None
+            def json(self): return self._p
+
+        def _fake(url, params=None, headers=None, timeout=None):
+            calls.append((url, dict(params or {})))
+            return _R(pages_payload[len(calls) - 1])
+
+        with patch("httpx.get", side_effect=_fake):
+            jobs = JSearchAdapter({"name": "JS", "ats": "jsearch",
+                                   "queries": ["developer"], **cfg}).fetch()
+        return calls, jobs
+
+    def test_it_calls_search_v2(self):
+        calls, _ = self._run([{"data": [], "cursor": None}])
+        assert calls[0][0].endswith("/search-v2")
+
+    def test_no_page_number_is_sent(self):
+        """search-v2 has no page parameter; sending one is not how it paginates."""
+        calls, _ = self._run([{"data": [], "cursor": None}])
+        assert "page" not in calls[0][1]
+        assert "num_pages" not in calls[0][1]
+
+    def test_the_location_goes_inside_the_query(self):
+        """"developer in montreal" returns what "developer" alone does not."""
+        calls, _ = self._run([{"data": [], "cursor": None}], location="Montreal")
+        assert calls[0][1]["query"] == "developer in Montreal"
+
+    def test_the_cursor_from_one_page_is_sent_with_the_next(self):
+        job = {"job_id": "a", "job_title": "Dev", "employer_name": "X",
+               "job_apply_link": "http://x/1"}
+        calls, jobs = self._run(
+            [{"data": [job], "cursor": "CUR2"},
+             {"data": [dict(job, job_id="b")], "cursor": None}],
+            pages=2)
+        assert "cursor" not in calls[0][1]          # first request asks for no page
+        assert calls[1][1]["cursor"] == "CUR2"
+        assert len(jobs) == 2
+
+    def test_paging_stops_when_no_cursor_comes_back(self):
+        job = {"job_id": "a", "job_title": "Dev", "employer_name": "X",
+               "job_apply_link": "http://x/1"}
+        calls, _ = self._run([{"data": [job], "cursor": None}], pages=5)
+        assert len(calls) == 1                     # nothing further to ask for

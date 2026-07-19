@@ -27,8 +27,8 @@ from src.adapters.base import redact
 from src.logs import log
 
 # OpenWeb Ninja's direct endpoint (same shape as the RapidAPI one, simpler auth).
-API = "https://api.openwebninja.com/jsearch/search"
-RAPIDAPI = "https://jsearch.p.rapidapi.com/search"
+API = "https://api.openwebninja.com/jsearch/search-v2"
+RAPIDAPI = "https://jsearch.p.rapidapi.com/search-v2"
 
 #: What a RapidAPI key looks like: one long alphanumeric run with `msh` and `jsn` in
 #: it. OpenWeb Ninja issues a different shape, so the key itself says which host it is
@@ -69,6 +69,8 @@ class JSearchAdapter(SourceAdapter):
         country = c.get("country", "ca")
         pages = int(c.get("pages", 1))
         location = c.get("location", "")
+        # Non-English regions need this to match; "en" suits Canada.
+        language = c.get("language", "en")
 
         # RapidAPI and OpenWeb Ninja serve the same API on different hosts, with
         # different auth headers. Sending a RapidAPI key to OpenWeb Ninja gets a 401
@@ -98,9 +100,17 @@ class JSearchAdapter(SourceAdapter):
         out: list[dict] = []
 
         for kw in queries:
+            # The API asks for the location inside the query, not beside it: "developer
+            # in montreal" returns what "developer" with a location parameter does not.
             q = f"{kw} in {location}" if location else kw
+            cursor = None
             for page in range(1, pages + 1):
-                params = {"query": q, "country": country, "page": page, "num_pages": 1}
+                # search-v2 pages by cursor: each response carries the token for the
+                # next one. There is no page number to ask for, so the first request
+                # sends none and every later one echoes back what it was handed.
+                params = {"query": q, "country": country, "language": language}
+                if cursor:
+                    params["cursor"] = cursor
                 r = None
                 try:
                     r = httpx.get(base, params=params, headers=headers, timeout=30)
@@ -114,6 +124,7 @@ class JSearchAdapter(SourceAdapter):
                 answered = True
 
                 jobs = data.get("data", []) if isinstance(data, dict) else []
+                cursor = data.get("cursor") if isinstance(data, dict) else None
                 if not jobs:
                     break
 
@@ -144,6 +155,9 @@ class JSearchAdapter(SourceAdapter):
                         "job_type": j.get("job_employment_type"),
                         "remote": 1 if j.get("job_is_remote") else 0,
                     })
+
+                if not cursor:
+                    break        # the API handed back no next page, so there isn't one
 
         if not answered:
             # Every request failed — a key that is valid for a different host answers

@@ -103,8 +103,14 @@ class TestManualJobEdit:
         # score isn't a permitted field; sending it changes nothing and isn't reported.
         r = client.patch(f"/api/jobs/{jid}", json={"title": "T", "score": 5})
         assert "score" not in r.json()["updated"]
-        # the job is still scored 80 -> still in the feed
-        assert any(j["title"] == "T" for j in client.get("/api/jobs?tab=feed").json())
+        # The score the request tried to set was never written. Asserting the job is
+        # still in the feed would be a weaker proxy: editing a job legitimately triggers
+        # a rescore, so on a machine where scoring actually runs the job can leave the
+        # feed for an honest reason and this test would fail for the wrong one.
+        conn = sqlite3.connect(db)
+        score = conn.execute("SELECT score FROM jobs WHERE id=?", (jid,)).fetchone()[0]
+        conn.close()
+        assert score != 5
 
     def test_empty_edit_is_rejected(self, client, db):
         jid = self._one_job(db)

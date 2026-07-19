@@ -255,6 +255,32 @@ def written_profile(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_live_scoring(monkeypatch):
+    """Never let a test score a job against a real model.
+
+    Scoring reaches for whatever provider is configured. On a machine with no API keys
+    that quietly fails and the suite is green; on a machine with a real .env the same
+    tests fire live requests — slow (a full run went from ~25s to ~75s), charged against
+    a real quota, and non-deterministic. One test asserted a job stayed in the feed after
+    an edit, which held only because scoring *hadn't* worked: with a live model the edit
+    rescored a fixture job ("T" at "X") below the threshold and it dropped out of the
+    feed. A test must not pass or fail depending on whose laptop it runs on.
+
+    `score_job` therefore returns None for every test — the documented "scoring couldn't
+    run" result, which leaves an existing score untouched. Any test that actually
+    exercises scoring patches it itself, and its patch wins.
+
+    The generate chain is deliberately left alone: the privacy tests drive it directly by
+    mocking the providers underneath, and stubbing it here would break that.
+    """
+    try:
+        monkeypatch.setattr("src.scoring.rerank.score_job", lambda *a, **kw: None)
+    except Exception:
+        pass
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limiter():
     """Clear the rate limiter before every test.
 

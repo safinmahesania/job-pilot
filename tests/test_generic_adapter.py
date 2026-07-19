@@ -5,6 +5,7 @@ network: they lock in the rules that matter — real job links are kept, navigat
 filter links are dropped, off-site links are excluded for company pages, and the three
 ats values all route here.
 """
+import pytest
 from unittest.mock import MagicMock, patch
 
 from src.adapters.base import KNOWN_ATS, get_adapter
@@ -88,13 +89,39 @@ class TestGenericAdapter:
             jobs = a.fetch()
         assert any(j["title"] == "Aggregated Job" for j in jobs)
 
-    def test_missing_careers_url_returns_empty_not_crash(self):
+    def test_missing_careers_url_is_an_error_not_an_empty_board(self):
+        """A source with no URL can never work, and must not look like one that simply
+        had no openings. Returning [] made it report success forever: the health check
+        counts a quiet zero separately from a thrown error precisely so a setup mistake
+        can be told apart from an empty day, and this one belongs in the error column."""
         a = GenericCareersAdapter({"name": "Broken", "ats": "custom"})
-        assert a.fetch() == []
+        with pytest.raises(RuntimeError, match="careers_url"):
+            a.fetch()
 
-    def test_fetch_failure_returns_empty_not_crash(self):
+    def test_a_site_that_cannot_be_read_is_an_error_not_an_empty_board(self):
+        """Same distinction, other cause. A careers page that answers 403 to every
+        request is not a board with nothing on it — and a year of that used to show as
+        "has never returned a job", which points the reader at the slug when the real
+        answer is that the site refuses us."""
         with patch("httpx.get", side_effect=Exception("network down")):
             a = GenericCareersAdapter({"name": "Down", "ats": "custom",
+                                       "careers_url": "https://x.com/careers"})
+            with pytest.raises(RuntimeError, match="could not read"):
+                a.fetch()
+
+    def test_a_page_that_reads_but_matches_nothing_is_still_an_empty_board(self):
+        """The other side of it: the site answered, it just had no job links. That is a
+        real zero and must stay one, or every quiet board becomes a false alarm."""
+        class _Resp:
+            status_code = 200
+            text = "<html><body><a href='/about'>About us</a></body></html>"
+            url = "https://x.com/careers"
+
+            def raise_for_status(self):
+                return None
+
+        with patch("httpx.get", return_value=_Resp()):
+            a = GenericCareersAdapter({"name": "Quiet", "ats": "custom",
                                        "careers_url": "https://x.com/careers"})
             assert a.fetch() == []
 

@@ -56,8 +56,18 @@ class GenericCareersAdapter(SourceAdapter):
         c = self.company
         careers_url = c.get("careers_url") or c.get("base") or c.get("url")
         if not careers_url:
-            log.warning("[generic %s] no careers_url configured", self.name)
-            return []
+            # Raise, don't return empty. An empty list is indistinguishable from "the
+            # board had no openings today", so a source configured without a URL used to
+            # report success forever while fetching nothing — and the Admin tab could
+            # only guess at why, suggesting the adapter might be a stub when in fact
+            # nothing had been pointed at anything. The health check separates a thrown
+            # error from a quiet zero precisely so this can be told apart; throwing puts
+            # this failure in the column where it belongs, with its own cause on it.
+            raise RuntimeError(
+                f"{self.name}: no careers_url set. An HTML-scraped source needs the "
+                f"page to read — add `careers_url: https://…` to it in "
+                f"config/companies-backup.yaml."
+            )
 
         ats = c.get("ats", "custom")
         max_pages = int(c.get("max_pages", 1))
@@ -65,6 +75,8 @@ class GenericCareersAdapter(SourceAdapter):
 
         seen: set[str] = set()
         out: list[dict] = []
+        read_a_page = False
+        last_error: Exception | None = None
 
         for page in range(1, max_pages + 1):
             url = self._page_url(careers_url, page, query)
@@ -73,7 +85,9 @@ class GenericCareersAdapter(SourceAdapter):
                 r.raise_for_status()
             except Exception as e:
                 log.warning("[%s %s] page %s fetch failed: %s", ats, self.name, page, e)
+                last_error = e
                 break
+            read_a_page = True
 
             soup = BeautifulSoup(r.text, "html.parser")
             base_host = urlparse(str(r.url)).netloc
@@ -112,6 +126,15 @@ class GenericCareersAdapter(SourceAdapter):
 
             if page_hits == 0:
                 break                        # nothing on this page -> stop paging
+
+        if not read_a_page:
+            # Not one page came back. That is not "the board had no openings" — it is
+            # "we could not read the board", and the two look identical from a count of
+            # zero. Left as an empty list, a site that answers 403 to every request for
+            # a year reports success every time and the Admin tab can only offer a guess
+            # ("the adapter may be a stub") about a cause it was never told. Raising puts
+            # the real reason where it will be read.
+            raise RuntimeError(f"{self.name}: could not read {careers_url} — {last_error}")
 
         if not out:
             log.info("[%s %s] no job links matched at %s", ats, self.name, careers_url)

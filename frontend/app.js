@@ -57,6 +57,7 @@ function jobpilot() {
       { k:'dismissed', label:'Dismissed', icon:'ti-archive' },
     ],
     sysNav: [
+      { k:'importTab', label:'Import', icon:'ti-file-import' },
       { k:'stats', label:'Stats', icon:'ti-chart-bar' },
       { k:'sourcesTab', label:'Sources', icon:'ti-plug' },
       { k:'profile', label:'Profile', icon:'ti-user' },

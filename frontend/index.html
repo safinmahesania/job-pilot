@@ -526,6 +526,8 @@
     <!-- ─── Admin ─── -->
     <div x-show="tab==='admin'">
       <h2 class="text-lg font-semibold mb-4 hidden md:block">Admin</h2>
+      <div class="text-sm text-gray-500 mb-4 max-w-2xl">How the app itself is doing, and the
+        buttons that act on the whole database. The destructive ones are at the bottom.</div>
       <!-- Boards that stopped working. The silent ones lead: an erroring board
            already shows red, but one returning 200-and-nothing looks perfect. -->
       <template x-if="brokenBoards().length">
@@ -597,11 +599,86 @@
         </template>
         <div x-show="errors.length===0" class="px-4 py-8 text-center text-gray-400 text-sm">Nothing has gone wrong. Good.</div>
       </div>
+    
+<div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Maintenance</h3>
+        <div class="card divide-y divide-gray-100">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Re-score all jobs</div><div class="text-xs text-gray-400 mt-0.5">Re-run AI scoring with the current profile. Slow.</div></div>
+            <button @click="maint('rescore',{url:'/api/maint/rescore',label:'Re-scored',heavy:true,busyLabel:'Re-scoring all jobs…',confirm:'Re-score all jobs? This runs the AI on every job and may take a while.'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md bg-brand text-white self-start">Re-score</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Cleanup below threshold</div><div class="text-xs text-gray-400 mt-0.5">Archive feed jobs scoring under the threshold.</div></div>
+            <button @click="maint('cleanup',{url:'/api/maint/cleanup',label:'Archived'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Cleanup</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Clear old jobs</div><div class="text-xs text-gray-400 mt-0.5">Permanently delete jobs older than N days.</div></div>
+            <div class="flex items-center gap-2 shrink-0">
+              <input type="number" min="1" x-model.number="clearDays" class="w-16 fld text-right">
+              <span class="text-xs text-gray-400">days</span>
+              <button @click="maint('clear',{url:'/api/maint/clear-old',body:{days:clearDays},label:'Deleted',confirm:'Permanently delete jobs older than '+clearDays+' days?'})" class="text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Clear</button>
+            </div>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Export jobs as CSV</div><div class="text-xs text-gray-400 mt-0.5">Download all jobs for backup or Excel.</div></div>
+            <button @click="exportCsv()" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Download</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Reload config</div><div class="text-xs text-gray-400 mt-0.5">Re-read profile.yaml + companies.yaml.</div></div>
+            <button @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Reload</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Restart server</div><div class="text-xs text-gray-400 mt-0.5">Full process restart — use after pulling new code or if it's wedged. Reconnects in a few seconds.</div></div>
+            <button @click="restartServer()" :disabled="restarting" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-amber-200 text-amber-700 hover:bg-amber-50 self-start disabled:opacity-50">
+              <span x-text="restarting ? 'Restarting…' : 'Restart'"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+<div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Storage &amp; cleanup</h3>
+        <div class="card divide-y divide-gray-100">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div>
+              <div class="text-sm font-medium flex items-center gap-1.5"><i class="ti ti-brush text-gray-400"></i> Clean cache &amp; logs</div>
+              <div class="text-xs text-gray-400 mt-0.5">Delete Python cache and log files. Safe — jobs preserved.</div>
+            </div>
+            <button @click="maint('cache',{url:'/api/maint/clean-cache',label:'Cleaned'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Clean</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div>
+              <div class="text-sm font-medium flex items-center gap-1.5"><i class="ti ti-history text-gray-400"></i> Clear run history</div>
+              <div class="text-xs text-gray-400 mt-0.5">Wipe the run list on the Admin tab. Jobs are safe.</div>
+            </div>
+            <button @click="maint('clear-runs',{url:'/api/maint/clear-runs',label:'Cleared',confirm:'Clear the run history?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Clear logs</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div>
+              <div class="text-sm font-medium text-red-600 flex items-center gap-1.5"><i class="ti ti-skull"></i> Reset all jobs <span class="text-xs font-normal">(destructive)</span></div>
+              <div class="text-xs text-gray-400 mt-0.5">Wipe all jobs from the DB. Use for a fresh start after a bad scrape. Cannot be undone.</div>
+            </div>
+            <button @click="maint('reset',{url:'/api/maint/reset',label:'Reset',confirm:'This deletes ALL jobs permanently. Continue?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-red-300 text-red-600 hover:bg-red-50 self-start">Reset jobs</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-red-50/40">
+            <div>
+              <div class="text-sm font-semibold text-red-600 flex items-center gap-1.5"><i class="ti ti-radioactive"></i> Nuclear reset — wipe everything</div>
+              <div class="text-xs text-gray-500 mt-0.5">
+                Wipes all application data in one shot: jobs, dedupe log, source health, run history, AI quota tracking, backups and cache.
+                <span class="text-gray-400">Preserves your config files (profile.yaml, companies.yaml), your .env and your settings.</span>
+              </div>
+            </div>
+            <button @click="maint('nuclear',{url:'/api/maint/nuclear',label:'Wiped',heavy:true,busyLabel:'Wiping everything…',confirm:'NUCLEAR RESET — this wipes all jobs, history, quota tracking and backups. Your config and settings are kept. Continue?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md bg-red-600 text-white self-start">☢ Reset everything</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ─── Settings ─── -->
     <div x-show="tab==='settings'">
       <h2 class="text-lg font-semibold mb-4 hidden md:block">Settings</h2>
+      <div class="text-sm text-gray-500 mb-4 max-w-2xl">How JobPilot behaves. The things you
+        adjust most are first; provider keys and config files are further down.</div>
 
       <div class="card p-4 max-w-2xl mb-5">
         <div class="flex items-center justify-between mb-1">
@@ -653,27 +730,8 @@
       </div>
 
       <!-- ─── Alerts ─── -->
-      <div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Alerts</h3>
-        <div class="card p-4">
-          <div class="text-sm font-medium">Weekly digest &amp; source alerts</div>
-          <div class="text-xs text-gray-400 mt-1 leading-relaxed">
-            Monday mornings: what you owe, what's waiting, what broke. And the moment a
-            working board goes dark — including one that returns nothing while still
-            reporting success, which nothing else would tell you about.
-            <span class="block mt-1">Both need Telegram configured in <code class="text-[11px]">.env</code>.</span>
-          </div>
-          <button @click="testDigest()" :disabled="busy==='digest'"
-            class="mt-3 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5">
-            <i class="ti ti-send"></i>
-            <span x-text="busy==='digest' ? 'Sending…' : 'Preview this week\'s digest'"></span>
-          </button>
-          <pre x-show="digestPreview" class="mt-3 text-[11px] bg-gray-50 border border-gray-100 rounded-md p-3 whitespace-pre-wrap text-gray-600" x-text="digestPreview"></pre>
-        </div>
-      </div>
-
-      <!-- ─── Scoring & feedback ─── -->
-      <div class="mt-6 max-w-2xl">
+      
+<div class="mt-6 max-w-2xl">
         <h3 class="text-sm font-semibold text-gray-700 mb-3">Scoring</h3>
         <div class="card divide-y divide-gray-100">
 
@@ -724,48 +782,7 @@
         </div>
       </div>
 
-      <!-- ─── Privacy ─── -->
-      <div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-1">Privacy</h3>
-        <div class="text-xs text-gray-400 mb-3">
-          Writing a cover letter genuinely needs your background — that's the point of it.
-          It does not need your phone number.
-        </div>
-
-        <div class="card divide-y divide-gray-100">
-          <template x-for="m in privacyModes" :key="m.key">
-            <label class="flex items-start gap-3 p-4 cursor-pointer hover:bg-gray-50">
-              <input type="radio" :value="m.key" x-model="privacy.mode" @change="savePrivacy()"
-                class="mt-1 accent-[#B4791A]">
-              <div>
-                <div class="text-sm font-medium flex items-center gap-1.5">
-                  <span x-text="m.label"></span>
-                  <span x-show="m.key==='redacted'" class="text-[10px] px-1.5 py-0.5 rounded"
-                    style="background:#F7EDD8; color:#7A4E0C;">Recommended</span>
-                </div>
-                <div class="text-xs text-gray-400 mt-1 leading-relaxed" x-text="m.desc"></div>
-              </div>
-            </label>
-          </template>
-
-          <div class="flex items-start justify-between gap-4 p-4">
-            <div>
-              <div class="text-sm font-medium">Follow job links to recover descriptions</div>
-              <div class="text-xs text-gray-400 mt-1 leading-relaxed">
-                Alert-email links are tracking redirects. Following one lets LinkedIn or Indeed
-                know the message was engaged with — but you were going to click it yourself
-                anyway, from this same machine. Turn it off and every alert-email job stays
-                <b>unscored</b>, because scoring needs a description.
-              </div>
-            </div>
-            <button @click="privacy.follow_job_links = !privacy.follow_job_links; savePrivacy()"
-              class="sw shrink-0 mt-0.5" :class="privacy.follow_job_links ? 'on' : 'off'"><span></span></button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ─── AI features ─── -->
-      <div class="mt-6 max-w-2xl">
+<div class="mt-6 max-w-2xl">
         <h3 class="text-sm font-semibold text-gray-700 mb-3">AI features</h3>
         <div class="card divide-y divide-gray-100">
           <div class="flex items-start justify-between gap-4 p-4">
@@ -791,49 +808,7 @@
         </div>
       </div>
 
-      <!-- ─── Connection tests ─── -->
-      <div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Connection tests</h3>
-        <div class="card divide-y divide-gray-100">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div>
-              <div class="text-sm font-medium">Test Telegram</div>
-              <div class="text-xs text-gray-400 mt-0.5">Send a test message to verify the bot and chat ID.</div>
-            </div>
-            <button @click="testNotify()" :disabled="!notify.configured" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Send test</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div>
-              <div class="text-sm font-medium">Test AI</div>
-              <div class="text-xs text-gray-400 mt-0.5">Run a tiny prompt through the provider chain and report which one answered.</div>
-            </div>
-            <button @click="testAI()" :disabled="busy" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Test AI</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ─── Configuration files ─── -->
-      <div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-1">Configuration files</h3>
-        <div class="text-xs text-gray-400 mb-3">Edit these directly in your editor. Companies and profile can also be edited from the tabs above.</div>
-        <div class="card divide-y divide-gray-100">
-          <template x-for="f in cfgFiles" :key="f.path">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-              <div class="min-w-0">
-                <div class="text-sm font-medium" x-text="f.label"></div>
-                <div class="text-xs text-gray-400 mt-0.5" x-text="f.description"></div>
-              </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <span x-show="!f.exists" class="text-[11px] px-1.5 py-0.5 rounded bg-red-50 text-red-500">missing</span>
-                <code @click="copyPath(f.path)" class="cursor-pointer text-[12px] px-2 py-1 rounded bg-brand/10 text-brand hover:bg-brand/20" :title="'Click to copy'" x-text="f.path"></code>
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
-
-      <!-- ─── AI providers ─── -->
-      <div class="mt-6 max-w-2xl">
+<div class="mt-6 max-w-2xl">
         <h3 class="text-sm font-semibold text-gray-700 mb-1">AI providers</h3>
         <div class="text-xs text-gray-400 mb-3">Used for cover letters and resumes. Automatic failover — when one hits its rate limit, the next is tried. Keys live in your <code class="text-brand">.env</code>.</div>
 
@@ -909,45 +884,108 @@
         </div>
       </div>
 
-      <div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Maintenance</h3>
+<div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Connection tests</h3>
         <div class="card divide-y divide-gray-100">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Re-score all jobs</div><div class="text-xs text-gray-400 mt-0.5">Re-run AI scoring with the current profile. Slow.</div></div>
-            <button @click="maint('rescore',{url:'/api/maint/rescore',label:'Re-scored',heavy:true,busyLabel:'Re-scoring all jobs…',confirm:'Re-score all jobs? This runs the AI on every job and may take a while.'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md bg-brand text-white self-start">Re-score</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Cleanup below threshold</div><div class="text-xs text-gray-400 mt-0.5">Archive feed jobs scoring under the threshold.</div></div>
-            <button @click="maint('cleanup',{url:'/api/maint/cleanup',label:'Archived'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Cleanup</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Clear old jobs</div><div class="text-xs text-gray-400 mt-0.5">Permanently delete jobs older than N days.</div></div>
-            <div class="flex items-center gap-2 shrink-0">
-              <input type="number" min="1" x-model.number="clearDays" class="w-16 fld text-right">
-              <span class="text-xs text-gray-400">days</span>
-              <button @click="maint('clear',{url:'/api/maint/clear-old',body:{days:clearDays},label:'Deleted',confirm:'Permanently delete jobs older than '+clearDays+' days?'})" class="text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Clear</button>
+            <div>
+              <div class="text-sm font-medium">Test Telegram</div>
+              <div class="text-xs text-gray-400 mt-0.5">Send a test message to verify the bot and chat ID.</div>
             </div>
+            <button @click="testNotify()" :disabled="!notify.configured" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Send test</button>
           </div>
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Export jobs as CSV</div><div class="text-xs text-gray-400 mt-0.5">Download all jobs for backup or Excel.</div></div>
-            <button @click="exportCsv()" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Download</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Reload config</div><div class="text-xs text-gray-400 mt-0.5">Re-read profile.yaml + companies.yaml.</div></div>
-            <button @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Reload</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Restart server</div><div class="text-xs text-gray-400 mt-0.5">Full process restart — use after pulling new code or if it's wedged. Reconnects in a few seconds.</div></div>
-            <button @click="restartServer()" :disabled="restarting" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-amber-200 text-amber-700 hover:bg-amber-50 self-start disabled:opacity-50">
-              <span x-text="restarting ? 'Restarting…' : 'Restart'"></span>
-            </button>
+            <div>
+              <div class="text-sm font-medium">Test AI</div>
+              <div class="text-xs text-gray-400 mt-0.5">Run a tiny prompt through the provider chain and report which one answered.</div>
+            </div>
+            <button @click="testAI()" :disabled="busy" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Test AI</button>
           </div>
         </div>
       </div>
 
-      <!-- ─── Import jobs ─── -->
-      <div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-1">Import jobs</h3>
+<div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Alerts</h3>
+        <div class="card p-4">
+          <div class="text-sm font-medium">Weekly digest &amp; source alerts</div>
+          <div class="text-xs text-gray-400 mt-1 leading-relaxed">
+            Monday mornings: what you owe, what's waiting, what broke. And the moment a
+            working board goes dark — including one that returns nothing while still
+            reporting success, which nothing else would tell you about.
+            <span class="block mt-1">Both need Telegram configured in <code class="text-[11px]">.env</code>.</span>
+          </div>
+          <button @click="testDigest()" :disabled="busy==='digest'"
+            class="mt-3 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5">
+            <i class="ti ti-send"></i>
+            <span x-text="busy==='digest' ? 'Sending…' : 'Preview this week\'s digest'"></span>
+          </button>
+          <pre x-show="digestPreview" class="mt-3 text-[11px] bg-gray-50 border border-gray-100 rounded-md p-3 whitespace-pre-wrap text-gray-600" x-text="digestPreview"></pre>
+        </div>
+      </div>
+
+<div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-1">Privacy</h3>
+        <div class="text-xs text-gray-400 mb-3">
+          Writing a cover letter genuinely needs your background — that's the point of it.
+          It does not need your phone number.
+        </div>
+
+        <div class="card divide-y divide-gray-100">
+          <template x-for="m in privacyModes" :key="m.key">
+            <label class="flex items-start gap-3 p-4 cursor-pointer hover:bg-gray-50">
+              <input type="radio" :value="m.key" x-model="privacy.mode" @change="savePrivacy()"
+                class="mt-1 accent-[#B4791A]">
+              <div>
+                <div class="text-sm font-medium flex items-center gap-1.5">
+                  <span x-text="m.label"></span>
+                  <span x-show="m.key==='redacted'" class="text-[10px] px-1.5 py-0.5 rounded"
+                    style="background:#F7EDD8; color:#7A4E0C;">Recommended</span>
+                </div>
+                <div class="text-xs text-gray-400 mt-1 leading-relaxed" x-text="m.desc"></div>
+              </div>
+            </label>
+          </template>
+
+          <div class="flex items-start justify-between gap-4 p-4">
+            <div>
+              <div class="text-sm font-medium">Follow job links to recover descriptions</div>
+              <div class="text-xs text-gray-400 mt-1 leading-relaxed">
+                Alert-email links are tracking redirects. Following one lets LinkedIn or Indeed
+                know the message was engaged with — but you were going to click it yourself
+                anyway, from this same machine. Turn it off and every alert-email job stays
+                <b>unscored</b>, because scoring needs a description.
+              </div>
+            </div>
+            <button @click="privacy.follow_job_links = !privacy.follow_job_links; savePrivacy()"
+              class="sw shrink-0 mt-0.5" :class="privacy.follow_job_links ? 'on' : 'off'"><span></span></button>
+          </div>
+        </div>
+      </div>
+
+<div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-1">Configuration files</h3>
+        <div class="text-xs text-gray-400 mb-3">Edit these directly in your editor. Companies and profile can also be edited from the tabs above.</div>
+        <div class="card divide-y divide-gray-100">
+          <template x-for="f in cfgFiles" :key="f.path">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+              <div class="min-w-0">
+                <div class="text-sm font-medium" x-text="f.label"></div>
+                <div class="text-xs text-gray-400 mt-0.5" x-text="f.description"></div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <span x-show="!f.exists" class="text-[11px] px-1.5 py-0.5 rounded bg-red-50 text-red-500">missing</span>
+                <code @click="copyPath(f.path)" class="cursor-pointer text-[12px] px-2 py-1 rounded bg-brand/10 text-brand hover:bg-brand/20" :title="'Click to copy'" x-text="f.path"></code>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>    <!-- ─── Import ─── -->
+    <div x-show="tab==='importTab'">
+      <h2 class="text-lg font-semibold mb-4 hidden md:block">Import jobs</h2>
+      <div class="text-sm text-gray-500 mb-4 max-w-2xl">Bring jobs in from a job-alert
+        email, a posting you paste, or a spreadsheet. Everything lands in the same feed.</div>
+<div class="mt-6 max-w-2xl">
         <div class="text-xs text-gray-400 mb-3">
           Bring in postings the fetch pipeline doesn't cover. Jobs whose description
           can be recovered are scored as usual; the rest land in
@@ -1089,45 +1127,8 @@
           </template>
         </div>
       </div>
-
-      <!-- ─── Storage & cleanup ─── -->
-      <div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Storage &amp; cleanup</h3>
-        <div class="card divide-y divide-gray-100">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div>
-              <div class="text-sm font-medium flex items-center gap-1.5"><i class="ti ti-brush text-gray-400"></i> Clean cache &amp; logs</div>
-              <div class="text-xs text-gray-400 mt-0.5">Delete Python cache and log files. Safe — jobs preserved.</div>
-            </div>
-            <button @click="maint('cache',{url:'/api/maint/clean-cache',label:'Cleaned'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Clean</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div>
-              <div class="text-sm font-medium flex items-center gap-1.5"><i class="ti ti-history text-gray-400"></i> Clear run history</div>
-              <div class="text-xs text-gray-400 mt-0.5">Wipe the run list on the Admin tab. Jobs are safe.</div>
-            </div>
-            <button @click="maint('clear-runs',{url:'/api/maint/clear-runs',label:'Cleared',confirm:'Clear the run history?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Clear logs</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div>
-              <div class="text-sm font-medium text-red-600 flex items-center gap-1.5"><i class="ti ti-skull"></i> Reset all jobs <span class="text-xs font-normal">(destructive)</span></div>
-              <div class="text-xs text-gray-400 mt-0.5">Wipe all jobs from the DB. Use for a fresh start after a bad scrape. Cannot be undone.</div>
-            </div>
-            <button @click="maint('reset',{url:'/api/maint/reset',label:'Reset',confirm:'This deletes ALL jobs permanently. Continue?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-red-300 text-red-600 hover:bg-red-50 self-start">Reset jobs</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-red-50/40">
-            <div>
-              <div class="text-sm font-semibold text-red-600 flex items-center gap-1.5"><i class="ti ti-radioactive"></i> Nuclear reset — wipe everything</div>
-              <div class="text-xs text-gray-500 mt-0.5">
-                Wipes all application data in one shot: jobs, dedupe log, source health, run history, AI quota tracking, backups and cache.
-                <span class="text-gray-400">Preserves your config files (profile.yaml, companies.yaml), your .env and your settings.</span>
-              </div>
-            </div>
-            <button @click="maint('nuclear',{url:'/api/maint/nuclear',label:'Wiped',heavy:true,busyLabel:'Wiping everything…',confirm:'NUCLEAR RESET — this wipes all jobs, history, quota tracking and backups. Your config and settings are kept. Continue?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md bg-red-600 text-white self-start">☢ Reset everything</button>
-          </div>
-        </div>
-      </div>
     </div>
+
 
   </main>
 

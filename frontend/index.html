@@ -1157,6 +1157,51 @@
               <div class="bg-gray-50 rounded-md py-2"><div class="text-sm font-semibold text-gray-700" x-text="Math.round(detail.seniority_score)"></div><div class="text-xs text-gray-400">Seniority</div></div>
               <div class="bg-gray-50 rounded-md py-2"><div class="text-sm font-semibold text-gray-700" x-text="Math.round(detail.domain_score)"></div><div class="text-xs text-gray-400">Domain</div></div>
             </div>
+            <!-- What you sent. Appears once there is something to show — which is
+                 usually the moment it matters: they called, and you want to read
+                 back what went out weeks ago. -->
+            <template x-if="sent && (sent.answers.length || Object.keys(sent.materials).length)">
+              <div class="mb-4 rounded-lg border border-gray-200 overflow-hidden">
+                <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-200">
+                  <i class="ti ti-send text-brand"></i>
+                  <span class="text-[13px] font-semibold text-gray-700">What you sent</span>
+                  <span class="text-xs text-gray-400" x-show="sent.job.applied_on"
+                    x-text="'· applied ' + sent.job.applied_on"></span>
+                </div>
+
+                <template x-for="kind in ['resume','cover']" :key="kind">
+                  <div x-show="sent.materials[kind]" class="border-b border-gray-100">
+                    <button @click="sentOpen = (sentOpen===kind ? null : kind)"
+                      class="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-gray-50">
+                      <i class="ti text-gray-400" :class="kind==='resume' ? 'ti-file-text' : 'ti-mail'"></i>
+                      <span class="text-[13px] flex-1" x-text="kind==='resume' ? 'Resume' : 'Cover letter'"></span>
+                      <span class="text-xs text-gray-400" x-show="sent.materials[kind]"
+                        x-text="(sent.materials[kind].created_at || '').slice(0,10)"></span>
+                      <i class="ti text-gray-400" :class="sentOpen===kind ? 'ti-chevron-up' : 'ti-chevron-down'"></i>
+                    </button>
+                    <div x-show="sentOpen===kind" class="px-3 pb-3">
+                      <pre class="text-xs text-gray-700 whitespace-pre-wrap font-sans bg-gray-50 rounded p-3 max-h-64 overflow-y-auto"
+                        x-text="sent.materials[kind].content"></pre>
+                      <a :href="`/api/jobs/${detail.id}/materials/${kind}/file?format=pdf`"
+                        class="text-xs text-brand hover:underline inline-flex items-center gap-1 mt-2">
+                        <i class="ti ti-download"></i> Download the PDF that was attached</a>
+                    </div>
+                  </div>
+                </template>
+
+                <div x-show="sent.answers.length">
+                  <div class="px-3 pt-2.5 pb-1 text-xs text-gray-400"
+                    x-text="sent.answers.length + ' question' + (sent.answers.length===1?'':'s') + ' you answered'"></div>
+                  <template x-for="(a, i) in sent.answers" :key="i">
+                    <div class="px-3 py-2 border-t border-gray-100">
+                      <div class="text-[13px] text-gray-600" x-text="a.question"></div>
+                      <div class="text-[13px] text-gray-900 mt-1 whitespace-pre-wrap" x-text="a.answer"></div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+
             <div class="jd text-sm text-gray-700 leading-relaxed" x-html="formatJD(detail.description)"></div>
           </div>
           <div class="flex flex-wrap items-center gap-2 p-4 sm:p-5 border-t border-gray-100">

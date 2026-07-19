@@ -67,6 +67,27 @@ def autofill_resolve(body: ResolveRequest, conn=Depends(_db_dep)):
         import traceback
         traceback.print_exc()
         raise HTTPException(502, f"{type(e).__name__}: {e}")
+
+    # Keep what was answered, against the job it was answered for. These are the
+    # screening questions — "why this company", "how long with React" — and they are
+    # the part of an application you have no other copy of. Weeks later, when they
+    # call, you should be able to read what you actually said. Blank answers are not
+    # stored: a field the model declined to invent is not an answer.
+    if body.job_id:
+        by_id = {f.id: f.label for f in body.fields}
+        for fid, answer in (mapped or {}).items():
+            question = (by_id.get(fid) or "").strip()
+            if not question or not str(answer).strip():
+                continue
+            conn.execute(
+                "INSERT INTO application_answers (job_id, question, answer) "
+                "VALUES (?, ?, ?) "
+                "ON CONFLICT(job_id, question) DO UPDATE SET "
+                "  answer = excluded.answer, created_at = datetime('now')",
+                (body.job_id, question[:500], str(answer)[:5000]),
+            )
+        conn.commit()
+
     return {"answers": mapped}
 
 
@@ -89,6 +110,40 @@ def save_material(job_id: int, body: MaterialSave, conn=Depends(_db_dep)):
         return materials.save(job_id, body.kind, body.content, body.provider)
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+@router.get("/api/jobs/{job_id}/application")
+def application_record(job_id: int, conn=Depends(_db_dep)):
+    """Everything you sent for this job, in one place.
+
+    Written for the moment the phone rings. The resume and cover letter are in one
+    table, the screening answers in another, and before an interview you want all of
+    it at once — not three clicks through two views. Bodies are included here, not
+    just timestamps: the point is to read it.
+    """
+    from src import materials
+
+    row = conn.execute(
+        "SELECT id, title, company, apply_url, applied_on, status "
+        "FROM jobs WHERE id=?", (job_id,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, "no such job")
+
+    docs = {}
+    for kind in ("resume", "cover"):
+        doc = materials.get(job_id, kind)
+        if doc:
+            docs[kind] = {"content": doc["content"],
+                          "created_at": doc.get("created_at"),
+                          "provider": doc.get("provider")}
+
+    answers = [dict(r) for r in conn.execute(
+        "SELECT question, answer, created_at FROM application_answers "
+        "WHERE job_id=? ORDER BY id", (job_id,)
+    ).fetchall()]
+
+    return {"job": dict(row), "materials": docs, "answers": answers}
 
 
 @router.get("/api/jobs/{job_id}/materials")

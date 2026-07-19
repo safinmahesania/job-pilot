@@ -1,6 +1,6 @@
 function jobpilot() {
   return {
-    tab: 'feed', jobs: [], counts: {}, health: [], runs: [], errors: [], stats: null, loading: true, q: '', detail: null,
+    tab: 'feed', jobs: [], counts: {}, health: [], runs: [], errors: [], stats: null, loading: true, q: '', detail: null, sent: null, sentOpen: null,
     running: false, lastRun: null, nextRun: null, threshold: 70,
     sort: 'score', source: 'all', sources: [],
     busy: null, snack: null, blocking: null, confirmBox: null,
@@ -368,7 +368,26 @@ function jobpilot() {
         (j.rationale||'').toLowerCase().includes(s));
     },
 
-    openDetail(job) { this.detail = job; },
+    openDetail(job) {
+      this.detail = job;
+      this.sent = null;
+      this.sentOpen = null;
+      this.loadSent(job.id);
+    },
+
+    // What went out for this job — documents and answered questions. Fetched when the
+    // job is opened rather than with the list: it's one row per job that most jobs
+    // don't have, and nobody needs it until they're looking at that job.
+    async loadSent(jobId) {
+      try {
+        const r = await fetch(`/api/jobs/${jobId}/application`);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (this.detail && this.detail.id === jobId) this.sent = d;
+      } catch (e) {
+        /* nothing sent, or the server is unreachable — the panel just stays hidden */
+      }
+    },
 
     // Generates either document — kind is 'cover' or 'resume'.
     async genDoc(job, kind = 'cover') {

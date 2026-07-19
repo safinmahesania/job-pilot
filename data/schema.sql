@@ -108,7 +108,25 @@ CREATE TABLE IF NOT EXISTS llm_usage (
     PRIMARY KEY (day, provider)
 );
 
--- Generated application documents, bound to the job they were written for.
+-- What you answered on the application form, kept so you can read it back.
+--
+-- A resume and a cover letter are already stored above; the screening questions
+-- were not, and they are the part you are most likely to be asked about. "Why do
+-- you want to work here" was answered three weeks ago by a model, in your name,
+-- and when the recruiter calls you should be able to see exactly what you said
+-- rather than guess.
+--
+-- One row per (job, question): filling the same form again updates the answer
+-- instead of leaving two versions with no way to tell which one was sent.
+CREATE TABLE IF NOT EXISTS application_answers (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id      INTEGER NOT NULL,
+    question    TEXT NOT NULL,
+    answer      TEXT NOT NULL,
+    created_at  TEXT DEFAULT (datetime('now')),
+    UNIQUE (job_id, question),
+    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+);
 -- One row per (job, kind): regenerating replaces the previous version, so the
 -- material attached to an application is always the current one for THAT job.
 CREATE TABLE IF NOT EXISTS materials (

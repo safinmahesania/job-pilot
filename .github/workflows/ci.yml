@@ -29,6 +29,14 @@ jobs:
           pip install -r requirements.txt
           pip install pytest
 
+      - name: Install the Calibri-metric font
+        # The resume PDF is meant to come out in Calibri, or in Carlito — its metric
+        # twin, same widths and line breaks. A bare runner has neither, so the renderer
+        # falls back to DejaVu (correct behaviour) and the font assertion has nothing to
+        # check. Installing Carlito means CI verifies the real guarantee instead of
+        # skipping past it.
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-crosextra-carlito
+
       - name: Run the test suite
         # No .env exists on a clean checkout, which is the point: the app runs unlocked
         # and every endpoint is reachable, exactly as the tests expect. The suite must

@@ -198,7 +198,8 @@ class JobEdit(BaseModel):
 
 
 @router.patch("/api/jobs/{job_id}")
-def edit_job(job_id: int, body: JobEdit, conn=Depends(_db_dep)):
+def edit_job(job_id: int, body: JobEdit, defer: bool = False,
+              conn=Depends(_db_dep)):
     """Correct a job's fields by hand — for when a fetch grabbed the wrong text or
     only half a description. Only the fields you actually send are changed; anything
     left out keeps its current value."""
@@ -227,18 +228,72 @@ def edit_job(job_id: int, body: JobEdit, conn=Depends(_db_dep)):
     # is best-effort: if scoring is off, or every provider is down, the edit still
     # stands — the job just keeps its old score (or stays unscored) rather than the
     # correction being lost because the model wasn't reachable.
+    #
+    # `defer=true` hands that job back to the caller. The UI uses it so it can run the
+    # steps one at a time and name each one while it happens — and so it can skip
+    # scoring entirely when the filters have already removed the job. Callers that
+    # don't ask for it keep the original behaviour.
     rescored = None
+    deferred = False
     SCORING_FIELDS = {"title", "company", "description"}
     scoring_on = _get_setting(conn, "scoring_enabled", "1") == "1"
     if scoring_on and (set(changes) & SCORING_FIELDS):
-        rescored = _rescore_one(conn, job_id)
+        if defer:
+            deferred = True
+        else:
+            rescored = _rescore_one(conn, job_id)
 
     row = conn.execute(
         "SELECT id, title, company, location, description, apply_url, source_url, "
         "job_type, posted_date, deadline, remote, salary_min, salary_max, score "
         "FROM jobs WHERE id=?", (job_id,)
     ).fetchone()
-    return {"updated": list(changes), "rescored": rescored, "job": dict(row)}
+    return {"updated": list(changes), "rescored": rescored,
+            "needs_reprocess": deferred, "job": dict(row)}
+
+
+@router.post("/api/jobs/{job_id}/recheck")
+def recheck_job(job_id: int, conn=Depends(_db_dep)):
+    """Put an edited job back through the filters a fetched job goes through.
+
+    A job that arrived with half a description was judged on half a description. Once
+    you paste the real posting, the things that were unknowable become knowable — that
+    it is in Austin, that it is a staff role, that it names a keyword you exclude — and
+    a job that looked fine on its title turns out not to be one you want.
+
+    A fetch run drops such a job without ceremony. This does the same, and says which
+    rule did it: you corrected this job by hand, so you should be told what happened to
+    it rather than watch it vanish.
+
+    Scoring is deliberately NOT done here. It is the slow half, and there is no point
+    paying for it on a job the filters just removed.
+    """
+    row = conn.execute(
+        "SELECT id, title, company, location, description, job_type, remote, "
+        "salary_min, salary_max, posted_date, source_url, apply_url, status "
+        "FROM jobs WHERE id=?", (job_id,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, "job not found")
+    job = dict(row)
+
+    from src.config import load_profile
+    from src.scoring.prefilter import why_not
+
+    profile = load_profile() or {}
+    if not profile:
+        # No profile means no constraints to check against. Saying "passed" would be a
+        # lie; the honest answer is that nothing was checked.
+        return {"verdict": "unchecked",
+                "reason": "no profile.yaml, so there were no filters to apply"}
+
+    reason = why_not(job, profile)
+    if reason is None:
+        return {"verdict": "ok", "reason": None}
+
+    conn.execute("UPDATE jobs SET status='dismissed' WHERE id=?", (job_id,))
+    conn.commit()
+    return {"verdict": "dismissed", "reason": reason}
 
 
 def _rescore_one(conn, job_id: int):

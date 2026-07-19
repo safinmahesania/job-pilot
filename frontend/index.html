@@ -1443,6 +1443,32 @@
   </div>
 
   <!-- ══ Blocking modal ══ -->
+  <!-- ══ Corner task box ══
+       Deliberately not a modal. Re-checking a job takes as long as the model takes,
+       and blacking out the screen for it stops you reading the next job while you
+       wait. It sits in the corner, names the step that is running, and stays a
+       moment on the result — a job the filters dismissed should not simply vanish. -->
+  <div x-show="task" x-cloak
+    class="fixed bottom-4 right-4 z-[70] w-[19rem] max-w-[calc(100vw-2rem)] rounded-lg bg-white shadow-xl border border-gray-200 overflow-hidden">
+    <div class="flex items-start gap-2.5 px-3.5 py-3">
+      <i class="ti mt-0.5 shrink-0 text-lg"
+        :class="!task || !task.done ? 'ti-loader-2 animate-spin text-brand'
+              : (task.ok ? 'ti-circle-check text-green-600' : 'ti-alert-circle text-red-500')"></i>
+      <div class="min-w-0 flex-1">
+        <div class="text-[13px] font-medium text-gray-800 truncate" x-text="task ? task.title : ''"></div>
+        <div class="text-xs mt-0.5 leading-relaxed"
+          :class="task && task.done && !task.ok ? 'text-red-600' : 'text-gray-500'"
+          x-text="task ? task.label : ''"></div>
+      </div>
+      <button x-show="task && task.done" @click="task=null"
+        class="shrink-0 text-gray-300 hover:text-gray-500"><i class="ti ti-x"></i></button>
+    </div>
+    <div x-show="task && !task.done" class="h-0.5 bg-gray-100 overflow-hidden">
+      <div class="h-full w-1/3 bg-brand" style="animation: jp-slide 1.1s ease-in-out infinite"></div>
+    </div>
+  </div>
+  <style>@keyframes jp-slide { 0% { transform: translateX(-100%) } 100% { transform: translateX(300%) } }</style>
+
   <div x-show="blocking" x-cloak class="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl px-8 py-7 flex flex-col items-center gap-3 shadow-xl max-w-xs text-center">
       <i class="ti ti-loader-2 animate-spin text-brand text-4xl"></i>

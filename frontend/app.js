@@ -4,6 +4,8 @@ function jobpilot() {
     running: false, lastRun: null, nextRun: null, threshold: 70,
     sort: 'score', source: 'all', sources: [],
     busy: null, snack: null, blocking: null, confirmBox: null,
+    // The corner progress box: one long-running thing, named while it runs.
+    task: null,
     cover: null,   // { loading, text, provider, title, company }
     edit: null,    // { id, title, company, location, description, apply_url, ... } when editing a job by hand
     sourceTest: null,  // { name, loading, ok, count, jobs, error, elapsed_ms } when testing a source
@@ -824,32 +826,70 @@ function jobpilot() {
       if (!this.edit) return;
       this.edit.busy = true;
       const { id, busy, ...fields } = this.edit;   // don't send id/busy in the body
+      const title = this.edit.title || 'this job';
+
+      // The edit is put back through the same steps a fetched job goes through, one at
+      // a time, so the box in the corner can name the step that is actually running
+      // rather than a generic spinner that means nothing.
+      this.task = { label: 'Saving your changes…', title, done: false, ok: true };
       try {
-        const r = await fetch(`/api/jobs/${id}`, {
+        const r = await fetch(`/api/jobs/${id}?defer=true`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(fields),
         });
         if (!r.ok) {
           const msg = (await r.json().catch(() => ({}))).detail || 'Could not save';
-          this.showSnack(typeof msg === 'string' ? msg : 'Could not save', 'error');
+          this.endTask(typeof msg === 'string' ? msg : 'Could not save', false);
           this.edit.busy = false;
           return;
         }
         const data = await r.json().catch(() => ({}));
         this.edit = null;
-        await this.load();          // pull the corrected job back into the list
-        // If the edit changed something the score depends on, the job was re-scored
-        // on the spot — say so, with the new number.
-        if (data.rescored != null) {
-          this.showSnack(`Job updated · re-scored to ${data.rescored}`);
-        } else {
-          this.showSnack('Job updated');
+        await this.load();
+
+        if (!data.needs_reprocess) {           // nothing score-relevant changed
+          this.endTask('Saved', true);
+          return;
         }
+
+        // Filters first — the cheap half, and there is no point scoring a job they
+        // remove.
+        this.task.label = 'Checking your filters…';
+        const rc = await fetch(`/api/jobs/${id}/recheck`, { method: 'POST' });
+        const check = rc.ok ? await rc.json() : { verdict: 'unchecked' };
+        if (check.verdict === 'dismissed') {
+          await this.load();
+          this.endTask('Dismissed — ' + check.reason, false);
+          return;
+        }
+
+        this.task.label = 'Re-scoring…';
+        const sc = await fetch('/api/jobs/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job_ids: [id] }),
+        });
+        await this.load();
+        if (!sc.ok) { this.endTask('Saved — scoring is unavailable', true); return; }
+        const res = await sc.json();
+        const score = res.results ? res.results[id] : null;
+        this.endTask(score != null ? `Re-scored to ${score}` : 'Saved', true);
       } catch (e) {
-        this.showSnack('Could not save', 'error');
-        this.edit.busy = false;
+        this.endTask('Could not save', false);
+        if (this.edit) this.edit.busy = false;
       }
+    },
+
+    // The corner box. Stays on screen for a few seconds with the outcome, so a job
+    // that got dismissed doesn't just silently disappear from the list.
+    endTask(label, ok) {
+      if (!this.task) return;
+      this.task.label = label;
+      this.task.done = true;
+      this.task.ok = ok;
+      const mine = this.task;
+      setTimeout(() => { if (this.task === mine) this.task = null; }, ok ? 4000 : 8000);
     },
 
     async runNow(only = null) {

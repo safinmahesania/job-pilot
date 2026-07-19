@@ -120,19 +120,43 @@ def _ok_recency(job, s):
         return True  # parse fail -> drop mat karo
 
 
-def passes(job: dict, profile: dict) -> bool:
+def why_not(job: dict, profile: dict) -> str | None:
+    """Which constraint this job fails, in words. None means it passes.
+
+    passes() answers yes or no, which is all a fetch run needs: it drops the job and
+    moves on, and nobody is watching. Someone who just hand-corrected a job by hand is
+    owed more than "removed" — they spent effort on it and deserve to know which rule
+    took it away, so they can disagree with the rule if it is wrong.
+
+    passes() is defined in terms of this function rather than beside it, so the answer
+    and the reason can never drift apart.
+    """
     c = profile.get("constraints", {})
+
     if not _check_locations(job, c.get("locations")):
-        return False
+        where = (job.get("location") or "").strip() or "not specified"
+        return f"its location ({where}) is not one you work in, and it is not remote"
     if not _check_salary_floor(job, c.get("salary_floor")):
-        return False
+        return "the salary is below the floor in your profile"
     if not _check_sponsorship(job, c.get("needs_sponsorship")):
-        return False
+        return "it will not sponsor, and your profile says you need sponsorship"
 
     s = profile.get("search", {})
-    return (_ok_level(job, s) and _ok_domain(job, s)
-            and _ok_job_type(job, s) and _ok_recency(job, s)
-            and _ok_exclude_keywords(job, s))
+    if not _ok_level(job, s):
+        return "its seniority is outside the levels you are looking for"
+    if not _ok_domain(job, s):
+        return "it is not in a domain you are looking for"
+    if not _ok_job_type(job, s):
+        return "its employment type is not one you are looking for"
+    if not _ok_recency(job, s):
+        return "the posting is older than your recency limit"
+    if not _ok_exclude_keywords(job, s):
+        return "it contains one of your excluded keywords"
+    return None
+
+
+def passes(job: dict, profile: dict) -> bool:
+    return why_not(job, profile) is None
 
 
 def _ok_exclude_keywords(job, s):

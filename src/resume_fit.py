@@ -199,7 +199,6 @@ class JobDoesNotFitError(Exception):
 
         title = job.get("title", "this role")
         company = job.get("company", "")
-        overlap_pct = int(score * 100)
 
         # Assembled outside the f-strings below on purpose. Inlining
         #   f"...{", ".join(sorted(matched)[:6])}..."
@@ -209,14 +208,22 @@ class JobDoesNotFitError(Exception):
         # here keeps every f-string simple and the syntax valid on both.
         at_company = f" at {company}" if company else ""
         matched_list = ", ".join(sorted(matched)[:6])
-        just = f" — just: {matched_list}" if matched else ""
+
+        # Say what actually decided this. The percentage below the fold is the old
+        # ratio, kept because callers still read `score`, but it is NOT the rule any
+        # more and leading with it misleads: this refusal is a count of YOUR
+        # technologies that the posting names, and a reader who is told "22%" starts
+        # arguing with a number that had no part in the decision.
+        if matched:
+            found = (f'It names one thing you listed — {matched_list} — and that is '
+                     f"not a language you write.")
+        else:
+            found = "It names nothing you listed at all."
 
         super().__init__(
             f"This job asks for a background you do not have.\n\n"
-            f'Only {overlap_pct}% of what "{title}"'
-            f"{at_company} asks for appears anywhere in "
-            f"your profile"
-            f"{just}.\n\n"
+            f'Nothing in "{title}"{at_company} matches the languages or tools on '
+            f"your profile. {found}\n\n"
             f"A resume tailored to this job would have to invent the rest, and a "
             f"model asked to tailor it will: it will write you a career you never "
             f"had, fluently, and you would be the one sending it.\n\n"

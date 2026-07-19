@@ -404,17 +404,23 @@ function jobpilot() {
           }
           if (d && d.error === 'does_not_fit') {
             this.cover = null;
+            const only = d.matched.length
+              ? 'It names one thing from your profile — ' + d.matched.join(', ') +
+                ' — and that is not a language you write.'
+              : 'It names nothing from your profile at all.';
             this.guardError = {
               title: "You can't honestly apply to this one",
-              why: 'Only ' + d.score + '% of what this job asks for appears anywhere ' +
-                   'in your profile. A ' + noun + ' tailored to it would have to ' +
-                   'invent the rest — and a model asked to tailor it will, fluently, ' +
-                   'and you would be the one sending it. Nothing was generated.',
+              why: 'This posting asks for none of the languages or tools on your ' +
+                   'profile. ' + only + ' A ' + noun + ' tailored to it would have ' +
+                   'to invent the rest — and a model asked to tailor it will, ' +
+                   'fluently, and you would be the one sending it. Nothing was generated.',
               items: d.matched.length
                 ? ['All this job wants that you actually have: ' + d.matched.join(', ')]
                 : ['Nothing this job asks for appears in your profile at all.'],
-              fix: 'If you think this really is a good fit, your profile is missing ' +
-                   'something. Add it, and try again.',
+              fix: 'If you think this really is a good fit, check that your ' +
+                   'languages and tools are actually listed in your profile — then ' +
+                   'run  python -m scripts.fit_doctor <job id>  to see what the ' +
+                   'check read.',
             };
             return;
           }

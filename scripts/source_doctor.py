@@ -119,7 +119,16 @@ def main():
     ap.add_argument("--broken", action="store_true", help="only ones health calls broken")
     args = ap.parse_args()
 
-    companies = [c for c in (load_companies() or []) if c.get("active", True)]
+    try:
+        all_sources = load_companies() or []
+    except FileNotFoundError:
+        print("No sources file found at config/companies-backup.yaml — nothing to test.")
+        return
+    except Exception as e:
+        print(f"config/companies-backup.yaml could not be read: {e}")
+        return
+
+    companies = [c for c in all_sources if c.get("active", True)]
     if args.names:
         wanted = {n.lower() for n in args.names}
         companies = [c for c in companies

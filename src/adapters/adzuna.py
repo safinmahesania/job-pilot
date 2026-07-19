@@ -28,6 +28,7 @@ import httpx
 
 from .base import SourceAdapter
 from src.adapters.base import redact
+from src.adapters.jsearch import _why
 from src.logs import log
 
 API = "https://api.adzuna.com/v1/api/jobs/{country}/search/{page}"
@@ -72,6 +73,7 @@ class AdzunaAdapter(SourceAdapter):
                     params["category"] = category
 
                 url = API.format(country=country, page=page)
+                r = None
                 try:
                     r = httpx.get(url, params=params, timeout=30)
                     r.raise_for_status()
@@ -79,7 +81,7 @@ class AdzunaAdapter(SourceAdapter):
                 except Exception as e:
                     # redact(): the exception carries the request URL, and that URL
                     # carries app_id and app_key.
-                    last_error = redact(e)
+                    last_error = _why(r, e) if r is not None else redact(e)
                     log.warning("[adzuna %s] '%s' page %s failed: %s",
                                 self.name, kw, page, last_error)
                     break

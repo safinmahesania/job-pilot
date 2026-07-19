@@ -128,3 +128,48 @@ class TestJSearchPicksTheRightHost:
         with patch("httpx.get", side_effect=Exception("401 Unauthorized")):
             with pytest.raises(RuntimeError, match="OpenWeb Ninja"):
                 self._adapter().fetch()
+
+
+class TestTheServersOwnExplanationIsKept:
+    """A status code names the category; the body names the cause. RapidAPI answers 403
+    with "You are not subscribed to this API" — throwing that away leaves a bare status
+    that could mean six things."""
+
+    def test_the_response_body_is_included(self):
+        from src.adapters.jsearch import _why
+
+        class _R:
+            text = '{"message":"You are not subscribed to this API."}'
+
+        out = _why(_R(), "Client error '403 Forbidden'")
+        assert "not subscribed" in out
+        assert "403" in out
+
+    def test_credentials_in_the_body_are_still_redacted(self):
+        from src.adapters.jsearch import _why
+
+        class _R:
+            text = '{"echo":"api_key=supersecret"}'
+
+        assert "supersecret" not in _why(_R(), "boom")
+
+    def test_a_body_that_cannot_be_read_is_not_fatal(self):
+        from src.adapters.jsearch import _why
+
+        class _R:
+            @property
+            def text(self):
+                raise ValueError("stream consumed")
+
+        assert "boom" in _why(_R(), "boom")
+
+    def test_a_timeout_has_no_response_to_read_and_still_reports(self):
+        """A timeout or DNS failure never got a response, so there is no body. The
+        adapters fall back to the exception alone rather than crashing on None."""
+        from src.adapters.jsearch import JSearchAdapter
+        import os
+        os.environ["JSEARCH_API_KEY"] = "f1e2d3c4-b5a6-7890-1234-56789abcdef0"
+        with patch("httpx.get", side_effect=TimeoutError("read timed out")):
+            with pytest.raises(RuntimeError, match="timed out"):
+                JSearchAdapter({"name": "JS", "ats": "jsearch",
+                                "queries": ["dev"]}).fetch()

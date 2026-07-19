@@ -36,6 +36,22 @@ RAPIDAPI = "https://jsearch.p.rapidapi.com/search"
 _RAPIDAPI_KEY_SHAPE = re.compile(r"^[a-z0-9]{6,}msh[a-z0-9]+jsn[a-z0-9]+$", re.I)
 
 
+def _why(response, error) -> str:
+    """The server's own explanation, not just the status line.
+
+    A status code names the category; the body names the cause. RapidAPI answers 403
+    with "You are not subscribed to this API", 404 with which host it could not find —
+    and throwing that away leaves a bare "404 Not Found" that could mean six things and
+    sends you searching the web instead of reading the answer you were already given.
+    """
+    body = ""
+    try:
+        body = (response.text or "").strip().replace("\n", " ")[:200]
+    except Exception:
+        pass
+    return redact(f"{error}{f' — server said: {body}' if body else ''}")
+
+
 class JSearchAdapter(SourceAdapter):
     def fetch(self) -> list[dict]:
         key = os.environ.get("JSEARCH_API_KEY")
@@ -85,12 +101,13 @@ class JSearchAdapter(SourceAdapter):
             q = f"{kw} in {location}" if location else kw
             for page in range(1, pages + 1):
                 params = {"query": q, "country": country, "page": page, "num_pages": 1}
+                r = None
                 try:
                     r = httpx.get(base, params=params, headers=headers, timeout=30)
                     r.raise_for_status()
                     data = r.json()
                 except Exception as e:
-                    last_error = redact(e)
+                    last_error = _why(r, e) if r is not None else redact(e)
                     log.warning("[jsearch %s] '%s' page %s failed: %s",
                                 self.name, kw, page, last_error)
                     break

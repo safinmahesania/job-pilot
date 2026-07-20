@@ -33,8 +33,7 @@ from src.paths import (
     SCORE_WEIGHT_SKILLS,
     SCORE_WEIGHT_SENIORITY,
     SCORE_WEIGHT_DOMAIN,
-    SCORING_VIA_PROVIDER_CHAIN,
-)
+    SCORING_VIA_PROVIDER_CHAIN, MIN_DESCRIPTION_CHARS)
 
 # Live state, read by the UI to show what actually scored the last job.
 MODEL_STATE = {"active": PRIMARY, "fallback_active": False,
@@ -209,7 +208,17 @@ def score_job(job: dict, profile: dict, calibration: str = "") -> ScoreResult | 
 
     `calibration` is the feedback block from src.scoring.feedback. The caller
     builds it once per run (it needs a database read) and passes it in.
+
+    A job with no description is not scored. The model would still answer — it always
+    answers — but with only a title and a company it is scoring its own impression of
+    the employer, not the role, and the number comes out looking exactly like one that
+    was read off a real posting. An unscored job says "not judged yet", which is true;
+    a 74 with nothing behind it says something false, and quietly outranks jobs that
+    earned their number.
     """
+    if len((job.get("description") or "").strip()) < MIN_DESCRIPTION_CHARS:
+        return None
+
     prompt = _prompt(job, profile, calibration)
     result = None
 

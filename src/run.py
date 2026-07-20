@@ -23,7 +23,8 @@ from src.scoring.rerank import (
     build_calibration,
 )
 from src import store, notify
-from src.paths import DEFAULT_SCORE_THRESHOLD, NOTIFY_MIN_SCORE, FETCH_CONCURRENCY
+from src.paths import (DEFAULT_SCORE_THRESHOLD, NOTIFY_MIN_SCORE, FETCH_CONCURRENCY,
+                       MIN_DESCRIPTION_CHARS)
 from src.logs import log
 from src.env import load_env
 
@@ -108,7 +109,7 @@ def run(only: list[str] | None = None):
     scoring_on = store.get_setting(conn, "scoring_enabled", "1") == "1"
 
     stats = {"fetched": 0, "seen": 0, "dropped": 0, "trashed": 0, "kept": 0,
-             "errors": 0}
+             "errors": 0, "no_description": 0}
     seen_this_run = set()           # guards against duplicates within one pass
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -171,7 +172,15 @@ def run(only: list[str] | None = None):
 
             result = score_job(job, profile, calibration)
             if result is None:
-                stats["errors"] += 1
+                # Two different things arrive here. A job with no description was
+                # deliberately not scored, and counting that as an error would report a
+                # working run as a broken one — and inflate a number people read to
+                # decide whether the model is misbehaving. A job that HAS a description
+                # and still came back None is a real failure.
+                if len((job.get("description") or "").strip()) < MIN_DESCRIPTION_CHARS:
+                    stats["no_description"] += 1
+                else:
+                    stats["errors"] += 1
                 continue
 
             # Persist every scored job; the feed filters by threshold at read time.

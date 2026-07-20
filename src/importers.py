@@ -67,6 +67,7 @@ from src.logs import log
 from src.config import load_profile
 from src.normalize import normalize, clean_html
 from src.scoring.prefilter import passes
+from src.paths import MIN_DESCRIPTION_CHARS
 from src.scoring.rerank import score_job, build_calibration
 from src.paths import DEFAULT_SCORE_THRESHOLD
 
@@ -600,7 +601,9 @@ def import_jobs(raw_jobs: list[dict], *, source: str = "import",
                 stats["dropped"] = stats.get("dropped", 0) + 1
                 continue
 
-            has_jd = bool((job.get("description") or "").strip())
+            # Same threshold scoring itself uses, so the two cannot disagree about
+            # what counts as a description.
+            has_jd = len((job.get("description") or "").strip()) >= MIN_DESCRIPTION_CHARS
 
             if has_jd and scoring_on and passes(job, profile):
                 result = score_job(job, profile, calibration)

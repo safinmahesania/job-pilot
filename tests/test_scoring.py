@@ -21,8 +21,13 @@ from src.paths import (
     FEEDBACK_MIN_EXAMPLES,
 )
 
-JOB = {"title": "Backend Dev", "company": "Shopify",
-       "location": "Toronto", "description": "Python, FastAPI"}
+# A description long enough to be one. Scoring declines anything shorter than
+# MIN_DESCRIPTION_CHARS, on the grounds that a title alone tells the model nothing about
+# the role — so a fixture of "Python, FastAPI" would be testing the guard, not scoring.
+JOB = {"title": "Backend Dev", "company": "Shopify", "location": "Toronto",
+       "description": ("Python, FastAPI. You will build and maintain backend services "
+                       "for our merchant platform, write tests, review code and ship "
+                       "to production with a small team in Toronto.")}
 
 
 def _reply(skills=90, seniority=85, domain=80, overall=70):

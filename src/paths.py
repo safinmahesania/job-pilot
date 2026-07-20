@@ -319,6 +319,18 @@ FIT_MIN_OVERLAP = 0.15
 # The gap is wide enough that this number is not a tuning knob.
 FIT_MIN_TECHNOLOGIES = 2
 
+#: Below this many characters, a job's description is treated as absent and the job is
+#: left unscored. Alert emails and half-finished imports arrive with an empty body or a
+#: single line like "Apply on our website"; the model would score those from the title
+#: alone and produce a number indistinguishable from one read off a real posting.
+#:
+#: Set low on purpose. One line naming a stack and a level — "Python, FastAPI,
+#: PostgreSQL. New grads welcome." — is thin but it is real information, and the score
+#: it produces is about the role. The line is drawn under that, at the point where
+#: there is nothing left to read.
+MIN_DESCRIPTION_CHARS = 40
+
+
 # ── Project selection ────────────────────────────────────────────────────────
 # The profile usually lists more projects than belong on one application, and
 # stale work is rarely the best evidence. So we first narrow to the most recent

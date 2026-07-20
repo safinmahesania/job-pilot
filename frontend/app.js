@@ -6,6 +6,9 @@ function jobpilot() {
     pickedJobs: [],
     // What the running pipeline is doing, polled from /api/run/status.
     runProgress: null,
+    // The run panel starts collapsed. The phase and a percentage are what you check
+    // in passing; the source, counts and model are what you open it for.
+    runPanelOpen: false,
     running: false, lastRun: null, nextRun: null, threshold: 70,
     sort: 'score', source: 'all', sources: [],
     busy: null, snack: null, blocking: null, confirmBox: null,

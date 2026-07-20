@@ -154,8 +154,33 @@ class JSearchAdapter(SourceAdapter):
                     break
                 answered = True
 
-                jobs = data.get("data", []) if isinstance(data, dict) else []
-                cursor = data.get("cursor") if isinstance(data, dict) else None
+                # Two shapes are in the wild for the same API. The older one puts the
+                # jobs straight under `data`; search-v2 nests them, with the paging
+                # cursor beside them. Iterating the wrong one walks a dict's keys and
+                # dies on `'str' object has no attribute 'get'`, which says nothing
+                # about the response that caused it.
+                payload = data.get("data") if isinstance(data, dict) else None
+                if isinstance(payload, dict):
+                    # `is None`, not `or`: an empty list is a real answer meaning "no
+                    # matches", and it is falsy. Chaining with `or` turns that into a
+                    # missing key and reports a working API as a broken one.
+                    jobs = payload.get("jobs")
+                    if jobs is None:
+                        jobs = payload.get("results")
+                    cursor = payload.get("cursor") or payload.get("next_cursor")
+                    if jobs is None:
+                        raise RuntimeError(
+                            f"{self.name}: {host_name} answered but the shape is "
+                            f"unfamiliar — `data` held keys {sorted(payload)[:8]}. "
+                            f"Expected a list of jobs under `jobs`."
+                        )
+                elif isinstance(payload, list):
+                    jobs = payload
+                    cursor = data.get("cursor") or data.get("next_cursor")
+                else:
+                    jobs, cursor = [], None
+
+                jobs = [j for j in jobs if isinstance(j, dict)]
                 if not jobs:
                     break
 

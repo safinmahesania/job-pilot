@@ -315,3 +315,54 @@ class TestJSearchFindsThePathItself:
             with pytest.raises(RuntimeError, match="search-v2"):
                 JSearchAdapter({"name": "JS", "ats": "jsearch",
                                 "queries": ["dev"]}).fetch()
+
+
+class TestJSearchReadsBothResponseShapes:
+    """The same API serves two shapes. The older one puts jobs straight under `data`;
+    search-v2 nests them beside the paging cursor. Iterating the wrong one walks a
+    dict's keys and dies on "'str' object has no attribute 'get'" — an error that says
+    nothing about the response that caused it."""
+
+    JOB = {"job_id": "a", "job_title": "Dev", "employer_name": "X",
+           "job_apply_link": "http://x/1"}
+
+    class _R:
+        status_code = 200
+        def __init__(self, p): self._p = p
+        def raise_for_status(self): return None
+        def json(self): return self._p
+
+    def _fetch(self, payload):
+        import os
+        from src.adapters.jsearch import JSearchAdapter
+        os.environ["JSEARCH_API_KEY"] = "7a1b2cmsh1f2e3d4c5b6a7f8p1a2b3cjsn4d5e6f7a8"
+        with patch("httpx.get", return_value=self._R(payload)):
+            return JSearchAdapter({"name": "JS", "ats": "jsearch",
+                                   "queries": ["dev"]}).fetch()
+
+    def test_the_nested_shape_is_read(self):
+        jobs = self._fetch({"status": "OK",
+                            "data": {"jobs": [self.JOB], "cursor": None}})
+        assert len(jobs) == 1
+
+    def test_the_flat_shape_is_still_read(self):
+        jobs = self._fetch({"status": "OK", "data": [self.JOB]})
+        assert len(jobs) == 1
+
+    def test_an_unfamiliar_shape_is_named_not_silently_empty(self):
+        """Zero jobs would report this as "no matches" when it is really a response we
+        cannot read — the same quiet failure this whole file exists to remove."""
+        with pytest.raises(RuntimeError, match="unfamiliar"):
+            self._fetch({"status": "OK", "data": {"totally": "different"}})
+
+    def test_non_dict_entries_are_skipped_rather_than_crashing(self):
+        jobs = self._fetch({"status": "OK",
+                            "data": {"jobs": ["oops", self.JOB], "cursor": None}})
+        assert len(jobs) == 1
+
+    def test_an_empty_job_list_is_no_matches_not_a_broken_shape(self):
+        """`jobs: []` is the API working and saying there is nothing. Chaining the
+        lookups with `or` made that falsy value fall through to the missing-key branch,
+        so a correct empty answer was reported as a shape the code could not read."""
+        assert self._fetch({"status": "OK",
+                            "data": {"jobs": [], "cursor": None}}) == []

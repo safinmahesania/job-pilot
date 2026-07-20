@@ -105,6 +105,11 @@ def verdict_for(count: int, err: str | None, c: dict) -> str:
     if ats in NEEDS_URL and not (c.get("careers_url") or c.get("base") or c.get("url")):
         return "0 jobs — no careers_url configured; nothing was fetched"
     if c.get("queries") or c.get("query"):
+        if ats == "jsearch" and not c.get("location"):
+            return ("0 jobs — the API answered and matched nothing. This one wants the "
+                    "place inside the query: add `location: Canada` (or a city) to "
+                    "this source, which makes it ask for \"developer in Canada\" "
+                    "rather than \"developer\".")
         return ("0 jobs — the API answered but matched nothing. Widen the query, or "
                 "check `where`/`country` spelling.")
     if ats in NEEDS_URL:

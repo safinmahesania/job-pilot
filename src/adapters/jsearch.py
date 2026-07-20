@@ -92,6 +92,12 @@ class JSearchAdapter(SourceAdapter):
         if not queries:
             one = c.get("query")
             queries = [one] if one else ["software developer"]
+
+        # A repeated query costs a full round trip — around fourteen seconds against
+        # this API — and returns rows the dedupe below discards anyway. Long hand-edited
+        # lists grow duplicates without anyone noticing. Order is kept so the list still
+        # reads the way it was written.
+        queries = list(dict.fromkeys(q for q in queries if str(q).strip()))
         country = c.get("country", "ca")
         pages = int(c.get("pages", 1))
         location = c.get("location", "")

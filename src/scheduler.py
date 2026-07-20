@@ -41,6 +41,7 @@ def _stamp_last_run(when: datetime):
 
 
 def _run_once(only=None):
+    from src.run import reset_progress
     from src.run import run as run_pipeline
 
     with _lock:
@@ -69,6 +70,9 @@ def _run_once(only=None):
         except Exception as inner:
             log.error("[scheduler] could not record the error: %s", inner)
     finally:
+        # Clear the progress the UI reads, on every path out. A crashed run that left
+        # "Scoring 40 of 300" frozen on screen would be worse than showing nothing.
+        reset_progress()
         now = datetime.now()
         _state["running"] = False
         _state["last_run"] = now.strftime("%Y-%m-%d %H:%M")

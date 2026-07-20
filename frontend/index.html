@@ -1463,6 +1463,45 @@
   </div>
 
   <!-- ══ Blocking modal ══ -->
+  <!-- ══ Run in progress ══
+       Deliberately not a blocking overlay. A run can take twenty minutes, and now that
+       each job commits on its own the database is no longer locked for the duration —
+       so there is nothing to protect you from, and locking the app out of your way for
+       twenty minutes would be the only harm. It sits at the top, out of the way, and
+       says enough to decide whether to wait: how far in, roughly how long left, and
+       what is doing the work. -->
+  <div x-show="running" x-cloak
+    class="fixed top-3 left-1/2 -translate-x-1/2 z-[65] w-[22rem] max-w-[calc(100vw-1.5rem)] rounded-lg bg-white shadow-lg border border-brand/30 overflow-hidden">
+    <div class="px-3.5 pt-3 pb-2.5">
+      <div class="flex items-center gap-2">
+        <i class="ti ti-loader-2 animate-spin text-brand"></i>
+        <span class="text-[13px] font-semibold text-gray-800 flex-1"
+          x-text="runProgress && runProgress.phase ? runProgress.phase : 'Run in progress'"></span>
+        <span class="text-xs text-gray-400" x-show="runEta()" x-text="runEta()"></span>
+      </div>
+
+      <div class="text-xs text-gray-500 mt-1.5 truncate"
+        x-show="runProgress && runProgress.source"
+        x-text="runProgress ? runProgress.source : ''"></div>
+
+      <div class="flex items-center gap-2 mt-2" x-show="runProgress && runProgress.total">
+        <div class="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+          <div class="h-full bg-brand transition-all duration-500"
+            :style="`width:${runPercent()}%`"></div>
+        </div>
+        <span class="text-[11px] text-gray-400 tabular-nums"
+          x-text="runProgress ? `${runProgress.done}/${runProgress.total}` : ''"></span>
+      </div>
+
+      <div class="text-[11px] text-gray-400 mt-2 flex items-center gap-1" x-show="runWorker()">
+        <i class="ti ti-cpu"></i><span x-text="runWorker()"></span>
+      </div>
+    </div>
+    <div class="px-3.5 py-1.5 bg-gray-50 border-t border-gray-100 text-[11px] text-gray-500">
+      You can keep using the app — jobs are saved as they finish.
+    </div>
+  </div>
+
   <!-- ══ Corner task box ══
        Deliberately not a modal. Re-checking a job takes as long as the model takes,
        and blacking out the screen for it stops you reading the next job while you

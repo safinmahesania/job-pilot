@@ -148,4 +148,16 @@ def trigger_run(body: RunRequest | None = None):
 
 @router.get("/api/run/status")
 def run_status():
-    return scheduler.get_state()
+    """Whether a run is going, and how far along it is.
+
+    The UI polls this to show a run in progress. "Running" on its own is not much use
+    when a pass can take twenty minutes; the counts let it say how far in, and the model
+    line says what is doing the work.
+    """
+    from src.run import PROGRESS
+    from src.scoring.rerank import get_model_state
+
+    state = scheduler.get_state()
+    state["progress"] = dict(PROGRESS)
+    state["model"] = get_model_state()
+    return state

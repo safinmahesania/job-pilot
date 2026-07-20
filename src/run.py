@@ -23,8 +23,8 @@ from src.scoring.rerank import (
     build_calibration,
 )
 from src import store, notify
-from src.paths import (DEFAULT_SCORE_THRESHOLD, NOTIFY_MIN_SCORE, FETCH_CONCURRENCY,
-                       MIN_DESCRIPTION_CHARS)
+from src.paths import (DEFAULT_SCORE_THRESHOLD, NOTIFY_MIN_SCORE,
+                       FETCH_CONCURRENCY, MIN_DESCRIPTION_CHARS)
 from src.logs import log
 from src.env import load_env
 
@@ -46,6 +46,22 @@ def _fetch_one(company: dict) -> tuple[dict, list[dict], dict]:
         health["status"] = "error"
         health["error"] = str(e)[:200]
         return company, [], health
+
+
+#: What the run is doing right now, read by /api/run/status so the UI can say more
+#: than "running". Plain dict rather than a queue: there is one pipeline at a time, the
+#: writer is this module and the readers only read, so the worst a torn read can do is
+#: show a count one job out of date.
+PROGRESS = {"active": False, "phase": "", "source": "",
+            "done": 0, "total": 0, "started": 0.0}
+
+
+def _progress(**kw):
+    PROGRESS.update(kw)
+
+
+def reset_progress():
+    PROGRESS.update(active=False, phase="", source="", done=0, total=0, started=0.0)
 
 
 def fetch_all(companies: list[dict],
@@ -121,11 +137,18 @@ def run(only: list[str] | None = None):
 
     # ── Fetch every board in parallel ───────────────────────────────────────
     fetch_started = time.time()
+    _progress(active=True, phase="Fetching sources", source="",
+              done=0, total=0, started=fetch_started)
     fetched = fetch_all(companies, respect_active=not only)
     print(f"  fetched {len(fetched)} sources in {time.time() - fetch_started:.1f}s")
 
     # ── Then process serially ───────────────────────────────────────────────
+    # Now the size of the work is known, so the UI can show a real proportion rather
+    # than a spinner that could mean thirty seconds or twenty minutes.
+    _progress(phase="Scoring", total=sum(len(r) for _, r, _ in fetched))
+
     for company, raw_jobs, src_stat in fetched:
+        _progress(source=company.get("name", ""))
         if src_stat["status"] == "error":
             stats["errors"] += 1
             store.save_source_health(conn, company["name"], company.get("ats"),
@@ -140,69 +163,83 @@ def run(only: list[str] | None = None):
             continue
 
         for raw in raw_jobs:
-            stats["fetched"] += 1
-            job = normalize(raw)
-            h = job["dedupe_hash"]
+            # One transaction per job, not one for the whole run. Scoring calls a model
+            # per job and a full pass takes minutes; wrapped in a single transaction that
+            # is minutes during which SQLite's write lock is held and nothing else can
+            # write — saving an edit in the UI waits out busy_timeout and fails with
+            # "database is locked", which looks like a bug in the edit and is really the
+            # run next door.
+            #
+            # `with conn:` is the right shape rather than a bare commit: it commits when
+            # the block is left normally (including the `continue`s below) and rolls back
+            # if the body raises, so a job is never half-written. A run that dies partway
+            # now keeps the jobs it had already finished.
+            with conn:
+                _progress(done=PROGRESS["done"] + 1)
+                stats["fetched"] += 1
+                job = normalize(raw)
+                h = job["dedupe_hash"]
 
-            # Skip anything already processed, this run or a previous one.
-            if store.already_seen(conn, h) or h in seen_this_run:
-                stats["seen"] += 1
-                continue
-            seen_this_run.add(h)
+                # Skip anything already processed, this run or a previous one.
+                if store.already_seen(conn, h) or h in seen_this_run:
+                    stats["seen"] += 1
+                    continue
+                seen_this_run.add(h)
 
-            # Cheap rule checks before spending a model call.
-            if not is_valid(job):
-                store.mark_seen(conn, h, "dropped")
-                stats["dropped"] += 1
-                continue
-            if not passes(job, profile):
-                store.mark_seen(conn, h, "dropped")
-                stats["dropped"] += 1
-                continue
+                # Cheap rule checks before spending a model call.
+                if not is_valid(job):
+                    store.mark_seen(conn, h, "dropped")
+                    stats["dropped"] += 1
+                    continue
+                if not passes(job, profile):
+                    store.mark_seen(conn, h, "dropped")
+                    stats["dropped"] += 1
+                    continue
 
-            # The expensive step (skipped when scrape-time AI is off).
-            if not scoring_on:
-                job.update(score=None, skills_score=None, seniority_score=None,
-                           domain_score=None, rationale=None, flags=None)
+                # The expensive step (skipped when scrape-time AI is off).
+                if not scoring_on:
+                    job.update(score=None, skills_score=None, seniority_score=None,
+                               domain_score=None, rationale=None, flags=None)
+                    store.save_job(conn, job)
+                    store.mark_seen(conn, h, "kept")
+                    stats["kept"] += 1
+                    src_stat["kept"] += 1
+                    continue
+
+                result = score_job(job, profile, calibration)
+                if result is None:
+                    # Two different things arrive here. A job with no description was
+                    # deliberately not scored, and counting that as an error would
+                    # report a working run as a broken one — and inflate a number
+                    # people read to decide whether the model is misbehaving. A job
+                    # that HAS a description and still came back None is a real failure.
+                    if (len((job.get("description") or "").strip())
+                            < MIN_DESCRIPTION_CHARS):
+                        stats["no_description"] += 1
+                    else:
+                        stats["errors"] += 1
+                    continue
+
+                # Persist every scored job; the feed filters by threshold at read time.
+                job.update(score=result.overall, skills_score=result.skills_score,
+                           seniority_score=result.seniority_score,
+                           domain_score=result.domain_score,
+                           rationale=result.rationale, flags=None)
                 store.save_job(conn, job)
-                store.mark_seen(conn, h, "kept")
-                stats["kept"] += 1
-                src_stat["kept"] += 1
-                continue
 
-            result = score_job(job, profile, calibration)
-            if result is None:
-                # Two different things arrive here. A job with no description was
-                # deliberately not scored, and counting that as an error would report a
-                # working run as a broken one — and inflate a number people read to
-                # decide whether the model is misbehaving. A job that HAS a description
-                # and still came back None is a real failure.
-                if len((job.get("description") or "").strip()) < MIN_DESCRIPTION_CHARS:
-                    stats["no_description"] += 1
+                threshold = int(store.get_setting(conn, "score_threshold",
+                                                  DEFAULT_SCORE_THRESHOLD))
+                if result.overall >= threshold:
+                    store.mark_seen(conn, h, "kept", result.overall)
+                    stats["kept"] += 1
+                    src_stat["kept"] += 1
+                    if result.overall >= NOTIFY_MIN_SCORE:
+                        new_scored.append({"score": result.overall,
+                                           "title": job.get("title"),
+                                           "company": job.get("company")})
                 else:
-                    stats["errors"] += 1
-                continue
-
-            # Persist every scored job; the feed filters by threshold at read time.
-            job.update(score=result.overall, skills_score=result.skills_score,
-                       seniority_score=result.seniority_score,
-                       domain_score=result.domain_score,
-                       rationale=result.rationale, flags=None)
-            store.save_job(conn, job)
-
-            threshold = int(store.get_setting(conn, "score_threshold",
-                                              DEFAULT_SCORE_THRESHOLD))
-            if result.overall >= threshold:
-                store.mark_seen(conn, h, "kept", result.overall)
-                stats["kept"] += 1
-                src_stat["kept"] += 1
-                if result.overall >= NOTIFY_MIN_SCORE:
-                    new_scored.append({"score": result.overall,
-                                       "title": job.get("title"),
-                                       "company": job.get("company")})
-            else:
-                store.mark_seen(conn, h, "trashed", result.overall)
-                stats["trashed"] += 1
+                    store.mark_seen(conn, h, "trashed", result.overall)
+                    stats["trashed"] += 1
 
         store.save_source_health(conn, company["name"], company.get("ats"),
                                  src_stat, now)

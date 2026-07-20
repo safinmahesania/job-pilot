@@ -4,6 +4,8 @@ function jobpilot() {
     // Job ids ticked for a selective score. Cleared on tab change: acting on
     // jobs that scrolled out of view is never what was meant.
     pickedJobs: [],
+    // What the running pipeline is doing, polled from /api/run/status.
+    runProgress: null,
     running: false, lastRun: null, nextRun: null, threshold: 70,
     sort: 'score', source: 'all', sources: [],
     busy: null, snack: null, blocking: null, confirmBox: null,
@@ -1032,6 +1034,35 @@ function jobpilot() {
       setTimeout(ping, 2500);   // give it a moment to actually go down first
     },
 
+    // ── The run panel ───────────────────────────────────────────────────────
+    // A run can take twenty minutes. "Running" alone doesn't tell you whether to wait
+    // or go and do something else, so this works out the remaining time from THIS run's
+    // own rate rather than an average of past ones — the first run is as informative as
+    // the fiftieth, and a slow source shows up honestly instead of being averaged away.
+    runEta() {
+      const p = this.runProgress;
+      if (!p || !p.total || !p.done || !p.started) return '';
+      const elapsed = (Date.now() / 1000) - p.started;
+      if (elapsed < 5) return '';               // too early to be worth saying
+      const perJob = elapsed / p.done;
+      const left = Math.round(perJob * (p.total - p.done));
+      if (left < 60) return 'about a minute left';
+      const mins = Math.round(left / 60);
+      return `about ${mins} minute${mins === 1 ? '' : 's'} left`;
+    },
+
+    runPercent() {
+      const p = this.runProgress;
+      if (!p || !p.total) return 0;
+      return Math.min(100, Math.round((p.done / p.total) * 100));
+    },
+
+    runWorker() {
+      const m = this.modelState || {};
+      if (!m.active) return '';
+      return m.provider === 'ollama' ? `${m.active} (local)` : `${m.active} · ${m.provider}`;
+    },
+
     poll() {
       if (this._pollIv) return;
       this._pollIv = setInterval(async () => {
@@ -1040,6 +1071,7 @@ function jobpilot() {
         if (m) this.modelState = m;
         if (!s) return;
         this.running = s.running; this.lastRun = s.last_run; this.nextRun = s.next_run;
+        this.runProgress = s.progress || null;
         if (!s.running) {
           clearInterval(this._pollIv); this._pollIv = null;
           this.blocking = null;

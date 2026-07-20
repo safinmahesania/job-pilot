@@ -566,74 +566,79 @@ def import_jobs(raw_jobs: list[dict], *, source: str = "import",
              "duplicates": 0, "errors": 0, "dropped": 0}
 
     for raw in raw_jobs:
-        stats["seen"] += 1
-        raw.setdefault("source", source)
+        # One transaction per job — see the same block in src/run.py. Importing scores
+        # each job in turn, so a long import would otherwise hold the write lock for
+        # the whole pass and any other write would fail with "database is locked".
+        with conn:
+            stats["seen"] += 1
+            raw.setdefault("source", source)
 
-        try:
-            job = normalize(raw)
+            try:
+                job = normalize(raw)
 
-            if store.already_seen(conn, job["dedupe_hash"]):
-                stats["duplicates"] += 1
-                continue
-
-            # No description? Try to recover one from the link before giving up.
-            if fetch_missing and not job.get("description"):
-                recovered = recover_description(job.get("apply_url") or "")
-                if recovered:
-                    job["description"] = recovered
-
-            # Location gate — runs before scoring, and works without a description
-            # because alert emails carry a location. A job we can SEE is outside Canada
-            # and not remote is dropped now rather than parked in the unscored tab.
-            #
-            # It only fires on a location we actually have. Some employers' alerts
-            # (Deloitte's, for one) name no location at all, and those postings are on a
-            # Canadian careers site and perfectly relevant — dropping them for a missing
-            # field would silently throw away good jobs. Unknown location therefore means
-            # "keep and let scoring judge it", not "discard".
-            from src.scoring.prefilter import _check_locations
-            allowed_locations = (profile.get("constraints") or {}).get("locations")
-            loc_known = (job.get("location") or "").strip().lower() not in (
-                "", "not specified", "unknown", "n/a", "-")
-            if (allowed_locations and loc_known
-                    and not _check_locations(job, allowed_locations)):
-                store.mark_seen(conn, job["dedupe_hash"], "trashed")
-                stats["dropped"] = stats.get("dropped", 0) + 1
-                continue
-
-            # Same threshold scoring itself uses, so the two cannot disagree about
-            # what counts as a description.
-            has_jd = len((job.get("description") or "").strip()) >= MIN_DESCRIPTION_CHARS
-
-            if has_jd and scoring_on and passes(job, profile):
-                result = score_job(job, profile, calibration)
-                if result is not None:
-                    job.update(score=result.overall,
-                               skills_score=result.skills_score,
-                               seniority_score=result.seniority_score,
-                               domain_score=result.domain_score,
-                               rationale=result.rationale, flags=None)
-                    store.save_job(conn, job)
-                    store.mark_seen(conn, job["dedupe_hash"],
-                                    "kept" if result.overall >= threshold else "trashed",
-                                    result.overall)
-                    stats["imported"] += 1
-                    stats["scored"] += 1
+                if store.already_seen(conn, job["dedupe_hash"]):
+                    stats["duplicates"] += 1
                     continue
 
-            # Everything else lands unscored: no description, scoring off, or the
-            # model failed. The job is still yours to look at — it just doesn't
-            # pretend to have been judged.
-            job.update(score=None, skills_score=None, seniority_score=None,
-                       domain_score=None, rationale=None, flags=None)
-            store.save_job(conn, job)
-            store.mark_seen(conn, job["dedupe_hash"], "kept")
-            stats["imported"] += 1
-            stats["unscored"] += 1
+                # No description? Try to recover one from the link before giving up.
+                if fetch_missing and not job.get("description"):
+                    recovered = recover_description(job.get("apply_url") or "")
+                    if recovered:
+                        job["description"] = recovered
 
-        except Exception as e:
-            log.warning("[import] %s: %s", raw.get("title", "?"), e)
-            stats["errors"] += 1
+                # Location gate — runs before scoring, and works without a description
+                # because alert emails carry a location. A job we can SEE is outside Canada
+                # and not remote is dropped now rather than parked in the unscored tab.
+                #
+                # It only fires on a location we actually have. Some employers' alerts
+                # (Deloitte's, for one) name no location at all, and those postings are on a
+                # Canadian careers site and perfectly relevant — dropping them for a missing
+                # field would silently throw away good jobs. Unknown location therefore means
+                # "keep and let scoring judge it", not "discard".
+                from src.scoring.prefilter import _check_locations
+                allowed_locations = (profile.get("constraints") or {}).get("locations")
+                loc_known = (job.get("location") or "").strip().lower() not in (
+                    "", "not specified", "unknown", "n/a", "-")
+                if (allowed_locations and loc_known
+                        and not _check_locations(job, allowed_locations)):
+                    store.mark_seen(conn, job["dedupe_hash"], "trashed")
+                    stats["dropped"] = stats.get("dropped", 0) + 1
+                    continue
+
+                # Same threshold scoring itself uses, so the two cannot disagree
+                # about what counts as a description.
+                has_jd = (len((job.get("description") or "").strip())
+                          >= MIN_DESCRIPTION_CHARS)
+
+                if has_jd and scoring_on and passes(job, profile):
+                    result = score_job(job, profile, calibration)
+                    if result is not None:
+                        job.update(score=result.overall,
+                                   skills_score=result.skills_score,
+                                   seniority_score=result.seniority_score,
+                                   domain_score=result.domain_score,
+                                   rationale=result.rationale, flags=None)
+                        store.save_job(conn, job)
+                        store.mark_seen(conn, job["dedupe_hash"],
+                                        "kept" if result.overall >= threshold else "trashed",
+                                        result.overall)
+                        stats["imported"] += 1
+                        stats["scored"] += 1
+                        continue
+
+                # Everything else lands unscored: no description, scoring off, or the
+                # model failed. The job is still yours to look at — it just doesn't
+                # pretend to have been judged.
+                job.update(score=None, skills_score=None, seniority_score=None,
+                           domain_score=None, rationale=None, flags=None)
+                store.save_job(conn, job)
+                store.mark_seen(conn, job["dedupe_hash"], "kept")
+                stats["imported"] += 1
+                stats["unscored"] += 1
+
+            except Exception as e:
+                log.warning("[import] %s: %s", raw.get("title", "?"), e)
+                stats["errors"] += 1
 
     conn.commit()
     conn.close()

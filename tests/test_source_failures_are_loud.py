@@ -366,3 +366,38 @@ class TestJSearchReadsBothResponseShapes:
         so a correct empty answer was reported as a shape the code could not read."""
         assert self._fetch({"status": "OK",
                             "data": {"jobs": [], "cursor": None}}) == []
+
+
+class TestQueriesAreNotRunTwice:
+    """Hand-edited query lists grow duplicates. Each one costs a full round trip against
+    an API that takes seconds per call, and returns rows discarded as already seen."""
+
+    class _R:
+        status_code = 200
+        def raise_for_status(self): return None
+        def json(self): return {"status": "OK", "data": {"jobs": [], "cursor": None}}
+
+    def _queries_sent(self, queries):
+        import os
+        from src.adapters.jsearch import JSearchAdapter
+        os.environ["JSEARCH_API_KEY"] = "7a1b2cmsh1f2e3d4c5b6a7f8p1a2b3cjsn4d5e6f7a8"
+        sent = []
+
+        def _fake(url, params=None, headers=None, timeout=None):
+            sent.append((params or {}).get("query"))
+            return self._R()
+
+        with patch("httpx.get", side_effect=_fake):
+            JSearchAdapter({"name": "JS", "ats": "jsearch", "queries": queries}).fetch()
+        return sent
+
+    def test_a_repeated_query_is_only_asked_once(self):
+        assert self._queries_sent(["developer", "intern", "developer"]) == [
+            "developer", "intern"]
+
+    def test_the_written_order_is_kept(self):
+        assert self._queries_sent(["zebra", "apple", "zebra", "mango"]) == [
+            "zebra", "apple", "mango"]
+
+    def test_blank_entries_are_dropped(self):
+        assert self._queries_sent(["developer", "", "  "]) == ["developer"]

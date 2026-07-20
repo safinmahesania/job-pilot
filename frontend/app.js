@@ -1,6 +1,9 @@
 function jobpilot() {
   return {
     tab: 'feed', jobs: [], counts: {}, health: [], runs: [], errors: [], stats: null, loading: true, q: '', detail: null, sent: null, sentOpen: null,
+    // Job ids ticked for a selective score. Cleared on tab change: acting on
+    // jobs that scrolled out of view is never what was meant.
+    pickedJobs: [],
     running: false, lastRun: null, nextRun: null, threshold: 70,
     sort: 'score', source: 'all', sources: [],
     busy: null, snack: null, blocking: null, confirmBox: null,
@@ -79,8 +82,61 @@ function jobpilot() {
       this.errors = [];
     },
 
+    // ── Picking a few jobs to act on ────────────────────────────────────────
+    // Scoring every unscored job is one button already. This is for the other case:
+    // a handful worth a model call, out of a list where most are not.
+    isJobPicked(id) { return this.pickedJobs.includes(id); },
+
+    toggleJobPicked(id) {
+      this.pickedJobs = this.isJobPicked(id)
+        ? this.pickedJobs.filter(x => x !== id)
+        : [...this.pickedJobs, id];
+    },
+
+    pickAllVisible() {
+      // What's on screen after filters, not everything the tab could hold — ticking
+      // "select all" should never reach jobs you can't see.
+      this.pickedJobs = this.filtered().map(j => j.id);
+    },
+
+    async scorePicked() {
+      if (!this.pickedJobs.length) return;
+      const ids = [...this.pickedJobs];
+      this.scoring = true;
+      this.task = { label: `Scoring ${ids.length} job${ids.length === 1 ? '' : 's'}…`,
+                    title: 'Selected jobs', done: false, ok: true };
+      try {
+        const r = await fetch('/api/jobs/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job_ids: ids }),
+        });
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({}));
+          this.endTask(typeof d.detail === 'string' ? d.detail : 'Could not score', false);
+          return;
+        }
+        const data = await r.json();
+        this.pickedJobs = [];
+        await this.load();
+        // Say how many of them actually got a number: a job with no description is
+        // skipped on purpose, and reporting it as scored would be a lie.
+        const skipped = data.requested - data.scored;
+        this.endTask(
+          skipped
+            ? `Scored ${data.scored} · ${skipped} skipped (no description to read)`
+            : `Scored ${data.scored}`,
+          true);
+      } catch (e) {
+        this.endTask('Could not score', false);
+      } finally {
+        this.scoring = false;
+      }
+    },
+
     async go(tab) {
       this.tab = tab;
+      this.pickedJobs = [];
       this.mobileNav = false;
       if (tab === 'sourcesTab') await this.loadSources();
       if (tab === 'profile') await this.loadProfile();

@@ -108,32 +108,18 @@ function jobpilot() {
       if (!this.pickedJobs.length) return;
       const ids = [...this.pickedJobs];
       this.scoring = true;
-      this.task = { label: `Scoring ${ids.length} job${ids.length === 1 ? '' : 's'}…`,
-                    title: 'Selected jobs', done: false, ok: true };
       try {
-        const r = await fetch('/api/jobs/score', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ job_ids: ids }),
-        });
-        if (!r.ok) {
-          const d = await r.json().catch(() => ({}));
-          this.endTask(typeof d.detail === 'string' ? d.detail : 'Could not score', false);
-          return;
-        }
-        const data = await r.json();
+        const res = await this.scoreIds(ids, 'Selected jobs');
+        if (!res) return;
         this.pickedJobs = [];
         await this.load();
-        // Say how many of them actually got a number: a job with no description is
-        // skipped on purpose, and reporting it as scored would be a lie.
-        const skipped = data.requested - data.scored;
+        // Say how many actually got a number: a job with no description is skipped on
+        // purpose, and reporting it as scored would be a lie.
+        const skipped = res.requested - res.scored;
         this.endTask(
-          skipped
-            ? `Scored ${data.scored} · ${skipped} skipped (no description to read)`
-            : `Scored ${data.scored}`,
+          skipped ? `Scored ${res.scored} · ${skipped} skipped (no description to read)`
+                  : `Scored ${res.scored}`,
           true);
-      } catch (e) {
-        this.endTask('Could not score', false);
       } finally {
         this.scoring = false;
       }
@@ -949,6 +935,7 @@ function jobpilot() {
       this.task.label = label;
       this.task.done = true;
       this.task.ok = ok;
+      this.task.progress = null;      // finished: a bar frozen at 97% reads as stuck
       const mine = this.task;
       setTimeout(() => { if (this.task === mine) this.task = null; }, ok ? 4000 : 8000);
     },
@@ -988,30 +975,73 @@ function jobpilot() {
       this.selectedSources = [];
     },
 
+    // ── Scoring a list, with progress ───────────────────────────────────────
+    // Sent in batches rather than one request with every id in it. One request would
+    // be simpler, but it returns only when the last job is done — so a pass over 178
+    // jobs shows a spinner for several minutes and cannot say how far in it is. A
+    // batch that comes back is a fact: this many are actually scored.
+    //
+    // The remaining time is worked out from THIS list's own rate, so a slow model or
+    // a fallback to a smaller one shows up honestly instead of against some average.
+    async scoreIds(ids, title) {
+      if (!ids.length) return null;
+      const BATCH = 10;
+      const started = Date.now();
+      let done = 0, scored = 0;
+
+      this.task = { title, label: `0 of ${ids.length}…`, done: false, ok: true,
+                    progress: { done: 0, total: ids.length } };
+
+      try {
+        for (let i = 0; i < ids.length; i += BATCH) {
+          const slice = ids.slice(i, i + BATCH);
+          const r = await fetch('/api/jobs/score', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job_ids: slice }),
+          });
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            this.endTask(err.detail || 'Scoring failed — is a model available?', false);
+            return null;
+          }
+          const data = await r.json();
+          scored += data.scored;
+          done += slice.length;
+
+          const elapsed = (Date.now() - started) / 1000;
+          const left = Math.round((elapsed / done) * (ids.length - done));
+          const eta = done >= ids.length ? ''
+            : left < 60 ? ' · about a minute left'
+            : ` · about ${Math.round(left / 60)} min left`;
+          this.task.label = `${done} of ${ids.length}${eta}`;
+          this.task.progress = { done, total: ids.length };
+        }
+        return { scored, requested: ids.length };
+      } catch (e) {
+        this.endTask('Scoring failed — check the server', false);
+        return null;
+      }
+    },
+
     async scoreAllUnscored() {
       const ids = this.jobs.map(j => j.id);
       if (!ids.length) return;
       this.scoring = true;
       try {
-        const r = await fetch('/api/jobs/score', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ job_ids: ids }),
-        });
-        if (!r.ok) {
-          const err = await r.json().catch(() => ({}));
-          this.showSnack(err.detail || 'Scoring failed — is a model available?', 'error');
-          return;
-        }
-        const data = await r.json();
-        this.showSnack(`Scored ${data.scored} of ${data.requested}`, data.scored ? 'success' : 'info');
-        await this.load();          // refresh — scored jobs leave the unscored tab, counts update too
-      } catch (e) {
-        this.showSnack('Scoring failed — check the server', 'error');
+        const res = await this.scoreIds(ids, 'Unscored jobs');
+        if (!res) return;
+        await this.load();
+        const skipped = res.requested - res.scored;
+        this.endTask(
+          skipped ? `Scored ${res.scored} · ${skipped} skipped (no description to read)`
+                  : `Scored ${res.scored}`,
+          true);
       } finally {
         this.scoring = false;
       }
     },
+
 
     async restartServer() {
       if (!confirm('Restart the server? It will reconnect in a few seconds.')) return;

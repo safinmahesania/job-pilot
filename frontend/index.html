@@ -1529,7 +1529,14 @@
         <button x-show="task && task.done" @click="task=null"
           class="shrink-0 text-gray-300 hover:text-gray-500"><i class="ti ti-x"></i></button>
       </div>
-      <div x-show="task && !task.done" class="h-0.5 bg-gray-100 overflow-hidden">
+      <!-- A determinate bar when the task counts its work, and the sliding one when it
+           can't. Showing a fake percentage for something with no known total would be
+           worse than the honest "something is happening" stripe. -->
+      <div x-show="task && !task.done && task.progress" class="h-0.5 bg-gray-100">
+        <div class="h-full bg-brand transition-all duration-300"
+          :style="`width:${task && task.progress ? Math.round((task.progress.done / task.progress.total) * 100) : 0}%`"></div>
+      </div>
+      <div x-show="task && !task.done && !task.progress" class="h-0.5 bg-gray-100 overflow-hidden">
         <div class="h-full w-1/3 bg-brand" style="animation: jp-slide 1.1s ease-in-out infinite"></div>
       </div>
     </div>

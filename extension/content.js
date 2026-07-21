@@ -85,7 +85,8 @@ const VOLUNTARY_KEYS = new Set([
   "gender", "ethnicity", "veteran_status", "disability_status",
 ]);
 
-let answers = null;      // canonical answers from the API
+let answers = null;
+let repeatedData = null;      // canonical answers from the API
 let custom = [];         // the user's own keyword -> answer rules
 let settings = { enabled: true, autoFill: false, useAI: true, jobId: null };
 let filling = false;     // guards against re-entrant fills
@@ -134,8 +135,19 @@ function labelFor(el) {
   // Workday and friends: the question sits in a wrapper above the input.
   const group = el.closest("[data-automation-id], .field, .form-group, fieldset");
   if (group) {
-    const legend = group.querySelector("legend, label, .field-label");
+    const legend = group.querySelector("legend, label, .field-label, h2, h3, h4");
     if (legend) bits.push(legend.innerText);
+  }
+
+  // The automation ids themselves, not just the text inside them. Workday names its
+  // hooks after what they are — resumeUpload, fileUploadDropZone — while the visible
+  // words can sit in a sibling this element has no relationship to. The attribute is
+  // often the only thing that says what the control is for, and reading it costs
+  // nothing: camelCase is split so "resumeUpload" reads as "resume Upload" and the
+  // patterns below can see the word.
+  for (let node = el, hops = 0; node && hops < 4; node = node.parentElement, hops++) {
+    const id = node.getAttribute && node.getAttribute("data-automation-id");
+    if (id) bits.push(id.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[-_]/g, " "));
   }
 
   bits.push(el.name || "", el.id || "", el.placeholder || "");
@@ -231,6 +243,61 @@ function asAnswer(key, raw) {
 // ── The fill itself ─────────────────────────────────────────────────────────
 
 /** Every field on the page we could plausibly fill. */
+// ── Repeated sections ───────────────────────────────────────────────────────
+//
+// A form that lets you press "Add" three times has three Job Title boxes, three
+// Employer boxes, and so on. Every one of them carries the same label, so a lookup
+// by label answers all three with the same job — which is what happened: three
+// identical work histories, and the same for education.
+//
+// Nothing in the label distinguishes them, so position does. The n-th Employer box
+// on the page belongs to the n-th job in your history: forms render repeats in
+// order, and so does profile.yaml. Counting per key rather than per section avoids
+// having to understand each site's DOM, which is where this would otherwise turn
+// into guesswork about Workday's markup specifically.
+//
+// When your history runs out, the remaining boxes are left alone. An empty third
+// section is honest; a third copy of your second job is not.
+
+const REPEAT_KEYS = {
+  current_company: ["experience", "company"],
+  current_title:   ["experience", "title"],
+  job_location:    ["experience", "location"],
+  job_start:       ["experience", "start"],
+  job_end:         ["experience", "end"],
+  job_description: ["experience", "description"],
+  school:          ["education", "school"],
+  degree:          ["education", "degree"],
+  field_of_study:  ["education", "field"],
+  graduation_year: ["education", "end"],
+  edu_start:       ["education", "start"],
+};
+
+/** How many times each repeatable key has been filled during this pass. */
+let repeatSeen = {};
+
+function resetRepeats() {
+  repeatSeen = {};
+}
+
+/**
+ * The value for `key` at its next occurrence, or undefined to fall through to the
+ * flat answer. Returns null when the history has run out, meaning "leave it empty".
+ */
+function repeatedValue(key) {
+  const spec = REPEAT_KEYS[key];
+  if (!spec || !repeatedData) return undefined;
+  const [listName, field] = spec;
+  const list = repeatedData[listName] || [];
+  if (!list.length) return undefined;
+
+  const i = repeatSeen[key] || 0;
+  repeatSeen[key] = i + 1;
+
+  if (i >= list.length) return null;      // nothing left to say — leave it blank
+  return list[i][field] || null;
+}
+
 function collectFields() {
   const nodes = document.querySelectorAll("input, select, textarea");
   return Array.from(nodes).filter((el) => {
@@ -254,9 +321,11 @@ async function fillPage({ silent = false } = {}) {
       }
       answers = res.data.answers;
       custom = res.data.custom || [];
+      repeatedData = res.data.repeated || null;
     }
 
     const fields = collectFields();
+    resetRepeats();          // positions are per pass, not per page lifetime
     if (!fields.length) {
       if (!silent) toast("Nothing to fill on this page", "info");
       return { filled: 0, skipped: 0 };
@@ -275,7 +344,11 @@ async function fillPage({ silent = false } = {}) {
 
       const key = matchKey(text);
       if (key) {
-        const value = asAnswer(key, answers[key]);
+        // A repeatable key answers by position first: the second Employer box gets
+        // the second job, not a second copy of the first.
+        const nth = repeatedValue(key);
+        if (nth === null) continue;                 // history exhausted — leave blank
+        const value = nth !== undefined ? nth : asAnswer(key, answers[key]);
         // Blank profile value: leave the field alone. Voluntary questions are
         // never guessed at.
         if (!value) {
@@ -288,11 +361,21 @@ async function fillPage({ silent = false } = {}) {
       if (!VOLUNTARY_KEYS.has(key)) unresolved.push({ el, text });
     }
 
+    // Three "Why do you want to work here?" boxes would be one question; three
+    // "Job Title" boxes in three repeated sections are three. Number the repeats so
+    // the cache below answers each one separately instead of pasting the first
+    // answer into all of them.
+    const labelCount = {};
+    for (const item of unresolved) {
+      const n = labelCount[item.text] = (labelCount[item.text] || 0) + 1;
+      item.cacheKey = n === 1 ? item.text : `${item.text} #${n}`;
+    }
+
     // Pass 2 — one batched AI call for whatever is left.
     if (settings.useAI && unresolved.length) {
       const pending = [];
       for (const item of unresolved) {
-        const cached = aiCache.get(item.text);
+        const cached = aiCache.get(item.cacheKey);
         if (cached !== undefined) {
           if (cached && applyValue(item.el, cached)) filled++;
         } else {
@@ -331,7 +414,7 @@ async function fillPage({ silent = false } = {}) {
           const mapped = res.data.answers || {};
           pending.forEach((item, i) => {
             const answer = mapped[`f${i}`] || "";
-            aiCache.set(item.text, answer);       // remember, even if blank
+            aiCache.set(item.cacheKey, answer);   // remember, even if blank
             if (answer && applyValue(item.el, answer)) filled++;
           });
         } else if (res && res.reason === "auth") {
@@ -432,8 +515,18 @@ async function attachFiles() {
 
   const identified = inputs.filter((i) => i.kind);
   if (!identified.length) {
-    toast(`${inputs.length} upload field(s) here, but I can't tell what they want — attach by hand`, "info");
-    return { attached: 0 };
+    // One upload box and nothing in the page to say what it wants. The rule that
+    // stops a cover letter landing in the resume slot is about telling two documents
+    // apart — with a single box there is no second slot to get wrong, and every
+    // application form with one upload is asking for a resume. Guessing here is safe
+    // in a way that guessing between two boxes is not.
+    if (inputs.length === 1) {
+      inputs[0].kind = "resume";
+      identified.push(inputs[0]);
+    } else {
+      toast(`${inputs.length} upload field(s) here, but I can't tell what they want — attach by hand`, "info");
+      return { attached: 0 };
+    }
   }
 
   const kinds = [...new Set(identified.map((i) => i.kind))];

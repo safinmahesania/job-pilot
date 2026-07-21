@@ -32,7 +32,10 @@ def autofill_data():
     """Canonical answers plus the user's own custom rules — no AI, instant."""
     from src import autofill
     return {"answers": autofill.answers(),
-            "custom": autofill.custom_answers()}
+            "custom": autofill.custom_answers(),
+            # Lists, for forms that ask for your history more than once. Flat answers
+            # cannot fill a second "Job Title" box with a second job.
+            "repeated": autofill.repeated()}
 
 
 class ResolveField(BaseModel):

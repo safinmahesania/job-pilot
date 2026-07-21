@@ -97,6 +97,55 @@ def answers() -> dict:
     }
 
 
+
+def repeated() -> dict:
+    """Your history as lists, for forms that ask for it more than once.
+
+    `answers()` is flat — one value per key — which is right for a name or an email
+    and wrong for the rest of a career. A Workday form where you press "Add" three
+    times has three Job Title boxes, and a flat dict has one job title to put in
+    them, so all three come out identical: the same employer, the same dates, three
+    times over.
+
+    Newest first, matching the order these are written in profile.yaml and the order
+    a form expects them. Blank entries are dropped rather than padded, so a second
+    section is filled only when there is a second job to put in it.
+    """
+    p = load_profile()
+
+    experience = []
+    for e in (p.get("experience") or []):
+        if not isinstance(e, dict):
+            continue
+        row = {
+            "company": e.get("company", "") or "",
+            "title": e.get("role", "") or e.get("title", "") or "",
+            "location": e.get("location", "") or "",
+            "start": str(e.get("start", "") or ""),
+            "end": str(e.get("end", "") or ""),
+            "description": e.get("description", "") or "",
+        }
+        if row["company"] or row["title"]:
+            experience.append(row)
+
+    education = []
+    for e in (p.get("education") or []):
+        if not isinstance(e, dict):
+            continue
+        row = {
+            "school": e.get("institution", "") or e.get("school", "") or "",
+            "degree": e.get("degree", "") or "",
+            "field": e.get("field", "") or "",
+            "location": e.get("location", "") or "",
+            "start": str(e.get("start", "") or ""),
+            "end": str(e.get("end", "") or ""),
+        }
+        if row["school"] or row["degree"]:
+            education.append(row)
+
+    return {"experience": experience, "education": education}
+
+
 def custom_answers() -> list[dict]:
     """Your own fixed answers to recurring questions.
 

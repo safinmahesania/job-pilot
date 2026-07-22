@@ -401,3 +401,53 @@ class TestQueriesAreNotRunTwice:
 
     def test_blank_entries_are_dropped(self):
         assert self._queries_sent(["developer", "", "  "]) == ["developer"]
+
+
+class TestAQuotaStopsTheSourceAtOnce:
+    """429 is about the account, not the query. A monthly quota that has run out will
+    not have refilled by the next keyword, so asking nine more times fills the log with
+    the same paragraph nine times over — and where the limit is per-minute rather than
+    monthly, digs the hole deeper."""
+
+    class _R429:
+        status_code = 429
+        text = ('{"message":"You have exceeded the MONTHLY quota for Requests on '
+                'your current plan, BASIC"}')
+        def raise_for_status(self):
+            raise Exception("Client error '429 Too Many Requests'")
+
+    def _run(self, queries, pages=5):
+        import os
+        from src.adapters.jsearch import JSearchAdapter
+        os.environ["JSEARCH_API_KEY"] = "7a1b2cmsh1f2e3d4c5b6a7f8p1a2b3cjsn4d5e6f7a8"
+        calls = []
+
+        def _fake(url, params=None, headers=None, timeout=None):
+            calls.append((params or {}).get("query"))
+            return self._R429()
+
+        with patch("httpx.get", side_effect=_fake):
+            with pytest.raises(RuntimeError) as excinfo:
+                JSearchAdapter({"name": "JS", "ats": "jsearch",
+                                "queries": queries, "pages": pages}).fetch()
+        return calls, str(excinfo.value)
+
+    def test_only_one_request_is_made(self):
+        calls, _ = self._run(["a", "b", "c", "d", "e", "f", "g", "h", "i"])
+        assert len(calls) == 1, f"kept going after a 429: {calls}"
+
+    def test_the_remaining_pages_are_not_tried_either(self):
+        calls, _ = self._run(["only one query"], pages=5)
+        assert len(calls) == 1
+
+    def test_it_does_not_send_you_hunting_for_a_broken_key(self):
+        """The setup is fine. Telling someone to check their key and their endpoint
+        here costs them an evening on a fault that isn't there."""
+        _, msg = self._run(["a", "b"])
+        assert "Nothing is wrong with the setup" in msg
+        assert "401" not in msg and "404" not in msg
+
+    def test_it_says_what_would_actually_help(self):
+        _, msg = self._run(["a", "b"])
+        assert "quota" in msg.lower()
+        assert "active: false" in msg or "pages" in msg

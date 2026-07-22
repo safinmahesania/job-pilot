@@ -91,3 +91,68 @@ class TestConnectionsAreTunedForSharing:
             assert c.execute("PRAGMA busy_timeout").fetchone()[0] > 0
         finally:
             c.close()
+
+
+class TestSourceHealthDoesNotHoldTheLock:
+    """The job loop was fixed to commit per job, but the writes on either side of it —
+    source health, the error record, the run-history row — were left loose. A write
+    without a commit holds the lock just the same, so a run still locked the database
+    for its whole length through that path, which nobody had retested.
+
+    This is the failure from the screenshot: "Pipeline failed / database is locked",
+    once per scheduled run.
+    """
+
+    def test_writing_source_health_leaves_no_open_transaction(self, conn):
+        from src import store
+
+        stat = {"status": "ok", "fetched": 5, "kept": 3, "error": None}
+        with conn:
+            store.save_source_health(conn, "Adzuna", "adzuna", stat, "2025-01-01 10:00")
+
+        # If the write above had been left in an open transaction, a second connection
+        # would not be able to write.
+        db_path = conn.execute("PRAGMA database_list").fetchone()[2]
+        import sqlite3
+        other = sqlite3.connect(db_path)
+        other.execute("PRAGMA busy_timeout=800")
+        try:
+            with other:
+                other.execute("INSERT INTO settings (key, value) VALUES ('k', 'v')")
+            wrote = True
+        except sqlite3.OperationalError:
+            wrote = False
+        finally:
+            other.close()
+
+        assert wrote, "source-health write left the database locked"
+
+    def test_a_full_run_ends_with_nothing_holding_the_lock(self, conn, monkeypatch):
+        """After the pipeline returns, the database is writable at once — no lingering
+        transaction from the run-history insert or the last source-health write."""
+        from src import run
+
+        monkeypatch.setattr(run, "load_profile", lambda: {
+            "skills": {"expert": ["Python"]}, "search": {"role_levels": ["junior"]}})
+        monkeypatch.setattr(run, "fetch_all", lambda *a, **k: [
+            ({"name": "Adzuna", "ats": "adzuna"}, [], {"status": "ok", "fetched": 0})])
+
+        try:
+            run.run()
+        except Exception:
+            pass
+
+        db_path = conn.execute("PRAGMA database_list").fetchone()[2]
+        import sqlite3
+        other = sqlite3.connect(db_path)
+        other.execute("PRAGMA busy_timeout=800")
+        try:
+            with other:
+                other.execute("INSERT INTO settings (key, value) VALUES ('after', '1')")
+            wrote = True
+        except sqlite3.OperationalError:
+            wrote = False
+        finally:
+            other.close()
+
+        assert wrote, "the run left the database locked after finishing"

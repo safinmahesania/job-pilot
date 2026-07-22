@@ -151,15 +151,21 @@ def run(only: list[str] | None = None):
         _progress(source=company.get("name", ""))
         if src_stat["status"] == "error":
             stats["errors"] += 1
-            store.save_source_health(conn, company["name"], company.get("ats"),
-                                     src_stat, now)
-            # A board that failed to fetch is worth keeping too — not raised (the
-            # pool already swallowed it so one broken board cannot stop the run), but
-            # recorded, so "why did nothing come from talent.com last night" has an
-            # answer.
-            store.record_source_error(
-                conn, f"fetch:{company['name']}",
-                src_stat.get("error") or "fetch failed")
+            # Its own transaction, like everything else here. save_source_health and
+            # record_source_error write but do not commit, so left loose they open a
+            # write the run never closes until the very end — which is the whole
+            # "database is locked" problem this file already fixed for the job loop,
+            # reappearing on the path nobody retested.
+            with conn:
+                store.save_source_health(conn, company["name"], company.get("ats"),
+                                         src_stat, now)
+                # A board that failed to fetch is worth keeping too — not raised (the
+                # pool already swallowed it so one broken board cannot stop the run),
+                # but recorded, so "why did nothing come from talent.com last night"
+                # has an answer.
+                store.record_source_error(
+                    conn, f"fetch:{company['name']}",
+                    src_stat.get("error") or "fetch failed")
             continue
 
         for raw in raw_jobs:
@@ -241,17 +247,19 @@ def run(only: list[str] | None = None):
                     store.mark_seen(conn, h, "trashed", result.overall)
                     stats["trashed"] += 1
 
-        store.save_source_health(conn, company["name"], company.get("ats"),
-                                 src_stat, now)
+        with conn:
+            store.save_source_health(conn, company["name"], company.get("ats"),
+                                     src_stat, now)
 
-    # Record this run in history.
-    conn.execute(
-        "INSERT INTO runs (kind, fetched, seen, dropped, trashed, kept, errors) "
-        "VALUES ('fetch', ?, ?, ?, ?, ?, ?)",
-        (stats["fetched"], stats["seen"], stats["dropped"],
-         stats["trashed"], stats["kept"], stats["errors"]),
-    )
-    conn.commit()
+    # Record this run in history — its own transaction, closed before returning so the
+    # write lock is never left held for the next reader to trip over.
+    with conn:
+        conn.execute(
+            "INSERT INTO runs (kind, fetched, seen, dropped, trashed, kept, errors) "
+            "VALUES ('fetch', ?, ?, ?, ?, ?, ?)",
+            (stats["fetched"], stats["seen"], stats["dropped"],
+             stats["trashed"], stats["kept"], stats["errors"]),
+        )
     conn.close()
 
     # Telegram summary (a no-op if not configured or disabled).

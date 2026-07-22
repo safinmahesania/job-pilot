@@ -129,6 +129,7 @@ class JSearchAdapter(SourceAdapter):
         seen: set[str] = set()
 
         answered = False
+        rate_limited = False
 
         last_error = None
         out: list[dict] = []
@@ -157,6 +158,14 @@ class JSearchAdapter(SourceAdapter):
                     last_error = _why(r, e) if r is not None else redact(e)
                     log.warning("[jsearch %s] '%s' page %s failed: %s",
                                 self.name, kw, page, last_error)
+                    # 429 is about the account, not this query. A monthly quota that
+                    # ran out will not have refilled by the next keyword, and asking
+                    # nine more times only fills the log with the same paragraph nine
+                    # times over — or, where the limit is per-minute rather than
+                    # monthly, digs the hole deeper. Stop the source here.
+                    if r is not None and getattr(r, "status_code", None) == 429:
+                        rate_limited = True
+                        break
                     break
                 answered = True
 
@@ -221,7 +230,20 @@ class JSearchAdapter(SourceAdapter):
                 if not cursor:
                     break        # the API handed back no next page, so there isn't one
 
+            if rate_limited:
+                break            # the account is out; the next keyword fares no better
+
         if not answered:
+            if rate_limited:
+                # Nothing is misconfigured. Saying "check your key, check the path"
+                # here would send someone hunting for a fault that isn't there.
+                raise RuntimeError(
+                    f"{self.name}: {host_name} refused every request — {last_error} "
+                    f"Nothing is wrong with the setup; the plan is out of requests. "
+                    f"Wait for the quota to reset, cut `pages` or the number of "
+                    f"queries on this source, or set `active: false` until then."
+                )
+
             # Every request failed. Two causes look identical from here and need
             # different fixes: a key valid at the other gateway (401 everywhere), and a
             # path this API no longer serves (404 everywhere). Name both, and say what

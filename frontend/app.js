@@ -338,6 +338,56 @@ function jobpilot() {
     closeSourceTest() { this.sourceTest = null; },
 
     // ───────── jobs ─────────
+    // ── Application instructions buried in the description ────────────────────
+    // Some postings hide a real instruction in the body — "email your CV to…",
+    // "include the word BANANA in your subject line", "in your cover letter, tell
+    // us…". These are easy to miss in a wall of boilerplate and expensive to miss:
+    // an application that ignores them is often discarded unread. So they are lifted
+    // out and shown on their own, above the description.
+    //
+    // Two kinds are caught. The first is how-to-apply: a line naming an email
+    // address, or telling you where to send things. The second is a gate — a
+    // deliberate hoop ("must include", "start your subject with", "mention X in your
+    // cover letter") that filters out anyone who pasted a generic application. The
+    // gates matter most, so they are marked, and shown first.
+    extractInstructions(text) {
+      if (!text) return [];
+      const plain = text
+        .replace(/<[^>]+>/g, ' ')      // strip any scraped markup first
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&');
+
+      // Split into lines and sentences both — an instruction can be its own bullet
+      // or buried mid-paragraph.
+      const pieces = plain
+        .split(/\n|(?<=[.!?])\s+(?=[A-Z])/)
+        .map(s => s.trim())
+        .filter(s => s.length > 8 && s.length < 320);
+
+      const GATE = /\b(must (include|contain|start|begin)|please (include|start|begin|mention|use)|include the (word|phrase|code)|start (your |the )?(subject|email|application|cover letter)|in your cover letter|mention (the|this|that|"| ?[A-Z])|use the subject|reference (number|code)|quote (this|the|reference))\b/i;
+      const HOWTO = /\b(e-?mail your|send your (cv|resume|application)|apply (by|via|through|at)|submit your|to apply[,: ])\b/i;
+      const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
+
+      const seen = new Set();
+      const out = [];
+      for (const line of pieces) {
+        const isGate = GATE.test(line);
+        const isHowto = HOWTO.test(line) || EMAIL.test(line);
+        if (!isGate && !isHowto) continue;
+
+        const key = line.toLowerCase().replace(/\s+/g, ' ');
+        if (seen.has(key)) continue;      // the same instruction repeated in header and body
+        seen.add(key);
+
+        const email = (line.match(EMAIL) || [])[0] || null;
+        out.push({ text: line, gate: isGate, email });
+      }
+
+      // Gates first — they are the ones that get an application binned when missed.
+      out.sort((a, b) => (b.gate ? 1 : 0) - (a.gate ? 1 : 0));
+      return out.slice(0, 6);            // more than a handful is noise, not signal
+    },
+
     formatJD(text) {
       if (!text) return 'No description available.';
 

@@ -1222,6 +1222,32 @@
               </div>
             </template>
 
+            <!-- Instructions lifted out of the description. Only rendered when the
+                 body actually contains some — most postings have none, and an empty
+                 box every time would train the eye to ignore it. -->
+            <template x-if="detail.description && extractInstructions(detail.description).length">
+              <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 overflow-hidden">
+                <div class="flex items-center gap-1.5 px-3.5 py-2 border-b border-amber-200 bg-amber-100/60">
+                  <i class="ti ti-alert-triangle text-amber-600 text-sm"></i>
+                  <span class="text-[13px] font-semibold text-amber-900">Application instructions in this posting</span>
+                </div>
+                <ul class="px-3.5 py-2.5 flex flex-col gap-2">
+                  <template x-for="(ins, i) in extractInstructions(detail.description)" :key="i">
+                    <li class="flex items-start gap-2 text-[13px] text-gray-800">
+                      <span class="shrink-0 mt-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded"
+                        :class="ins.gate ? 'bg-amber-200 text-amber-900' : 'bg-gray-200 text-gray-600'"
+                        x-text="ins.gate ? 'MUST' : 'HOW'"></span>
+                      <div class="min-w-0">
+                        <span x-text="ins.text"></span>
+                        <a x-show="ins.email" :href="`mailto:${ins.email}`"
+                          class="ml-1 text-brand underline break-all" x-text="ins.email"></a>
+                      </div>
+                    </li>
+                  </template>
+                </ul>
+              </div>
+            </template>
+
             <div class="jd text-sm text-gray-700 leading-relaxed" x-html="formatJD(detail.description)"></div>
           </div>
           <div class="flex flex-wrap items-center gap-2 p-4 sm:p-5 border-t border-gray-100">

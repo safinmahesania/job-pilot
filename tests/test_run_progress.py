@@ -39,7 +39,7 @@ class TestProgressIsPublished:
 
 
 class TestProgressIsClearedWhenARunEnds:
-    def test_a_crashed_run_does_not_leave_a_stale_bar(self, monkeypatch):
+    def test_a_crashed_run_does_not_leave_a_stale_bar(self, monkeypatch, conn):
         """A panel frozen at "40 of 300" forever is worse than no panel."""
         from src import scheduler
 
@@ -48,7 +48,13 @@ class TestProgressIsClearedWhenARunEnds:
         def _boom(only=None):
             raise RuntimeError("the pipeline fell over")
 
+        # The crash branch of _run_once notifies and records the failure. Both reach
+        # outside the test — notify.send reads the real Telegram token from .env and
+        # would message the developer's phone — so both are stubbed. A test must never
+        # touch the outside world just because the code under test would.
         monkeypatch.setattr("src.run.run", _boom)
+        monkeypatch.setattr(scheduler.notify, "send", lambda *a, **k: False)
+        monkeypatch.setattr(scheduler.store, "record_error", lambda *a, **k: 0)
         scheduler._run_once()
 
         assert run.PROGRESS["active"] is False

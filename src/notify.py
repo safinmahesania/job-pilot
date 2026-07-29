@@ -19,6 +19,12 @@ def _chat_id() -> str | None:
 def send(text: str) -> bool:
     if not enabled():
         return False
+    # Never message a real phone from inside a test. Individual tests should stub this,
+    # but one that forgets would otherwise fire the developer's Telegram for real —
+    # which is exactly how a test's "the pipeline fell over" ended up as a notification.
+    # pytest sets this in the environment of every test process.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
     try:
         r = httpx.post(
             f"https://api.telegram.org/bot{_token()}/sendMessage",

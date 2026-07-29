@@ -73,6 +73,10 @@ def scoring_via_chain() -> bool:
 SCORING_GUIDE = """
 Score EACH dimension across the full 0-100 range — do not cluster around 60-75.
 
+A posting may be written in French or in both French and English. Score it on what the
+role is, exactly as you would an English one — the language it is written in is not a
+qualification and must not lower any dimension. Read the French as fluently as the English.
+
 What a high score looks like on each:
   skills_score 90+   : job's required tech overlaps the candidate's core skills
   seniority_score 90+: intern / junior / new-grad role, no senior requirement

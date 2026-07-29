@@ -22,7 +22,7 @@ from src.scoring.rerank import (
     score_job, reset_model_state, set_preferred, get_model_state,
     build_calibration,
 )
-from src import store, notify, enrich
+from src import store, notify, enrich, language
 from src.paths import (DEFAULT_SCORE_THRESHOLD, NOTIFY_MIN_SCORE,
                        FETCH_CONCURRENCY, MIN_DESCRIPTION_CHARS)
 from src.logs import log
@@ -125,7 +125,8 @@ def run(only: list[str] | None = None):
     scoring_on = store.get_setting(conn, "scoring_enabled", "1") == "1"
 
     stats = {"fetched": 0, "seen": 0, "dropped": 0, "trashed": 0, "kept": 0,
-             "errors": 0, "no_description": 0, "enriched": 0, "enrich_missed": 0}
+             "errors": 0, "no_description": 0, "enriched": 0, "enrich_missed": 0,
+             "french_only": 0}
     seen_this_run = set()           # guards against duplicates within one pass
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -204,6 +205,11 @@ def run(only: list[str] | None = None):
 
                 # The expensive step (skipped when scrape-time AI is off).
                 if not scoring_on:
+                    # No enrichment on this path, so the snippet is all there is — tag it
+                    # from that. Good enough to flag French-only in the feed.
+                    job["language"] = language.detect(job.get("description"))
+                    if job["language"] == "fr":
+                        stats["french_only"] += 1
                     job.update(score=None, skills_score=None, seniority_score=None,
                                domain_score=None, rationale=None, flags=None)
                     store.save_job(conn, job)
@@ -227,6 +233,13 @@ def run(only: list[str] | None = None):
                         # shell to a plain fetch, or an expired stub. The job keeps its
                         # snippet and is skipped just below by the no-description rule.
                         stats["enrich_missed"] += 1
+
+                # Now the description is as complete as it will get, tag its language.
+                # A French-only posting is kept and scored — the model reads French — but
+                # flagged, so the feed shows which jobs expect French.
+                job["language"] = language.detect(job.get("description"))
+                if job["language"] == "fr":
+                    stats["french_only"] += 1
 
                 result = score_job(job, profile, calibration)
                 if result is None:

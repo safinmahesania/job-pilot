@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     status          TEXT DEFAULT 'surfaced',
     job_type        TEXT,
     deadline        TEXT,
+    language        TEXT,                 -- 'en' / 'fr' / 'bilingual' / 'unknown'
     applied_on      TEXT,                 -- date stamped when status -> 'applied'
     notes           TEXT,                 -- free-text notes from the Applied tab
     followed_up_on  TEXT,                 -- date of the last follow-up you sent

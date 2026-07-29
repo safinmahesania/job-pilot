@@ -56,12 +56,12 @@ def save_job(conn, job: dict):
            (dedupe_hash, source, source_url, apply_url, title, company,
             location, remote, description, posted_date, score, skills_score,
             seniority_score, domain_score, rationale, flags,
-            job_type, deadline, salary_min, salary_max)
+            job_type, deadline, language, salary_min, salary_max)
            VALUES (:dedupe_hash, :source, :source_url, :apply_url, :title,
                    :company, :location, :remote, :description, :posted_date,
                    :score, :skills_score, :seniority_score, :domain_score,
                    :rationale, :flags,
-                   :job_type, :deadline, :salary_min, :salary_max)""",
+                   :job_type, :deadline, :language, :salary_min, :salary_max)""",
         job,
     )
 

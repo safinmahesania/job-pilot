@@ -213,7 +213,13 @@
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-baseline justify-between gap-2">
-                <span class="font-medium text-[15px] cursor-pointer hover:text-brand" @click="openDetail(job)" x-text="job.title"></span>
+                <span class="flex items-baseline gap-1.5 min-w-0">
+                  <span class="font-medium text-[15px] cursor-pointer hover:text-brand truncate" @click="openDetail(job)" x-text="job.title"></span>
+                  <!-- French-only in amber (you'll need French to apply), bilingual in a
+                       quieter grey (English is fine). English and unknown carry none. -->
+                  <span x-show="job.language==='fr'" class="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800" title="This posting is in French only">FR only</span>
+                  <span x-show="job.language==='bilingual'" class="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500" title="Posting is in French and English">FR / EN</span>
+                </span>
                 <span class="hidden sm:block text-xs text-gray-400 whitespace-nowrap" x-text="job.posted_date ? timeAgo(job.posted_date) : ''"></span>
               </div>
               <div class="text-[13px] text-gray-500 mt-0.5">

@@ -168,6 +168,9 @@ def normalize(raw: dict) -> dict:
         "posted_date": raw.get("posted_date"),
         "job_type": raw.get("job_type") or "Unknown",
         "deadline": raw.get("deadline"),
+        # Set in run.py after any enrichment, since an Adzuna snippet is too short to
+        # judge and the full text may be a different language mix than the teaser.
+        "language": "unknown",
         "salary_min": salary_min,
         "salary_max": salary_max,
     }

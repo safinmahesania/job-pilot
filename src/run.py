@@ -125,7 +125,7 @@ def run(only: list[str] | None = None):
     scoring_on = store.get_setting(conn, "scoring_enabled", "1") == "1"
 
     stats = {"fetched": 0, "seen": 0, "dropped": 0, "trashed": 0, "kept": 0,
-             "errors": 0, "no_description": 0}
+             "errors": 0, "no_description": 0, "enriched": 0, "enrich_missed": 0}
     seen_this_run = set()           # guards against duplicates within one pass
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -212,16 +212,21 @@ def run(only: list[str] | None = None):
                     src_stat["kept"] += 1
                     continue
 
-                # Adzuna hands over a truncated snippet, and scoring half a description
-                # is scoring half a job. Now that this job has passed the fit gate and is
-                # actually going to be scored, it is worth the one request to fetch the
-                # full posting from the page Adzuna links to. Done here, after the gate,
-                # so the fetch is spent only on jobs that matter — not the hundreds just
-                # dropped. A job whose full text can't be had keeps its short snippet and
-                # is left unscored by the no-description rule below, rather than scored on
-                # half of what it says.
+                # The snippet Adzuna gave is half a description, and scoring half a
+                # description is scoring half a job. This job has passed the fit filter,
+                # so it is one of the few worth the fetch — the hundreds the filter just
+                # dropped never reach here. Only Adzuna jobs whose link points at Adzuna,
+                # Lever or Greenhouse are fetched; anything else keeps its snippet and is
+                # skipped below by the no-description rule rather than scored on half.
                 if scoring_on and enrich.is_enrichable(job):
-                    enrich.enrich_if_needed(job)
+                    if enrich.enrich_if_needed(job):
+                        stats["enriched"] += 1
+                    else:
+                        # Followed the link but the full text wasn't there — a
+                        # JS-rendered page (Workday, LinkedIn) that serves an empty
+                        # shell to a plain fetch, or an expired stub. The job keeps its
+                        # snippet and is skipped just below by the no-description rule.
+                        stats["enrich_missed"] += 1
 
                 result = score_job(job, profile, calibration)
                 if result is None:

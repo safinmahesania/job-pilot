@@ -5,6 +5,7 @@ are editable from the frontend. `last_run_ts` is also persisted, which is what
 makes catch-up work: if the machine was off past the due time, the next loop
 tick after startup fires the run.
 """
+import sqlite3
 import threading
 import time
 from datetime import datetime, timedelta
@@ -198,8 +199,21 @@ def _loop():
                 _run_once()
                 _board_alerts()          # streaks are freshest right after a run
 
-            _followup_check()
-            _weekly_digest()
+            # These stamp a setting each day/week. If a long write elsewhere (a rescore
+            # of hundreds of jobs) happens to hold the lock as one of these fires, the
+            # write can't get in — but that is not a scheduler failure worth a Telegram
+            # alert and a recorded error: the stamp simply happens on the next poll a
+            # minute later. So a lock here is caught and shrugged off, and only a real
+            # crash falls through to the handler below.
+            try:
+                _followup_check()
+                _weekly_digest()
+            except sqlite3.OperationalError as e:
+                if "locked" in str(e).lower():
+                    log.info("[scheduler] maintenance write deferred (db busy) — "
+                             "will retry next poll")
+                else:
+                    raise
         except Exception as e:
             # The scheduler loop is the one place a crash means the app quietly stops
             # doing its job — no run, no follow-up check, and nobody watching. Print

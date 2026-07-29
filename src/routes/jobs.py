@@ -325,10 +325,15 @@ def recheck_job(job_id: int, conn=Depends(_db_dep)):
     return {"verdict": "dismissed", "reason": reason}
 
 
-def _rescore_one(conn, job_id: int):
-    """Score a single edited job now, and persist the result. Returns the new score,
-    or None if scoring couldn't run (no model available, profile missing, etc.) — in
-    which case the job's existing score is left untouched and the edit is unaffected."""
+def _rescore_one(conn, job_id: int, calibration: str | None = None):
+    """Score a single job now, and persist the result. Returns the new score, or None if
+    scoring couldn't run (no model available, profile missing, etc.) — in which case the
+    job's existing score is left untouched and the edit is unaffected.
+
+    `calibration` may be passed in by a batch caller. Building it reads the database, so
+    doing it once for a whole rescore rather than once per job saves a query — and a
+    connection — on every job in the batch.
+    """
     try:
         from src import configio
         from src.scoring.rerank import score_job, build_calibration
@@ -344,18 +349,23 @@ def _rescore_one(conn, job_id: int):
         if not job:
             return None
 
-        calibration = build_calibration()
+        if calibration is None:
+            calibration = build_calibration()
         result = score_job(dict(job), profile, calibration)
         if result is None:
             return None
 
-        conn.execute(
-            "UPDATE jobs SET score=?, skills_score=?, seniority_score=?, "
-            "domain_score=?, rationale=? WHERE id=?",
-            (result.overall, result.skills_score, result.seniority_score,
-             result.domain_score, result.rationale, job_id),
-        )
-        conn.commit()
+        # `with conn:` so the row commits and the write lock releases the moment this
+        # job is done — not held across the next job's multi-second model call. Holding
+        # it across the batch is what let a rescore lock out the scheduler's own writes
+        # (the follow-up and digest stamps), which then failed with "database is locked".
+        with conn:
+            conn.execute(
+                "UPDATE jobs SET score=?, skills_score=?, seniority_score=?, "
+                "domain_score=?, rationale=? WHERE id=?",
+                (result.overall, result.skills_score, result.seniority_score,
+                 result.domain_score, result.rationale, job_id),
+            )
         return round(result.overall)
     except Exception:
         import traceback

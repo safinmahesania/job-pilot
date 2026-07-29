@@ -38,9 +38,14 @@ def score_jobs(body: ScoreRequest, conn=Depends(_db_dep)):
         raise HTTPException(403, "Scoring is off — enable it in Settings first.")
 
     from src.routes.jobs import _rescore_one
+    from src.scoring.rerank import build_calibration
+
+    # Once for the batch, not once per job: building it reads the database, and doing
+    # that per job adds a query and a connection to every one of up to 200 jobs.
+    calibration = build_calibration()
     results = {}
     for jid in body.job_ids[:200]:          # cap a single request
-        results[jid] = _rescore_one(conn, jid)
+        results[jid] = _rescore_one(conn, jid, calibration)
     scored = sum(1 for v in results.values() if v is not None)
     return {"requested": len(body.job_ids), "scored": scored, "results": results}
 

@@ -156,3 +156,54 @@ class TestSourceHealthDoesNotHoldTheLock:
             other.close()
 
         assert wrote, "the run left the database locked after finishing"
+
+
+class TestRescoreDoesNotLockOutTheScheduler:
+    """A rescore of many jobs must not hold the write lock across its whole run.
+
+    Each job's model call takes seconds; scoring hundreds of them in one transaction
+    holds SQLite's write lock for minutes, and the scheduler's own once-a-day and
+    once-a-week stamps — plain settings writes — then fail with "database is locked".
+    This is that failure from the screenshot ("Scheduler loop error"), reproduced and
+    prevented: each job commits on its own, so the lock is free between jobs.
+    """
+
+    def test_a_settings_write_succeeds_between_rescored_jobs(self, conn):
+        from src import store
+        from src.routes.jobs import _rescore_one
+
+        import sqlite3 as _sq
+        conn.row_factory = _sq.Row          # _rescore_one does dict(row)
+        conn.execute("INSERT INTO jobs (id, dedupe_hash, title, company, description) "
+                     "VALUES (1, 'h1', 'Dev', 'X', 'A description long enough to score "
+                     "properly under the pipeline being exercised here.')")
+        conn.commit()
+        db_path = conn.execute("PRAGMA database_list").fetchone()[2]
+
+        import sqlite3
+        outcomes = []
+
+        def _fake_score(job, profile, calibration=""):
+            # Stands in for the model call — the window during which the old code held
+            # the lock. The scheduler's settings write lands right here.
+            other = sqlite3.connect(db_path)
+            other.execute("PRAGMA busy_timeout=800")
+            try:
+                store.set_setting(other, "followup_notified_on", "2025-01-01")
+                outcomes.append("ok")
+            except sqlite3.OperationalError as e:
+                outcomes.append(str(e))
+            finally:
+                other.close()
+            return type("R", (), {"overall": 80, "skills_score": 8,
+                                  "seniority_score": 7, "domain_score": 6,
+                                  "rationale": "fits"})()
+
+        from unittest.mock import patch
+        with patch("src.scoring.rerank.score_job", _fake_score), \
+             patch("src.configio.read_yaml", return_value={"skills": {"expert": ["Python"]}}), \
+             patch("src.scoring.rerank.build_calibration", return_value=""):
+            _rescore_one(conn, 1, calibration="")
+
+        assert outcomes and outcomes[0] == "ok", (
+            f"scheduler write was locked out during a rescore: {outcomes}")

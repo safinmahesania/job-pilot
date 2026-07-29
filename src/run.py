@@ -22,7 +22,7 @@ from src.scoring.rerank import (
     score_job, reset_model_state, set_preferred, get_model_state,
     build_calibration,
 )
-from src import store, notify
+from src import store, notify, enrich
 from src.paths import (DEFAULT_SCORE_THRESHOLD, NOTIFY_MIN_SCORE,
                        FETCH_CONCURRENCY, MIN_DESCRIPTION_CHARS)
 from src.logs import log
@@ -211,6 +211,17 @@ def run(only: list[str] | None = None):
                     stats["kept"] += 1
                     src_stat["kept"] += 1
                     continue
+
+                # Adzuna hands over a truncated snippet, and scoring half a description
+                # is scoring half a job. Now that this job has passed the fit gate and is
+                # actually going to be scored, it is worth the one request to fetch the
+                # full posting from the page Adzuna links to. Done here, after the gate,
+                # so the fetch is spent only on jobs that matter — not the hundreds just
+                # dropped. A job whose full text can't be had keeps its short snippet and
+                # is left unscored by the no-description rule below, rather than scored on
+                # half of what it says.
+                if scoring_on and enrich.is_enrichable(job):
+                    enrich.enrich_if_needed(job)
 
                 result = score_job(job, profile, calibration)
                 if result is None:

@@ -628,6 +628,10 @@
             <button @click="maint('rescore',{url:'/api/maint/rescore',label:'Re-scored',heavy:true,busyLabel:'Re-scoring all jobs…',confirm:'Re-score all jobs? This runs the AI on every job and may take a while.'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md bg-brand text-white self-start">Re-score</button>
           </div>
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div><div class="text-sm font-medium">Dismiss expired jobs</div><div class="text-xs text-gray-400 mt-0.5">Find live jobs whose application deadline has passed — from the stored date or one written in the description — and dismiss them.</div></div>
+            <button @click="maint('sweep',{url:'/api/jobs/sweep-expired',label:'Dismissed',busyLabel:'Checking deadlines…'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Dismiss expired</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
             <div><div class="text-sm font-medium">Cleanup below threshold</div><div class="text-xs text-gray-400 mt-0.5">Archive feed jobs scoring under the threshold.</div></div>
             <button @click="maint('cleanup',{url:'/api/maint/cleanup',label:'Archived'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Cleanup</button>
           </div>

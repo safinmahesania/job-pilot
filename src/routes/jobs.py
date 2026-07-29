@@ -130,6 +130,35 @@ class StatusUpdate(BaseModel):
     status: str
 
 
+@router.post("/api/jobs/sweep-expired")
+def sweep_expired(conn=Depends(_db_dep)):
+    """Dismiss every live job whose application deadline has passed.
+
+    A posting that stopped accepting applications still sits in the feed looking open,
+    and reading it is time spent on a door already shut. This walks the live jobs, reads
+    each one's deadline — the stored field, or a date written into the description like
+    "apply by March 15" — and dismisses the ones now in the past. Only 'surfaced' jobs
+    are touched: something already saved or applied to is the user's business, not a
+    deadline's.
+    """
+    from src import expiry
+
+    rows = conn.execute(
+        "SELECT id, deadline, description FROM jobs WHERE status='surfaced'"
+    ).fetchall()
+
+    expired = [r[0] for r in rows
+               if expiry.has_expired({"deadline": r[1], "description": r[2]})]
+
+    if expired:
+        with conn:
+            conn.executemany(
+                "UPDATE jobs SET status='dismissed' WHERE id=?",
+                [(i,) for i in expired])
+
+    return {"checked": len(rows), "dismissed": len(expired)}
+
+
 @router.post("/api/jobs/{job_id}/status")
 def set_status(job_id: int, body: StatusUpdate, conn=Depends(_db_dep)):
     if body.status not in ALLOWED_STATUS:

@@ -74,12 +74,18 @@ def _numbered(items: list[str]) -> str:
     return "\n".join(f"  [{i}] {item}" for i, item in enumerate(items)) or "  (none)"
 
 
-def choices(profile: dict) -> str:
+def choices(profile: dict, preferred_projects: list[int] | None = None) -> str:
     """The profile, numbered, as the model sees it.
 
     This is the whole world. There is nothing else to choose from, and nothing to
     add — which is not a rule the model has to follow, but a fact about the shape of
     the answer it can give.
+
+    `preferred_projects` are the indices a deterministic relevance ranking already chose
+    for this job (the same ranking the cover letter uses). Passing them in lets the
+    resume feature the *same* projects as the letter for one application, instead of the
+    model picking a different few — so a reviewer reads one coherent story across both
+    documents rather than two overlapping ones.
     """
     blocks = []
 
@@ -110,11 +116,18 @@ def choices(profile: dict) -> str:
         blocks.append("\n".join(lines))
 
     projects = profile.get("projects") or []
-    lines = [f"MY PROJECTS — pick the {RESUME_PROJECTS_USED} most relevant to this "
-             f"job, best first."]
+    preferred = set(preferred_projects or [])
+    if preferred:
+        lines = [f"MY PROJECTS — feature these {len(preferred)}, marked ★ below. They "
+                 f"were ranked most relevant to this job, and the cover letter uses the "
+                 f"same ones. Keep to them unless one is plainly unrelated."]
+    else:
+        lines = [f"MY PROJECTS — pick the {RESUME_PROJECTS_USED} most relevant to this "
+                 f"job, best first."]
     for i, project in enumerate(projects):
         tech = ", ".join(str(t) for t in (project.get("tech") or []))
-        lines.append(f"  [{i}] {project.get('name', '')}"
+        star = "★ " if i in preferred else ""
+        lines.append(f"  [{i}] {star}{project.get('name', '')}"
                      f"{f' ({tech})' if tech else ''}")
         for j, bullet in enumerate(project.get("highlights") or []):
             lines.append(f"      ({j}) {bullet}")

@@ -83,16 +83,17 @@ class TestDeterministicProjectSelection:
         # JobPilot (Python/FastAPI/SQLite) overlaps the job most, so it leads.
         assert self.PROFILE["projects"][picked[0]]["name"] == "JobPilot"
 
-    def test_resume_and_cover_letter_would_agree_on_top_projects(self):
-        # Both call the same deterministic function, so the cover letter's top_n is a
-        # prefix of the resume's ranking — they feature the same projects.
+    def test_resume_and_cover_letter_agree_on_the_same_three_projects(self):
+        # Both call the same deterministic ranking with the same count, so they feature
+        # the identical set — one story across the resume and its letter, not two.
         from src import apply
         job = {"title": "Python Developer", "company": "X",
                "description": "Python, FastAPI, SQLite, React Native."}
         with patch.object(apply, "load_profile", return_value=self.PROFILE):
-            resume_picks = apply.select_relevant_projects(job, top_n=3)
-            cover_picks = apply.select_relevant_projects(job, top_n=2)
-        assert cover_picks == resume_picks[:2]
+            resume_picks = apply.select_relevant_projects(job)
+            cover_picks = apply.select_relevant_projects(job)
+        assert resume_picks == cover_picks
+        assert len(resume_picks) == min(3, len(self.PROFILE["projects"]))
 
 
 class TestFastModeSkipsRevise:
@@ -167,3 +168,81 @@ class TestCoverLetterNeverRefuses:
         result = self._run("Dear Hiring Manager,\n\nI build with Python daily. " * 6)
         assert result["text"]
         assert result["warnings"] == []
+
+
+class TestAlwaysThreeProjects:
+    """An application features three projects — always three, chosen by relevance, and
+    when nothing matches, simply the three most recent (the ranking falls back to profile
+    order, which is newest-first)."""
+
+    from unittest.mock import patch as _patch
+
+    PROFILE = {"projects": [
+        {"name": "Newest", "description": "flutter supabase app", "tech": ["Flutter"]},
+        {"name": "Second", "description": "python fastapi tool", "tech": ["Python"]},
+        {"name": "Third", "description": "react native app", "tech": ["React Native"]},
+        {"name": "Fourth", "description": "erlang concurrency", "tech": ["Erlang"]},
+        {"name": "Fifth", "description": "clojure graph", "tech": ["Clojure"]},
+    ]}
+
+    def test_three_are_selected_when_the_profile_has_enough(self):
+        from unittest.mock import patch
+        from src import apply
+        job = {"title": "Dev", "company": "X", "description": "Python FastAPI role."}
+        with patch.object(apply, "load_profile", return_value=self.PROFILE):
+            picked = apply.select_relevant_projects(job)
+        assert len(picked) == 3
+
+    def test_a_job_that_matches_nothing_still_returns_three(self):
+        """No keyword overlap at all — the count is held, and the three are the most
+        recent, because a tie keeps profile order (newest first)."""
+        from unittest.mock import patch
+        from src import apply
+        job = {"title": "Underwater Basket Weaver", "company": "X",
+               "description": "Weaving reeds beneath the waves. No software here."}
+        with patch.object(apply, "load_profile", return_value=self.PROFILE):
+            picked = apply.select_relevant_projects(job)
+        assert len(picked) == 3
+        assert picked == [0, 1, 2]          # the three newest, in order
+
+    def test_fewer_than_three_projects_does_not_crash(self):
+        from unittest.mock import patch
+        from src import apply
+        thin = {"projects": [{"name": "Only one", "description": "python",
+                              "tech": ["Python"]}]}
+        job = {"title": "Dev", "company": "X", "description": "Python role."}
+        with patch.object(apply, "load_profile", return_value=thin):
+            picked = apply.select_relevant_projects(job)
+        assert picked == [0]
+
+    def test_no_projects_returns_empty_not_an_error(self):
+        from unittest.mock import patch
+        from src import apply
+        job = {"title": "Dev", "company": "X", "description": "Python role."}
+        with patch.object(apply, "load_profile", return_value={"projects": []}):
+            assert apply.select_relevant_projects(job) == []
+
+
+class TestResumeHonoursThePreferredProjects:
+    """The resume is handed the same project indices the cover letter uses, and marks
+    them in the list the model sees, so both documents feature the same work."""
+
+    PROFILE = {"projects": [
+        {"name": "Alpha", "tech": ["Python"], "highlights": ["Built X"]},
+        {"name": "Beta", "tech": ["Flutter"], "highlights": ["Shipped Y"]},
+        {"name": "Gamma", "tech": ["Erlang"], "highlights": ["Scaled Z"]},
+    ]}
+
+    def test_preferred_projects_are_starred(self):
+        from src import resume_select
+        out = resume_select.choices(self.PROFILE, preferred_projects=[0, 2])
+        # The two chosen carry the marker; the un-chosen one does not.
+        assert "★ Alpha" in out
+        assert "★ Gamma" in out
+        assert "★ Beta" not in out
+
+    def test_without_a_preference_it_asks_the_model_to_choose(self):
+        from src import resume_select
+        out = resume_select.choices(self.PROFILE)
+        assert "★" not in out
+        assert "most relevant" in out

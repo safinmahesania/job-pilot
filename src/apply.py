@@ -780,6 +780,11 @@ def generate_resume(job: dict) -> dict:
 
     requirements = extract_requirements(job)
 
+    # The same projects the cover letter will feature, chosen by the same deterministic
+    # ranking, so a resume and its letter tell one story rather than two. Computed here
+    # and handed to the prompt as a recommendation.
+    preferred = select_relevant_projects(job, requirements=requirements)
+
     score, matched = resume_fit.overlap(requirements, profile, job)
     detail = f" ({', '.join(sorted(matched)[:6])})" if matched else ""
     print(f"  fit: {score:.0%} of what this job asks for is in your profile{detail}")
@@ -808,7 +813,7 @@ Full description:
 Everything below is ME. Everything above is the job. Nothing crosses over.
 ────────────────────────────────────────────────────────────────────────
 
-{resume_select.choices(profile)}
+{resume_select.choices(profile, preferred)}
 
 MY OWN SUMMARY, which yours must be built from:
 {profile.get('summary', '')}

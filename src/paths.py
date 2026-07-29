@@ -246,8 +246,14 @@ COVER_LETTER_WORDS = 280       # target length; the model aims for ~this
 
 # Only the most recent projects are considered when picking what to feature.
 # The profile lists projects newest-first, so this takes the top N.
-COVER_LETTER_PROJECT_POOL = 4   # how many recent projects are ranked
-COVER_LETTER_PROJECTS_USED = 2  # how many make it into the letter
+#
+# USED is three by choice: an application should show three projects — enough to
+# demonstrate range without padding. POOL is the field they're ranked from; a job that
+# matches nothing (no keyword overlap at all) leaves the ranking in profile order, so
+# the three that surface are simply the three most recent — which is the right fallback,
+# since recent work is the strongest work to lead with when relevance can't decide.
+COVER_LETTER_PROJECT_POOL = 6   # how many recent projects are ranked
+COVER_LETTER_PROJECTS_USED = 3  # how many make it into the resume and letter
 
 # Every letter states willingness to relocate for the role.
 COVER_LETTER_MENTION_RELOCATION = True

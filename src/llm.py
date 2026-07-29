@@ -192,6 +192,45 @@ def privacy_mode() -> str:
     return PRIVACY_MODE
 
 
+# ── Rate-limit cooldown ─────────────────────────────────────────────────────
+#
+# A hosted provider on a free tier has a per-minute request quota. In a batch — rescore
+# all, or a full run — that quota is spent in the first few jobs, and every job after it
+# gets a 429. Without memory, each of those still tries the provider first, fails, and
+# falls back: same result, but slower and with a screenful of identical warnings.
+#
+# So a provider that returns a 429 is "rested" for a short window. While resting it is
+# skipped and the chain goes straight to the next provider. The window is deliberately
+# short — a per-minute limit clears in under a minute — so a provider that was only
+# briefly saturated is tried again soon rather than sidelined for the whole batch.
+
+_RATE_LIMIT_COOLDOWN_S = 60.0
+_rested_until: dict[str, float] = {}
+
+
+def _is_rate_limit(exc) -> bool:
+    """Whether an exception is a 429. httpx raises HTTPStatusError with the code in the
+    message; matching the text keeps this independent of which client raised it."""
+    msg = str(exc).lower()
+    return "429" in msg or "too many requests" in msg or "rate limit" in msg
+
+
+def _rest(name: str):
+    import time
+    _rested_until[name] = time.time() + _RATE_LIMIT_COOLDOWN_S
+
+
+def _resting(name: str) -> bool:
+    import time
+    until = _rested_until.get(name)
+    if until is None:
+        return False
+    if time.time() >= until:
+        del _rested_until[name]           # cooldown over — eligible again
+        return False
+    return True
+
+
 def generate(system: str, user: str, personal: bool = False) -> tuple[str, str]:
     """Run the prompt through the provider chain.
 
@@ -238,6 +277,13 @@ def generate(system: str, user: str, personal: bool = False) -> tuple[str, str]:
         if not is_configured(name):
             errors.append(f"{name}: not configured")
             continue
+        if _resting(name):
+            # This provider handed back a 429 moments ago. A per-minute quota does not
+            # refill inside a batch, so trying it once per job just fails once per job —
+            # slower, and a screenful of identical "429, falling back" lines. Skip
+            # straight to the next provider until the cooldown lifts.
+            errors.append(f"{name}: resting after rate limit")
+            continue
         try:
             if name == "ollama":
                 text, tokens = _call_ollama(system, user)
@@ -247,6 +293,10 @@ def generate(system: str, user: str, personal: bool = False) -> tuple[str, str]:
                 record_usage(name, tokens)
                 return text, name
         except Exception as e:
+            if _is_rate_limit(e):
+                # Rest it, so the rest of the batch goes straight to the fallback rather
+                # than knocking on a door that is closed for the minute.
+                _rest(name)
             errors.append(f"{name}: {e}")
             continue
 

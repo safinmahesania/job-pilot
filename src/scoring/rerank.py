@@ -36,6 +36,16 @@ from src.paths import (
     SCORING_VIA_PROVIDER_CHAIN, MIN_DESCRIPTION_CHARS)
 
 # Live state, read by the UI to show what actually scored the last job.
+#: Set once when a batch first falls back to Ollama, so the message is printed once
+#: rather than once per job. reset_model_state() clears it, so each run starts fresh.
+_FALLBACK_ANNOUNCED = False
+
+
+def _mark_fallback_announced():
+    global _FALLBACK_ANNOUNCED
+    _FALLBACK_ANNOUNCED = True
+
+
 MODEL_STATE = {"active": PRIMARY, "fallback_active": False,
                "preferred": PRIMARY, "provider": "ollama"}
 
@@ -49,6 +59,8 @@ def set_preferred(model: str):
 
 def reset_model_state():
     """Called at the start of every run."""
+    global _FALLBACK_ANNOUNCED
+    _FALLBACK_ANNOUNCED = False
     MODEL_STATE["active"] = MODEL_STATE["preferred"]
     MODEL_STATE["fallback_active"] = False
 
@@ -231,8 +243,15 @@ def score_job(job: dict, profile: dict, calibration: str = "") -> ScoreResult | 
             result, provider = _call_chain(prompt)
             MODEL_STATE["provider"] = provider
         except Exception as e:
-            print(f"  chain scoring failed for '{job.get('title')}': "
-                  f"{str(e)[:80]} — falling back to local Ollama")
+            # Say this once per batch, not once per job. When a hosted provider's
+            # per-minute quota is spent, every remaining job falls back the same way —
+            # a hundred identical "429, falling back" lines is noise, and reads like a
+            # hundred failures when it is one, handled correctly. The first line tells
+            # you what happened; the rest are the same fact.
+            if not _FALLBACK_ANNOUNCED:
+                print(f"  hosted provider unavailable ({str(e)[:70]}) — "
+                      f"scoring the rest of this batch on local Ollama")
+                _mark_fallback_announced()
 
     if result is None:
         # The chain is off, or every provider in it failed. Ollama direct, with

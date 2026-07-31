@@ -1235,5 +1235,19 @@ function jobpilot() {
     cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); },
     modelShort(m) { return (m || '').replace('qwen2.5:',''); },
     timeAgo(d) { try { const days = Math.floor((Date.now() - new Date(d)) / 8.64e7); return days <= 0 ? 'today' : days + 'd ago'; } catch { return ''; } },
+
+    // The day a job was fetched, as "Mon, 28 Jul" — the weekday included because "which
+    // day did these come in" is often what you actually want to know, and a bare date
+    // makes you count. Falls back to empty on anything unparseable rather than showing
+    // "Invalid Date".
+    fetchedDay(d) {
+      if (!d) return '';
+      try {
+        const dt = new Date(d.replace(' ', 'T'));      // SQLite's "YYYY-MM-DD HH:MM:SS"
+        if (isNaN(dt)) return '';
+        return dt.toLocaleDateString('en-CA',
+          { weekday: 'short', day: 'numeric', month: 'short' });
+      } catch { return ''; }
+    },
   };
 }

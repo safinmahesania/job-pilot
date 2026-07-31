@@ -226,6 +226,7 @@
                 <span x-text="job.company"></span> · <span x-text="job.location"></span><template x-if="job.salary_max"><span> · <span class="text-brand font-medium" x-text="salaryLabel(job)"></span></span></template>
                 <span class="text-gray-400" x-show="job.job_type && job.job_type!=='Unknown'"> · <span x-text="job.job_type"></span></span>
                 <span class="text-amber-700" x-show="job.deadline"> · <i class="ti ti-calendar text-xs"></i> <span x-text="job.deadline"></span></span>
+                <span class="text-gray-400" x-show="fetchedDay(job.fetched_at)"> · <i class="ti ti-download text-xs"></i> <span x-text="fetchedDay(job.fetched_at)"></span></span>
               </div>
               <div class="text-[13px] rounded-md px-2.5 py-2 my-2.5 leading-relaxed flex gap-1.5" style="background:#F7EDD8; color:#7A4E0C;" x-show="job.rationale">
                 <i class="ti ti-bulb mt-0.5 shrink-0"></i><span x-text="job.rationale"></span>

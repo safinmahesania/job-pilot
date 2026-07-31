@@ -60,6 +60,7 @@ const RULES = [
   ["school",              /\b(school|university|college|institution)\b/i],
   ["degree",              /\bdegree\b/i],
   ["field_of_study",      /\b(field of study|major|discipline)\b/i],
+  ["skills",              /\b(skills?|competenc(?:y|ies)|areas? of expertise)\b/i],
   ["graduation_year",     /\b(graduation|grad)[\s_-]*(year|date)\b/i],
   ["years_of_experience", /\byears?[\s_-]*(of)?[\s_-]*experience\b/i],
   ["salary_expectation",  /\b(salary|compensation)[\s_-]*(expectation|requirement)?\b/i],
@@ -308,6 +309,80 @@ function collectFields() {
   });
 }
 
+
+// ── Skills typeahead ────────────────────────────────────────────────────────
+//
+// Workday-style skill fields are a text input wired to a dropdown: you type, a list
+// appears, you click a match, and it becomes a removable tag. The value never lives in
+// the input's own .value — it lives in the tags — so the ordinary "set value, dispatch
+// change" does nothing useful, and pasting the comma-joined list makes one tag with
+// every skill mashed together.
+//
+// This types each skill, waits for the dropdown, and picks the option that matches. It
+// is best-effort: if the dropdown doesn't appear or has no match, that skill is skipped
+// rather than forced, because a wrong tag is worse than a missing one on a form a human
+// will review.
+
+function _looksLikeTypeahead(el) {
+  // A text input that is also a combobox, or sits inside one. Plain text inputs and
+  // real <select>s are handled elsewhere; this is only the type-and-pick control.
+  if (!el || el.tagName !== "INPUT") return false;
+  const type = (el.type || "text").toLowerCase();
+  if (type !== "text" && type !== "search") return false;
+  const role = (el.getAttribute("role") || "").toLowerCase();
+  const owns = el.getAttribute("aria-autocomplete") || el.getAttribute("aria-controls");
+  const inCombo = el.closest('[role="combobox"], [data-automation-id*="multiSelect" i], [data-automation-id*="skill" i]');
+  return role === "combobox" || !!owns || !!inCombo;
+}
+
+function _sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+function _typeInto(el, text) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+  if (setter) setter.call(el, text); else el.value = text;
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: text.slice(-1) }));
+}
+
+function _openOptions() {
+  // The dropdown options, wherever the framework renders them — usually a listbox
+  // appended to the body rather than a sibling of the input.
+  return Array.from(document.querySelectorAll(
+    '[role="option"], [role="listbox"] li, [data-automation-id*="promptOption" i]'
+  )).filter((o) => o.offsetParent !== null && o.textContent.trim());
+}
+
+async function _fillSkillsTypeahead(el, skills) {
+  let added = 0;
+  for (const skill of skills.slice(0, 20)) {         // a sane cap for one field
+    try {
+      el.focus();
+      _typeInto(el, skill);
+      // Give the dropdown time to query and render.
+      let opts = [];
+      for (let waited = 0; waited < 1200 && !opts.length; waited += 150) {
+        await _sleep(150);
+        opts = _openOptions();
+      }
+      if (!opts.length) continue;                    // no dropdown — skip this one
+
+      const want = skill.toLowerCase();
+      const match =
+        opts.find((o) => o.textContent.trim().toLowerCase() === want) ||
+        opts.find((o) => o.textContent.trim().toLowerCase().startsWith(want)) ||
+        opts.find((o) => o.textContent.trim().toLowerCase().includes(want));
+      if (!match) { _typeInto(el, ""); continue; }   // no real match — don't force it
+
+      match.click();
+      added++;
+      await _sleep(120);
+      _typeInto(el, "");                             // clear for the next skill
+    } catch { /* one skill failing must not stop the rest */ }
+  }
+  return added;
+}
+
+
 async function fillPage({ silent = false } = {}) {
   if (filling) return { filled: 0, skipped: 0 };
   filling = true;
@@ -343,6 +418,18 @@ async function fillPage({ silent = false } = {}) {
       if (mine && applyValue(el, mine)) { filled++; continue; }
 
       const key = matchKey(text);
+
+      // A skills field is often a typeahead: you type a skill, pick it from a dropdown,
+      // and it becomes a tag; then the next one. Pasting the whole comma-joined list
+      // into it enters one nonsense "skill" called "Python, SQL, React, ...". So when
+      // the label looks like skills and the control is a typeahead, add them one at a
+      // time instead. Detected by label rather than by key because this needs the list
+      // form of the answer, which lives in repeatedData.
+      if (key === "skills" && _looksLikeTypeahead(el) && repeatedData?.skills?.length) {
+        const added = await _fillSkillsTypeahead(el, repeatedData.skills);
+        if (added) { filled++; continue; }
+      }
+
       if (key) {
         // A repeatable key answers by position first: the second Employer box gets
         // the second job, not a second copy of the first.

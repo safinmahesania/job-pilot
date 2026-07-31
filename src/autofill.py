@@ -143,7 +143,22 @@ def repeated() -> dict:
         if row["school"] or row["degree"]:
             education.append(row)
 
-    return {"experience": experience, "education": education}
+    # Skills as a list, not the comma-joined string in answers(). Workday and similar
+    # forms have a typeahead where each skill is typed, chosen from a dropdown, and
+    # becomes its own tag — pasting "Python, SQL, React" into one of those enters a
+    # single nonsense skill called "Python, SQL, React". The list lets the extension add
+    # them one at a time. Order preserved (expert tier first), duplicates dropped.
+    skills = p.get("skills", {}) or {}
+    skill_list: list[str] = []
+    seen = set()
+    for tier in ("expert", "proficient", "familiar", "working"):
+        for s in (skills.get(tier) or []):
+            s = str(s).strip()
+            if s and s.lower() not in seen:
+                seen.add(s.lower())
+                skill_list.append(s)
+
+    return {"experience": experience, "education": education, "skills": skill_list}
 
 
 def custom_answers() -> list[dict]:

@@ -62,7 +62,7 @@ class TestEducationIsAList:
 class TestItSurvivesAThinProfile:
     def test_no_history_at_all_is_empty_lists_not_an_error(self):
         out = _repeated({"identity": {"name": "X"}})
-        assert out == {"experience": [], "education": []}
+        assert out == {"experience": [], "education": [], "skills": []}
 
     def test_malformed_entries_are_skipped(self):
         out = _repeated({"experience": ["not a dict", {"company": "Real Co"}]})
@@ -81,3 +81,31 @@ class TestTheEndpointCarriesIt:
         with patch.object(autofill, "load_profile", return_value=PROFILE):
             flat = autofill.answers()
         assert flat["current_company"] == "Second Co"
+
+
+class TestSkillsAsAList:
+    """Skills also come as a list, for typeahead fields where each is added on its own.
+    Pasting the comma-joined string into one of those enters a single mangled skill."""
+
+    def test_skills_are_returned_as_a_list(self):
+        profile = {"skills": {"expert": ["Python", "SQL"], "proficient": ["React"]}}
+        with patch.object(autofill, "load_profile", return_value=profile):
+            out = autofill.repeated()
+        assert out["skills"] == ["Python", "SQL", "React"]
+
+    def test_tiers_are_ordered_expert_first(self):
+        profile = {"skills": {"familiar": ["Go"], "expert": ["Python"]}}
+        with patch.object(autofill, "load_profile", return_value=profile):
+            out = autofill.repeated()
+        assert out["skills"][0] == "Python"
+
+    def test_duplicates_across_tiers_are_dropped(self):
+        profile = {"skills": {"expert": ["Python"], "proficient": ["python", "SQL"]}}
+        with patch.object(autofill, "load_profile", return_value=profile):
+            out = autofill.repeated()
+        assert out["skills"].count("Python") == 1
+        assert "SQL" in out["skills"]
+
+    def test_no_skills_is_an_empty_list(self):
+        with patch.object(autofill, "load_profile", return_value={}):
+            assert autofill.repeated()["skills"] == []

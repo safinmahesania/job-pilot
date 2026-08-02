@@ -20,6 +20,12 @@
  *   already filled are never overwritten, so re-running is safe.
  */
 
+// A one-line banner in the console, so which build is actually running can be confirmed
+// at a glance — the commonest cause of "the fix didn't work" is an extension that was
+// edited on disk but never reloaded, still running the old code. If this line doesn't
+// show the expected version after a fill, the reload didn't take.
+console.log("[JobPilot] content script v1.9.1 loaded");
+
 // Injected on demand by the service worker when you click the extension — never
 // on page load, and never on a page you didn't point it at. Guard against being
 // injected twice into the same document.
@@ -388,6 +394,113 @@ async function _fillSkillsTypeahead(el, skills) {
 }
 
 
+// ── Workday split date inputs ───────────────────────────────────────────────
+//
+// Workday's dates are two spinbuttons — a Month and a Year — and it renders one such
+// pair for the start and another for the end of each experience. Worse, every one of
+// them shares the same id ("dateSectionMonth-input"), so they can't be told apart by id
+// at all; only their order on the page and their aria-label ("Month" vs "Year")
+// distinguish them. The generic key logic can't see any of that, so left to the AI pass
+// they get filled with nonsense (a month in the year box, a "1" for a year).
+//
+// So they are handled on their own: walk the experience blocks in document order, and
+// for each block fill its two date pairs (start, then end) from that experience's dates.
+// A date is "YYYY-MM"; the year and month go to their labelled inputs. An experience
+// with no end date leaves the end pair blank.
+
+function _experienceBlocks() {
+  // The wrapper for each experience, in the order they appear. Workday numbers the ids
+  // (workExperience-143--jobTitle), so group by that number.
+  const seen = new Map();
+  document.querySelectorAll('[data-automation-id^="workExperience-"]').forEach((el) => {
+    const m = (el.getAttribute("data-automation-id") || "").match(/workExperience-(\d+)--/);
+    if (!m) return;
+    if (!seen.has(m[1])) {
+      seen.set(m[1], el.closest('[data-automation-id*="workExperience" i]') || el.parentElement);
+    }
+  });
+  return [...seen.values()];
+}
+
+function _setSpin(input, value) {
+  // Spinbuttons validate keystrokes, so set through the native setter and fire the
+  // events Workday listens for, same as any other controlled input.
+  const setter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype, "value")?.set;
+  if (setter) setter.call(input, String(value)); else input.value = String(value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  input.dispatchEvent(new Event("blur", { bubbles: true }));
+}
+
+function _fillDatePair(container, ym) {
+  // ym is "YYYY-MM". Find the Month and Year spinbuttons inside this container and set
+  // them. Returns true if it put something in.
+  const m = /^(\d{4})-(\d{1,2})/.exec(ym || "");
+  if (!m) return false;
+  const year = m[1];
+  const month = String(parseInt(m[2], 10));
+
+  const spins = [...container.querySelectorAll(
+    'input[aria-label="Month"], input[aria-label="Year"], input[data-automation-id*="date" i]')];
+  const monthEl = spins.find((s) =>
+    /month/i.test(s.getAttribute("aria-label") || s.getAttribute("data-automation-id") || ""));
+  const yearEl = spins.find((s) =>
+    /year/i.test(s.getAttribute("aria-label") || s.getAttribute("data-automation-id") || ""));
+  let did = false;
+  if (monthEl) { _setSpin(monthEl, month); did = true; }
+  if (yearEl) { _setSpin(yearEl, year); did = true; }
+  return did;
+}
+
+function fillWorkdayDates() {
+  const experience = repeatedData?.experience || [];
+  if (!experience.length) return 0;
+
+  const blocks = _experienceBlocks();
+  let filled = 0;
+  blocks.forEach((block, i) => {
+    const exp = experience[i];
+    if (!exp) return;
+
+    // Each block has a start section and (unless the job is current) an end section.
+    // Match them by a start/end or from/to wrapper when Workday labels them; otherwise
+    // fall back to the two date sections in order.
+    const groups = [];
+    const startWrap = block.querySelector(
+      '[data-automation-id*="startDate" i], [data-automation-id*="from" i]');
+    const endWrap = block.querySelector(
+      '[data-automation-id*="endDate" i], [data-automation-id*="to" i]');
+    if (startWrap) groups.push(["start", startWrap]);
+    if (endWrap) groups.push(["end", endWrap]);
+
+    if (!groups.length) {
+      const sections = [...block.querySelectorAll('[data-automation-id*="dateSection" i]')]
+        // collapse to distinct date wrappers, not each spinbutton
+        .map((s) => s.closest('[data-automation-id*="formField" i], [data-automation-id*="date" i]') || s)
+        .filter((v, idx, arr) => arr.indexOf(v) === idx);
+      if (sections[0]) groups.push(["start", sections[0]]);
+      if (sections[1]) groups.push(["end", sections[1]]);
+    }
+
+    for (const [which, wrap] of groups) {
+      const val = which === "start" ? exp.start : exp.end;
+      if (val && _fillDatePair(wrap, val)) filled++;
+    }
+
+    // "I currently work here" defaults to ticked in Workday, but a job with an end date
+    // is not current — an unchecked-by-default form would leave every past job claiming
+    // to be present employment. Untick it where we have an end date; leave it alone
+    // (the user decides) when the job genuinely has none.
+    if (exp.end) {
+      const current = block.querySelector('input[type="checkbox"][data-automation-id*="currentlyWorkHere" i], input[type="checkbox"][id*="currentlyWorkHere" i]');
+      if (current && current.checked) { current.click(); filled++; }
+    }
+  });
+  return filled;
+}
+
+
 async function fillPage({ silent = false } = {}) {
   if (filling) return { filled: 0, skipped: 0 };
   filling = true;
@@ -414,8 +527,28 @@ async function fillPage({ silent = false } = {}) {
     let filled = 0;
     const unresolved = [];
 
+    // Workday's split date spinbuttons are handled on their own, before the generic
+    // loop, because they can't be told apart by id and the AI pass fills them with
+    // nonsense. Wrapped in its own try/catch: a date-fill that throws must not take the
+    // rest of the form down with it — better a filled form with blank dates than a page
+    // where nothing filled at all.
+    try {
+      filled += fillWorkdayDates();
+    } catch (e) {
+      console.warn("[JobPilot] date fill failed, continuing:", e);
+    }
+
     // Pass 1 — your own custom rules first, then the built-in heuristics.
     for (const el of fields) {
+      // A date spinbutton was just handled (or intentionally left blank) above — never
+      // let the generic logic or the AI pass touch it, or a month lands in the year box.
+      const autoId = el.getAttribute("data-automation-id") || "";
+      const aria = el.getAttribute("aria-label") || "";
+      if (/dateSection/i.test(autoId) || (el.getAttribute("role") === "spinbutton"
+          && /month|year|day/i.test(aria))) {
+        continue;
+      }
+
       const text = labelFor(el);
 
       // Your explicit answers win over everything else.

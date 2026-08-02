@@ -50,7 +50,9 @@ _HEADERS = {
 }
 
 # jobs.lever.co/{company}/{id}  ->  the two path parts identify the posting.
-_LEVER = re.compile(r"jobs\.lever\.co/([^/]+)/([0-9a-f-]+)", re.I)
+# jobs.lever.co/{company}/{id}  ->  the two path parts identify the posting. The id is a
+# UUID on most postings but not all, so match any non-slash run rather than hex only.
+_LEVER = re.compile(r"jobs\.lever\.co/([^/?#]+)/([^/?#]+)", re.I)
 # boards.greenhouse.io/{token}/jobs/{id}  or  job-boards.greenhouse.io/...
 _GREENHOUSE = re.compile(
     r"(?:job-)?boards\.greenhouse\.io/(?:embed/job_app\?for=)?([^/?]+)"
@@ -138,15 +140,37 @@ def _from_greenhouse(url: str, timeout: float) -> str | None:
 
 
 def _from_adzuna(url: str, timeout: float) -> str | None:
-    """Adzuna's own detail page — HTML, so take the largest block of readable text.
+    """Adzuna's link, followed to wherever it lands.
 
-    Job pages wrap the description in varied markup; rather than guess a selector, strip
-    to text and trust that the description is the largest run of prose on the page, which
-    on a posting it is.
+    Adzuna's `redirect_url` is a /land/ad/ hop through its own domain to the real
+    posting. Following it can land three useful places: an Adzuna detail page, or —
+    because employers post through them — a Lever or Greenhouse page. So follow the
+    redirect, look at where it actually ended up, and if that final URL is a Lever or
+    Greenhouse posting, read it through their clean JSON API instead of scraping the
+    rendered page. Otherwise take the page's text.
+
+    Anything that lands on Indeed, LinkedIn or a JS-rendered careers page yields little —
+    a plain fetch sees an empty shell — and the short result is rejected by the caller,
+    leaving the job unscored rather than scored on a fragment.
     """
     r = _get(url, timeout)
     if not r:
         return None
+
+    # Where did the redirect actually end up? Re-route to a structured API when it landed
+    # somewhere we can read cleanly.
+    final = str(r.url)
+    if _LEVER.search(final):
+        text = _from_lever(final, timeout)
+        if text:
+            return text
+    if _GREENHOUSE.search(final):
+        text = _from_greenhouse(final, timeout)
+        if text:
+            return text
+
+    # Otherwise, the text of the page we landed on (an Adzuna detail page, or a simple
+    # employer page). Strip to readable lines and keep them.
     text = strip_html(r.text) or ""
     lines = [ln.strip() for ln in text.splitlines()]
     return "\n".join(ln for ln in lines if ln).strip() or None

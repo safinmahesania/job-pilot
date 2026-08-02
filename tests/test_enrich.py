@@ -23,8 +23,9 @@ def _job(url, desc="short snippet", source="adzuna"):
 
 
 class _Resp:
-    def __init__(self, *, text="", json_data=None, status=200):
+    def __init__(self, *, text="", json_data=None, status=200, url="https://www.adzuna.ca/details/1"):
         self.text = text
+        self.url = url
         self._json = json_data
         self._status = status
 
@@ -147,3 +148,43 @@ class TestWhenItCannotEnrich:
         with patch("httpx.get") as get:
             assert enrich.enrich_if_needed(job) is False
         get.assert_not_called()
+
+
+class TestAdzunaRedirectRouting:
+    """Adzuna's /land/ad/ link is followed, and if it lands on Lever or Greenhouse the
+    clean JSON API is used instead of scraping the page it redirected to."""
+
+    def test_a_redirect_landing_on_lever_uses_the_lever_api(self):
+        job = _job("https://www.adzuna.ca/land/ad/999")
+        calls = []
+
+        def _fake(url, **k):
+            calls.append(url)
+            if "adzuna" in url:
+                # The redirect ended up on a Lever posting.
+                return _Resp(text="<html>landing</html>",
+                             url="https://jobs.lever.co/acme/abc-123")
+            if "api.lever.co" in url:
+                return _Resp(json_data={"descriptionPlain": FULL, "lists": []})
+            return _Resp(text="")
+
+        with patch("httpx.get", side_effect=_fake):
+            changed = enrich.enrich_if_needed(job)
+        assert changed is True
+        assert any("api.lever.co" in u for u in calls)
+        assert "billing team" in job["description"]
+
+    def test_a_redirect_to_a_plain_page_uses_its_text(self):
+        job = _job("https://www.adzuna.ca/land/ad/999")
+        html = f"<html><body><div>{FULL}</div></body></html>"
+        with patch("httpx.get", return_value=_Resp(text=html,
+                   url="https://careers.acme.com/job/1")):
+            changed = enrich.enrich_if_needed(job)
+        assert changed is True
+        assert "billing team" in job["description"]
+
+
+class TestLeverIdShapes:
+    def test_a_non_hex_lever_id_is_still_enrichable(self):
+        job = _job("https://jobs.lever.co/stripe/some-text-id-123")
+        assert enrich.is_enrichable(job) is True

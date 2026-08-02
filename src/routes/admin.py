@@ -26,6 +26,52 @@ class ScoreRequest(BaseModel):
     job_ids: list[int]
 
 
+@router.post("/api/jobs/enrich-existing")
+def enrich_existing(conn=Depends(_db_dep)):
+    """Fetch full descriptions for Adzuna jobs already in the feed that only have a snippet.
+
+    Enrichment runs during a fetch, so jobs saved before it existed — or before their
+    link pointed somewhere fetchable — still carry Adzuna's truncated snippet. This walks
+    the live Adzuna jobs whose description is short, fetches the full posting for the ones
+    whose link is fetchable (Adzuna / Lever / Greenhouse), saves it, and re-scores them so
+    the new score reflects the whole posting rather than the teaser.
+
+    It only touches short Adzuna jobs, so running it twice is cheap — the second run finds
+    nothing left to do.
+    """
+    from src import enrich
+    from src.paths import MIN_DESCRIPTION_CHARS
+    from src.routes.jobs import _rescore_one
+    from src.scoring.rerank import build_calibration
+
+    scoring_on = _get_setting(conn, "scoring_enabled", "1") == "1"
+
+    rows = conn.execute(
+        "SELECT id, source, source_url, apply_url, description "
+        "FROM jobs WHERE source='adzuna' AND status='surfaced' "
+        "AND (description IS NULL OR length(description) < 400)"
+    ).fetchall()
+
+    calibration = build_calibration() if scoring_on else ""
+    enriched = 0
+    rescored = 0
+    for row in rows[:150]:                  # cap one request; run again for the rest
+        job = {"source": row[1], "source_url": row[2], "apply_url": row[3],
+               "description": row[4]}
+        if not enrich.is_enrichable(job):
+            continue
+        full = enrich.full_description(job)
+        if not full or len(full) < MIN_DESCRIPTION_CHARS:
+            continue
+        with conn:
+            conn.execute("UPDATE jobs SET description=? WHERE id=?", (full, row[0]))
+        enriched += 1
+        if scoring_on and _rescore_one(conn, row[0], calibration) is not None:
+            rescored += 1
+
+    return {"checked": len(rows), "enriched": enriched, "rescored": rescored}
+
+
 @router.post("/api/jobs/score")
 def score_jobs(body: ScoreRequest, conn=Depends(_db_dep)):
     """Score specific jobs on demand — for unscored imports, or to re-run a few.

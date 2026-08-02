@@ -556,6 +556,11 @@ function applyValue(el, value) {
 // resume slot is worse than an empty slot you fill yourself.
 
 const RESUME_PATTERN = /\b(resume|résumé|cv|curriculum)\b/i;
+// Workday's upload input carries no "resume" text — its label is "Drop files here /
+// Select files" and its automation-id is "attachments-FileUpload" / "file-upload-input-
+// ref". On an application form a lone "attachments" upload is the resume slot, so these
+// count too, which lets it be identified without relying on the single-input fallback.
+const ATTACHMENT_PATTERN = /\b(attachment|file[\s_-]*upload|upload[\s_-]*file|drop files|select files)\b/i;
 const COVER_PATTERN = /\b(cover[\s_-]*letter|covering[\s_-]*letter|motivation)\b/i;
 
 /** Turn the base64 the service worker sent back into a File. */
@@ -566,14 +571,30 @@ function toFile({ name, base64, type }) {
   return new File([bytes], name, { type });
 }
 
-/** Put a File into an <input type="file"> the way the page will notice. */
+/** Put a File into an <input type="file"> the way the page will notice.
+ *
+ * A hidden, framework-controlled input (Workday, and most modern ATSes) does not react
+ * to `input.files = ...` alone. React tracks the input through a value setter it patched
+ * onto the element, and it only re-reads `files` when a `change` bubbles up through its
+ * own listener — which is attached at the document, so the event has to bubble, and the
+ * element has to look like it was really interacted with. So: set files via the native
+ * property, focus the element, and fire the full sequence a real pick produces. */
 function attachTo(input, file) {
   const dt = new DataTransfer();
   dt.items.add(file);
-  input.files = dt.files;
+
+  // Use the native setter so a framework that wrapped `files`/`value` still sees it.
+  const setter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype, "files")?.set;
+  if (setter) setter.call(input, dt.files);
+  else input.files = dt.files;
+
+  try { input.focus(); } catch { /* hidden inputs may refuse focus; harmless */ }
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
-  return true;
+  // Some flows only commit the file when focus leaves the control.
+  input.dispatchEvent(new Event("blur", { bubbles: true }));
+  return input.files?.length === 1;
 }
 
 /** Every file input on the page, tagged with what it seems to want. */
@@ -581,10 +602,17 @@ function fileInputs() {
   return Array.from(document.querySelectorAll('input[type="file"]'))
     .filter((el) => !el.disabled && !el.files?.length)   // don't replace an upload
     .map((el) => {
-      const text = labelFor(el) + " " + (el.getAttribute("accept") || "");
+      // The automation-id is part of the label here: Workday's file input is hidden
+      // (display:none, styled button in front) and its visible text says only "Select
+      // files", so the id "attachments-FileUpload" is often the only thing that names
+      // what the control is for.
+      const ids = [el.getAttribute("data-automation-id") || "",
+                   el.closest("[data-automation-id]")?.getAttribute("data-automation-id") || ""];
+      const text = labelFor(el) + " " + (el.getAttribute("accept") || "") + " " + ids.join(" ");
       let kind = null;
       if (COVER_PATTERN.test(text)) kind = "cover";        // check cover first:
       else if (RESUME_PATTERN.test(text)) kind = "resume"; // "resume or cover letter"
+      else if (ATTACHMENT_PATTERN.test(text)) kind = "resume"; // a lone "attachments" box
       return { el, kind, text };
     });
 }

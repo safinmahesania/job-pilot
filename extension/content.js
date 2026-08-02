@@ -55,9 +55,11 @@ const RULES = [
   ["city",                /\b(city|town|locality)\b/i],
   ["province",            /\b(province|state|region)\b/i],
   ["country",             /\bcountry\b/i],
-  ["current_company",     /\b(current|present)?[\s_-]*(employer|company)\b/i],
-  ["current_title",       /\b(current)?[\s_-]*(job title|position|role)\b/i],
-  ["school",              /\b(school|university|college|institution)\b/i],
+  ["current_company",     /\b(current|present)?[\s_-]*(employer|company)(\s*name)?\b/i],
+  ["job_description",     /\b(role|job)\s*description\b|\bresponsibilities\b/i],
+  ["current_title",       /\b(current)?[\s_-]*(job\s*title|position|role)\b/i],
+  ["job_location",        /\bwork\s*experience[\s\S]{0,20}\blocation\b|\bemployment[\s\S]{0,20}\blocation\b/i],
+  ["school",              /\b(school|university|college|institution)(\s*name)?\b/i],
   ["degree",              /\bdegree\b/i],
   ["field_of_study",      /\b(field of study|major|discipline)\b/i],
   ["skills",              /\b(skills?|competenc(?:y|ies)|areas? of expertise)\b/i],
@@ -415,7 +417,7 @@ async function fillPage({ silent = false } = {}) {
 
       // Your explicit answers win over everything else.
       const mine = matchCustom(text);
-      if (mine && applyValue(el, mine)) { filled++; continue; }
+      if (mine && await applyValue(el, mine)) { filled++; continue; }
 
       const key = matchKey(text);
 
@@ -442,7 +444,7 @@ async function fillPage({ silent = false } = {}) {
           if (!VOLUNTARY_KEYS.has(key)) unresolved.push({ el, text });
           continue;
         }
-        if (applyValue(el, value)) { filled++; continue; }
+        if (await applyValue(el, value)) { filled++; continue; }
       }
 
       if (!VOLUNTARY_KEYS.has(key)) unresolved.push({ el, text });
@@ -464,7 +466,7 @@ async function fillPage({ silent = false } = {}) {
       for (const item of unresolved) {
         const cached = aiCache.get(item.cacheKey);
         if (cached !== undefined) {
-          if (cached && applyValue(item.el, cached)) filled++;
+          if (cached && await applyValue(item.el, cached)) filled++;
         } else {
           pending.push(item);
         }
@@ -499,11 +501,12 @@ async function fillPage({ silent = false } = {}) {
 
         if (res?.ok) {
           const mapped = res.data.answers || {};
-          pending.forEach((item, i) => {
+          for (let i = 0; i < pending.length; i++) {
+            const item = pending[i];
             const answer = mapped[`f${i}`] || "";
             aiCache.set(item.cacheKey, answer);   // remember, even if blank
-            if (answer && applyValue(item.el, answer)) filled++;
-          });
+            if (answer && await applyValue(item.el, answer)) filled++;
+          }
         } else if (res && res.reason === "auth") {
           if (!silent) toast("JobPilot needs its password — set it in the extension popup", "error");
         }
@@ -527,7 +530,7 @@ async function fillPage({ silent = false } = {}) {
 }
 
 /** Route a value to the right filler for the element type. */
-function applyValue(el, value) {
+async function applyValue(el, value) {
   try {
     if (el.tagName === "SELECT") return fillSelect(el, value);
     if (el.type === "radio") return fillRadio(el, value);
@@ -536,11 +539,47 @@ function applyValue(el, value) {
       if (yes !== el.checked) el.click();
       return yes;
     }
+    // Workday renders its dropdowns (Degree, Country, Province, Phone Type) as a
+    // <button>, not a <select>: clicking it opens a listbox appended elsewhere in the
+    // DOM, and you pick an option from there. A plain setValue does nothing to those, so
+    // they need the open-and-choose dance.
+    if (el.tagName === "BUTTON" || el.getAttribute("aria-haspopup")) {
+      return await _fillButtonDropdown(el, value);
+    }
     setValue(el, value);
     return true;
   } catch {
     return false;
   }
+}
+
+/** Open a Workday button-dropdown and click the option that matches `value`. */
+async function _fillButtonDropdown(button, value) {
+  const want = String(value).trim().toLowerCase();
+  if (!want) return false;
+
+  button.click();                                    // open the listbox
+  let opts = [];
+  for (let waited = 0; waited < 1500 && !opts.length; waited += 150) {
+    await new Promise((r) => setTimeout(r, 150));
+    opts = Array.from(document.querySelectorAll(
+      '[role="option"], [role="listbox"] li, [data-automation-id*="promptOption" i]'
+    )).filter((o) => o.offsetParent !== null && o.textContent.trim());
+  }
+  if (!opts.length) return false;
+
+  const match =
+    opts.find((o) => o.textContent.trim().toLowerCase() === want) ||
+    opts.find((o) => o.textContent.trim().toLowerCase().includes(want)) ||
+    opts.find((o) => want.includes(o.textContent.trim().toLowerCase()) && o.textContent.trim());
+  if (!match) {
+    // Nothing fits — close the menu (Escape) and leave it for the human, rather than
+    // pick a wrong degree.
+    button.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }));
+    return false;
+  }
+  match.click();
+  return true;
 }
 
 

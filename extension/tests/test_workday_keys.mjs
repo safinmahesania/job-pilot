@@ -46,3 +46,33 @@ expect("skills--skills", "skills");
 
 if (failed) { console.log(`\n  ${failed} FAILED`); process.exit(1); }
 console.log("\n  ALL PASS");
+
+// ── Name fields must not swallow "companyName" / "schoolName" ──────────────────
+// A bare "name" match was dropping the applicant's legal name into the employer and
+// school boxes. full_name now needs a qualifier (full/legal/preferred/your/display).
+const NAME_RULES = [
+  ["first_name",  /\b(first|given)[\s_-]*name\b|^fname$/i],
+  ["last_name",   /\b(last|family|sur)[\s_-]*name\b|^lname$/i],
+  ["full_name",   /\b(full|legal|preferred|your|display)[\s_-]*name\b|\blegal\s*name\b/i],
+  ["current_company", /\b(current|present)?[\s_-]*(employer|company)(\s*name)?\b/i],
+  ["school",      /\b(school|university|college|institution)(\s*name)?\b/i],
+];
+function nameKey(text) {
+  for (const [k, re] of NAME_RULES) if (re.test(text)) return k;
+  return null;
+}
+let nameFailed = 0;
+function expectName(id, want) {
+  const got = nameKey(labelFromId(id));
+  const ok = got === want;
+  if (!ok) nameFailed++;
+  console.log(`  ${ok ? "ok  " : "FAIL"} ${id.padEnd(36)} -> ${got} ${ok ? "" : "(wanted " + want + ")"}`);
+}
+console.log("\n  name-field disambiguation:");
+expectName("name--legalName--firstName", "first_name");
+expectName("name--legalName--lastName", "last_name");
+expectName("workExperience-53--companyName", "current_company");  // NOT full_name
+expectName("education-92--schoolName", "school");                 // NOT full_name
+
+if (nameFailed) { console.log(`\n  ${nameFailed} NAME FAILED`); process.exit(1); }
+console.log("\n  NAME ALL PASS");

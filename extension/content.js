@@ -44,7 +44,10 @@ const SKIP_TYPES = new Set([
 const RULES = [
   ["first_name",          /\b(first|given)[\s_-]*name\b|^fname$/i],
   ["last_name",           /\b(last|family|sur)[\s_-]*name\b|^lname$/i],
-  ["full_name",           /\b(full|legal|your)?[\s_-]*name\b/i],
+  // Must be "full/legal/preferred/your name" — NOT a bare "name". Workday's fields are
+  // "companyName", "schoolName", "fileName"; a lone "name" match was dropping the
+  // applicant's legal name into the employer and school boxes.
+  ["full_name",           /\b(full|legal|preferred|your|display)[\s_-]*name\b|\blegal\s*name\b/i],
   ["email",               /\be-?mail\b/i],
   ["phone",               /\b(phone|mobile|telephone|cell)\b/i],
   ["linkedin",            /\blinked-?in\b/i],
@@ -447,9 +450,14 @@ async function fillPage({ silent = false } = {}) {
         if (await applyValue(el, value)) { filled++; continue; }
       }
 
+      // Checkboxes and radios the heuristics didn't claim are left for the human. The
+      // AI pass fills free-text; letting it decide a yes/no it doesn't understand is how
+      // "currently work here" ended up ticked on every past job at once. A wrong tick on
+      // an application is worse than an empty one the person sets themselves.
+      if (el.type === "checkbox" || el.type === "radio") continue;
+
       if (!VOLUNTARY_KEYS.has(key)) unresolved.push({ el, text });
     }
-
     // Three "Why do you want to work here?" boxes would be one question; three
     // "Job Title" boxes in three repeated sections are three. Number the repeats so
     // the cache below answers each one separately instead of pasting the first

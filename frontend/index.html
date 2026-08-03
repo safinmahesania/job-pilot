@@ -636,7 +636,10 @@
           </div>
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
             <div><div class="text-sm font-medium">Fetch full Adzuna descriptions</div><div class="text-xs text-gray-400 mt-0.5">Adzuna gives a short snippet. This fetches the full posting for feed jobs still on a snippet (from Adzuna, Lever or Greenhouse) and re-scores them. Safe to run again.</div></div>
-            <button @click="maint('enrich',{url:'/api/jobs/enrich-existing',label:'Enriched',busyLabel:'Fetching descriptions…'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Fetch full descriptions</button>
+            <div class="flex gap-2 shrink-0 self-start">
+              <button @click="maint('enrich',{url:'/api/jobs/enrich-existing',label:'Enriched',busyLabel:'Fetching descriptions…'})" class="text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Fetch full descriptions</button>
+              <button @click="diagnoseEnrich()" class="text-[13px] h-9 px-3 rounded-md border border-gray-200 hover:bg-gray-50" title="Show where the Adzuna links point, without fetching">Diagnose</button>
+            </div>
           </div>
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
             <div><div class="text-sm font-medium">Dismiss expired jobs</div><div class="text-xs text-gray-400 mt-0.5">Find live jobs whose application deadline has passed — from the stored date or one written in the description — and dismiss them.</div></div>

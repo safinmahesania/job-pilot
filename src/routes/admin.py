@@ -26,6 +26,67 @@ class ScoreRequest(BaseModel):
     job_ids: list[int]
 
 
+@router.get("/api/jobs/enrich-diagnosis")
+def enrich_diagnosis(conn=Depends(_db_dep)):
+    """Where do the feed's Adzuna links actually point? No fetching — just a tally.
+
+    "Fetch full descriptions" can come back having enriched almost nothing, and the
+    reason is usually that the links don't go anywhere fetchable: an Adzuna job whose
+    redirect lands on Indeed or LinkedIn is left on its snippet by design. This counts
+    the short Adzuna jobs by destination so that's visible at a glance, and lists a few
+    example hosts that fell outside the allowlist — which is the real answer to "why are
+    descriptions still short".
+    """
+    from urllib.parse import urlparse
+
+    from src import enrich
+
+    rows = conn.execute(
+        "SELECT source_url, apply_url, description FROM jobs "
+        "WHERE source='adzuna' AND status='surfaced' "
+        "AND (description IS NULL OR length(description) < 400 "
+        "     OR trim(description) LIKE '%…' OR trim(description) LIKE '%...')"
+    ).fetchall()
+
+    by_strategy = {"adzuna": 0, "lever": 0, "greenhouse": 0, "not_fetchable": 0}
+    other_hosts: dict[str, int] = {}
+    for source_url, apply_url, _desc in rows:
+        url = source_url or apply_url or ""
+        strat = enrich._destination(url)
+        if strat:
+            by_strategy[strat] += 1
+        else:
+            by_strategy["not_fetchable"] += 1
+            host = (urlparse(url).hostname or "unknown").replace("www.", "")
+            other_hosts[host] = other_hosts.get(host, 0) + 1
+
+    # The handful of hosts most of the un-fetchable links go to.
+    top_other = sorted(other_hosts.items(), key=lambda kv: kv[1], reverse=True)[:8]
+
+    fetchable = {k: v for k, v in by_strategy.items() if k != "not_fetchable"}
+
+    # Also push it to Telegram, so the breakdown can be read on a phone rather than only
+    # in a browser alert — the same numbers, formatted for a message.
+    from src import notify
+    hosts_line = ", ".join(f"{h} ({n})" for h, n in top_other) or "none"
+    notify.send(
+        "<b>Adzuna enrichment — diagnosis</b>\n"
+        f"Short jobs: {len(rows)}\n"
+        f"Fetchable → Adzuna {fetchable.get('adzuna', 0)}, "
+        f"Lever {fetchable.get('lever', 0)}, "
+        f"Greenhouse {fetchable.get('greenhouse', 0)}\n"
+        f"Not fetchable: {by_strategy['not_fetchable']}\n"
+        f"Unfetchable hosts: {hosts_line}"
+    )
+
+    return {
+        "short_adzuna_jobs": len(rows),
+        "fetchable": fetchable,
+        "not_fetchable": by_strategy["not_fetchable"],
+        "top_unfetchable_hosts": [{"host": h, "count": n} for h, n in top_other],
+    }
+
+
 @router.post("/api/jobs/enrich-existing")
 def enrich_existing(conn=Depends(_db_dep)):
     """Fetch full descriptions for Adzuna jobs already in the feed that only have a snippet.
@@ -90,6 +151,17 @@ def enrich_existing(conn=Depends(_db_dep)):
         enriched += 1
         if scoring_on and _rescore_one(conn, row[0], calibration) is not None:
             rescored += 1
+
+    from src import notify
+    notify.send(
+        "<b>Adzuna enrichment — run</b>\n"
+        f"Checked: {len(rows)}\n"
+        f"Enriched: {enriched}   Rescored: {rescored}\n"
+        f"Already full: {already_full}\n"
+        f"Short but not fetchable: {not_fetchable}\n"
+        f"Fetch returned nothing: {fetch_failed}\n"
+        f"(of {total_adzuna} Adzuna jobs, {surfaced_adzuna} in feed)"
+    )
 
     return {
         "checked": len(rows),

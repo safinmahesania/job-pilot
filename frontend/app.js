@@ -1166,6 +1166,31 @@ function jobpilot() {
     },
 
     // ───────── maintenance ─────────
+    async diagnoseEnrich() {
+      // A read-only tally of where the short Adzuna jobs' links point — the fast answer
+      // to "why are descriptions still short". Fetchable ones can be enriched; the rest
+      // link to Indeed/LinkedIn/company pages the enricher deliberately leaves alone.
+      try {
+        const r = await fetch("/api/jobs/enrich-diagnosis");
+        const d = await r.json();
+        const f = d.fetchable || {};
+        const hosts = (d.top_unfetchable_hosts || [])
+          .map((h) => `${h.host} (${h.count})`).join(", ") || "none";
+        alert(
+          `Short Adzuna jobs: ${d.short_adzuna_jobs}\n\n` +
+          `Fetchable (can be enriched):\n` +
+          `  • Adzuna page: ${f.adzuna || 0}\n` +
+          `  • Lever: ${f.lever || 0}\n` +
+          `  • Greenhouse: ${f.greenhouse || 0}\n\n` +
+          `Not fetchable: ${d.not_fetchable} — these link to sites the enricher leaves ` +
+          `alone (JS-rendered or shouldn't be crawled).\n\n` +
+          `Where the not-fetchable ones go:\n  ${hosts}`
+        );
+      } catch (e) {
+        alert("Diagnosis failed: " + e);
+      }
+    },
+
     async maint(action, opts = {}) {
       if (opts.confirm && !(await this.ask(opts.confirm))) return;
       if (opts.heavy) this.blocking = { label: opts.busyLabel || (opts.label + '…') };

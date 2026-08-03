@@ -24,7 +24,7 @@
 // at a glance — the commonest cause of "the fix didn't work" is an extension that was
 // edited on disk but never reloaded, still running the old code. If this line doesn't
 // show the expected version after a fill, the reload didn't take.
-console.log("[JobPilot] content script v1.9.3 loaded");
+console.log("[JobPilot] content script v1.9.4 loaded");
 
 // Injected on demand by the service worker when you click the extension — never
 // on page load, and never on a page you didn't point it at. Guard against being
@@ -102,6 +102,7 @@ let repeatedData = null;      // canonical answers from the API
 let custom = [];         // the user's own keyword -> answer rules
 let settings = { enabled: true, autoFill: false, useAI: true, jobId: null };
 let filling = false;     // guards against re-entrant fills
+let _contextDead = false; // set once the extension is torn down (reloaded), to stop retrying
 const aiCache = new Map();   // label -> answer, so a field is only resolved once
 
 // ── Utilities ───────────────────────────────────────────────────────────────
@@ -883,6 +884,7 @@ async function attachFiles() {
 let debounce = null;
 
 function scheduleAutoFill() {
+  if (_contextDead) return;      // extension is gone; refreshing is the only fix
   if (!settings.enabled || !settings.autoFill) return;
   clearTimeout(debounce);
   debounce = setTimeout(async () => {
@@ -927,22 +929,41 @@ function send(message) {
   return new Promise((resolve) => {
     // After the extension is reloaded, an old content script left running on a page that
     // wasn't refreshed still tries to talk to a service worker that no longer exists.
-    // chrome.runtime.sendMessage then throws "Extension context invalidated" — not into
-    // the callback, but synchronously, right here. Catch it, tell the user to refresh,
-    // and resolve cleanly instead of letting an uncaught rejection surface as a scary
-    // console error.
+    // chrome.runtime.sendMessage then reports "Extension context invalidated" — sometimes
+    // by throwing synchronously right here, sometimes via chrome.runtime.lastError inside
+    // the callback, and sometimes the callback simply never fires. All three are handled:
+    // the try/catch for the throw, the lastError check for the callback, and _contextDead
+    // so the observer and auto-fill stop calling in once we know the context is gone.
+    if (_contextDead || !chrome.runtime?.id) {
+      resolve({ ok: false, reason: "context-invalidated" });
+      return;
+    }
     try {
       chrome.runtime.sendMessage(message, (response) => {
-        if (chrome.runtime.lastError) resolve({ ok: false });
-        else resolve(response);
+        const err = chrome.runtime.lastError;
+        if (err) {
+          if (String(err.message || err).includes("context invalidated")) {
+            _markContextDead();
+          }
+          resolve({ ok: false });
+          return;
+        }
+        resolve(response);
       });
     } catch (e) {
-      if (String(e).includes("context invalidated")) {
-        toast("JobPilot was updated — refresh this page (Ctrl+Shift+R) and try again", "error");
-      }
+      if (String(e).includes("context invalidated")) _markContextDead();
       resolve({ ok: false, reason: "context-invalidated" });
     }
   });
+}
+
+function _markContextDead() {
+  if (_contextDead) return;
+  _contextDead = true;
+  // The page is now running against a dead extension. Nothing here will work until the
+  // page is refreshed, so stop the observer from firing more doomed calls and tell the
+  // user once.
+  try { toast("JobPilot was updated — refresh this page (Ctrl+Shift+R) to use it again", "error"); } catch { /* toast may be unavailable */ }
 }
 
 // A persistent loader for the slow AI phase. Unlike a toast (which auto-dismisses),

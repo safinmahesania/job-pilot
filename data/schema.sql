@@ -140,3 +140,12 @@ CREATE TABLE IF NOT EXISTS materials (
     UNIQUE (job_id, kind),
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
 );
+
+-- A copy of every notification the app sends (to Telegram or otherwise), so recent ones
+-- can be read in the UI without a phone. Kept small by trimming old rows on insert.
+CREATE TABLE IF NOT EXISTS notifications (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    text        TEXT NOT NULL,
+    created_at  TEXT DEFAULT (datetime('now')),
+    seen        INTEGER DEFAULT 0        -- 0 until the user opens the notifications panel
+);

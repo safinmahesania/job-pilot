@@ -17,13 +17,19 @@ def _chat_id() -> str | None:
     return os.environ.get("TELEGRAM_CHAT_ID")
 
 def send(text: str) -> bool:
-    if not enabled():
-        return False
     # Never message a real phone from inside a test. Individual tests should stub this,
     # but one that forgets would otherwise fire the developer's Telegram for real —
     # which is exactly how a test's "the pipeline fell over" ended up as a notification.
     # pytest sets this in the environment of every test process.
     if os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
+
+    # Keep a copy in the DB regardless of whether Telegram is configured, so the bell in
+    # the UI shows the same history a phone would. Best-effort: a storage hiccup must not
+    # stop the notification itself.
+    _record(text)
+
+    if not enabled():
         return False
     try:
         r = httpx.post(
@@ -36,6 +42,22 @@ def send(text: str) -> bool:
     except Exception as e:
         log.warning("[notify] telegram failed: %s", e)
         return False
+
+
+def _record(text: str) -> None:
+    """Save a notification to the DB, trimming to the most recent 100."""
+    try:
+        from src import store
+        conn = store.connect()
+        with conn:
+            conn.execute("INSERT INTO notifications (text) VALUES (?)", (text,))
+            # Keep the table small — only the last 100 matter for a "recent" panel.
+            conn.execute(
+                "DELETE FROM notifications WHERE id NOT IN "
+                "(SELECT id FROM notifications ORDER BY id DESC LIMIT 100)"
+            )
+    except Exception as e:
+        log.warning("[notify] could not record notification: %s", e)
 
 
 def run_summary(stats: dict, elapsed_s: float, model: str, new_jobs: list[dict]) -> str:

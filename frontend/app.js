@@ -43,6 +43,7 @@ function jobpilot() {
         desc:'Contact details included. There is no quality gained by this over Redacted — it exists so the choice is visibly yours.' },
     ],
     clearDays: 30, mobileNav: false,
+    notifPanel: false, notifications: [], unseenCount: 0,
     modelState: { active: 'qwen2.5:14b', fallback_active: false, preferred: 'qwen2.5:14b' },
     selectedModel: 'qwen2.5:14b',
     notify: { enabled: true, configured: false },
@@ -173,6 +174,7 @@ function jobpilot() {
         if (sched.running) this.poll();
       }
       this.loading = false;
+      this.loadNotifications();     // fill the bell badge
     },
 
     // ───────── list <-> string helpers ─────────
@@ -1166,6 +1168,47 @@ function jobpilot() {
     },
 
     // ───────── maintenance ─────────
+    async loadNotifications() {
+      // Pull the recent notifications and the unseen count for the bell badge. Called on
+      // load and after each run, so the badge is current without opening the panel.
+      try {
+        const r = await fetch("/api/notifications");
+        const d = await r.json();
+        this.notifications = d.notifications || [];
+        this.unseenCount = d.unseen || 0;
+      } catch { /* a missing count just means no badge; not worth surfacing */ }
+    },
+
+    async openNotifications() {
+      this.notifPanel = true;
+      await this.loadNotifications();
+      // Opening the panel counts as seeing them — clear the badge.
+      if (this.unseenCount > 0) {
+        try { await fetch("/api/notifications/seen", { method: "POST" }); } catch { /* ignore */ }
+        this.unseenCount = 0;
+        this.notifications = this.notifications.map((n) => ({ ...n, seen: true }));
+      }
+    },
+
+    notifHtml(text) {
+      // Notifications are stored with the same lightweight HTML the Telegram messages use
+      // (<b>…</b>). Allow only <b>/<strong>, escaping everything else so a notification
+      // can't inject markup.
+      const esc = (text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return esc.replace(/&lt;(\/?)(b|strong)&gt;/gi, "<$1$2>");
+    },
+
+    notifWhen(iso) {
+      if (!iso) return "";
+      const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
+      if (isNaN(d)) return "";
+      const diff = (Date.now() - d.getTime()) / 1000;
+      if (diff < 60) return "just now";
+      if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+      return d.toLocaleDateString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    },
+
     async diagnoseEnrich() {
       // A read-only tally of where the short Adzuna jobs' links point — the fast answer
       // to "why are descriptions still short". Fetchable ones can be enriched; the rest

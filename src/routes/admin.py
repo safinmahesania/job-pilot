@@ -26,6 +26,27 @@ class ScoreRequest(BaseModel):
     job_ids: list[int]
 
 
+@router.get("/api/notifications")
+def list_notifications(conn=Depends(_db_dep)):
+    """Recent notifications for the bell in the UI, newest first, with an unseen count."""
+    rows = conn.execute(
+        "SELECT id, text, created_at, seen FROM notifications "
+        "ORDER BY id DESC LIMIT 50"
+    ).fetchall()
+    items = [{"id": r[0], "text": r[1], "created_at": r[2], "seen": bool(r[3])}
+             for r in rows]
+    unseen = sum(1 for it in items if not it["seen"])
+    return {"notifications": items, "unseen": unseen}
+
+
+@router.post("/api/notifications/seen")
+def mark_notifications_seen(conn=Depends(_db_dep)):
+    """Mark everything as seen — called when the user opens the notifications panel."""
+    with conn:
+        conn.execute("UPDATE notifications SET seen = 1 WHERE seen = 0")
+    return {"ok": True}
+
+
 @router.get("/api/jobs/enrich-diagnosis")
 def enrich_diagnosis(conn=Depends(_db_dep)):
     """Where do the feed's Adzuna links actually point? No fetching — just a tally.

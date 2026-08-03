@@ -20,20 +20,30 @@
  *   already filled are never overwritten, so re-running is safe.
  */
 
+// Injected on demand by the service worker when you click the extension — never
+// on page load, and never on a page you didn't point it at.
+//
+// Guard against running twice in one document — but a plain "already loaded, do nothing"
+// guard is a trap on a single-page app like Workday: after the extension is reloaded,
+// clicking it injects the NEW script, but the OLD one already set the flag, so the new
+// code would bail and the stale code would keep running (and keep throwing "context
+// invalidated"). So the flag carries a version. A newer script signals the old one to
+// stand down (its observer/timers check window.__jobpilotActive) and then takes over.
+const JOBPILOT_VERSION = "1.9.5";
+if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
+  // A different build was here — tell it to stop, then let this one proceed.
+  window.__jobpilotActive = false;
+  window.__jobpilotTookOver = true;
+}
+window.__jobpilotVersion = JOBPILOT_VERSION;
+
 // A one-line banner in the console, so which build is actually running can be confirmed
 // at a glance — the commonest cause of "the fix didn't work" is an extension that was
 // edited on disk but never reloaded, still running the old code. If this line doesn't
 // show the expected version after a fill, the reload didn't take.
-console.log("[JobPilot] content script v1.9.4 loaded");
-
-// Injected on demand by the service worker when you click the extension — never
-// on page load, and never on a page you didn't point it at. Guard against being
-// injected twice into the same document.
-if (window.__jobpilotLoaded) {
-  // already here; do nothing
-} else {
-  window.__jobpilotLoaded = true;
-}
+console.log("[JobPilot] content script v" + JOBPILOT_VERSION + " loaded"
+  + (window.__jobpilotTookOver ? " (took over from an older build — this page is fine now)" : ""));
+window.__jobpilotActive = true;
 
 // Fields we never touch, whatever their label says.
 const SKIP_TYPES = new Set([
@@ -884,7 +894,7 @@ async function attachFiles() {
 let debounce = null;
 
 function scheduleAutoFill() {
-  if (_contextDead) return;      // extension is gone; refreshing is the only fix
+  if (_contextDead || window.__jobpilotActive === false) return;  // gone, or superseded
   if (!settings.enabled || !settings.autoFill) return;
   clearTimeout(debounce);
   debounce = setTimeout(async () => {
@@ -934,7 +944,7 @@ function send(message) {
     // the callback, and sometimes the callback simply never fires. All three are handled:
     // the try/catch for the throw, the lastError check for the callback, and _contextDead
     // so the observer and auto-fill stop calling in once we know the context is gone.
-    if (_contextDead || !chrome.runtime?.id) {
+    if (_contextDead || window.__jobpilotActive === false || !chrome.runtime?.id) {
       resolve({ ok: false, reason: "context-invalidated" });
       return;
     }

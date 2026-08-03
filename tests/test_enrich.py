@@ -207,3 +207,30 @@ class TestTruncatedSnippets:
         with patch("httpx.get") as get:
             assert enrich.enrich_if_needed(job) is False
         get.assert_not_called()
+
+
+class TestJsonLdRescue:
+    """A JS-rendered Adzuna page hands a plain fetch an almost-empty shell, but carries
+    the posting in a JobPosting JSON-LD block. That block is read before giving up."""
+
+    def test_description_is_taken_from_jsonld_when_the_page_is_a_shell(self):
+        job = _job("https://www.adzuna.ca/land/ad/999")
+        long_desc = ("We are hiring an AI Engineer to build and ship models. " * 10)
+        shell = (
+            '<html><body><div id="root"></div>'
+            '<script type="application/ld+json">'
+            '{"@type":"JobPosting","description":"' + long_desc + '"}'
+            '</script></body></html>'
+        )
+        with patch("httpx.get", return_value=_Resp(text=shell,
+                   url="https://www.adzuna.ca/details/999")):
+            changed = enrich.enrich_if_needed(job)
+        assert changed is True
+        assert "AI Engineer" in job["description"]
+
+    def test_a_page_with_neither_text_nor_jsonld_returns_nothing(self):
+        job = _job("https://www.adzuna.ca/land/ad/999")
+        with patch("httpx.get", return_value=_Resp(text="<html><body></body></html>",
+                   url="https://www.adzuna.ca/details/999")):
+            changed = enrich.enrich_if_needed(job)
+        assert changed is False        # honestly unfetchable — left unscored

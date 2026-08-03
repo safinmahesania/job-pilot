@@ -139,6 +139,43 @@ def _from_greenhouse(url: str, timeout: float) -> str | None:
     return strip_html(data.get("content") or "").strip() or None
 
 
+def _from_jsonld(html: str) -> str | None:
+    """The description out of a JobPosting JSON-LD block, if the page carries one.
+
+    Most job pages — including Adzuna's own detail pages — embed the posting as
+    schema.org JobPosting inside <script type="application/ld+json">, and its
+    "description" field holds the full text even when the visible page is a JS shell a
+    plain fetch renders as almost nothing. Reading it here rescues the postings that
+    "returned nothing" from a text strip. The description is usually HTML, so it's run
+    through strip_html the same as any other source.
+    """
+    import json
+
+    blocks = re.findall(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        html, re.I | re.S)
+    for raw in blocks:
+        try:
+            data = json.loads(raw.strip())
+        except (ValueError, TypeError):
+            continue
+        # A block can be one object, a list, or a @graph wrapper.
+        candidates = data if isinstance(data, list) else data.get("@graph", [data]) \
+            if isinstance(data, dict) else []
+        for node in candidates:
+            if not isinstance(node, dict):
+                continue
+            t = node.get("@type", "")
+            types = t if isinstance(t, list) else [t]
+            if "JobPosting" in types and node.get("description"):
+                text = strip_html(node["description"]) or ""
+                lines = [ln.strip() for ln in text.splitlines()]
+                cleaned = "\n".join(ln for ln in lines if ln).strip()
+                if cleaned:
+                    return cleaned
+    return None
+
+
 def _from_adzuna(url: str, timeout: float) -> str | None:
     """Adzuna's link, followed to wherever it lands.
 
@@ -149,9 +186,10 @@ def _from_adzuna(url: str, timeout: float) -> str | None:
     Greenhouse posting, read it through their clean JSON API instead of scraping the
     rendered page. Otherwise take the page's text.
 
-    Anything that lands on Indeed, LinkedIn or a JS-rendered careers page yields little —
-    a plain fetch sees an empty shell — and the short result is rejected by the caller,
-    leaving the job unscored rather than scored on a fragment.
+    Pages that render their content with JavaScript hand a plain fetch an almost-empty
+    shell, which is why so many jobs "returned nothing". Before giving up on those, the
+    posting is looked for in a JobPosting JSON-LD block, which carries the full text even
+    when the visible HTML doesn't.
     """
     r = _get(url, timeout)
     if not r:
@@ -168,6 +206,11 @@ def _from_adzuna(url: str, timeout: float) -> str | None:
         text = _from_greenhouse(final, timeout)
         if text:
             return text
+
+    # Structured data first — it survives JS rendering, where a text strip finds nothing.
+    from_ld = _from_jsonld(r.text)
+    if from_ld:
+        return from_ld
 
     # Otherwise, the text of the page we landed on (an Adzuna detail page, or a simple
     # employer page). Strip to readable lines and keep them.

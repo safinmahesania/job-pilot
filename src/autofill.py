@@ -148,15 +148,34 @@ def repeated() -> dict:
     # becomes its own tag — pasting "Python, SQL, React" into one of those enters a
     # single nonsense skill called "Python, SQL, React". The list lets the extension add
     # them one at a time. Order preserved (expert tier first), duplicates dropped.
-    skills = p.get("skills", {}) or {}
+    #
+    # profile.yaml may store skills either as tiers ({expert: [...], proficient: [...]})
+    # or as a plain list ([Python, SQL, ...]). Both are accepted: a list is taken as-is,
+    # a dict is flattened expert-first. Anything else yields no skills rather than an
+    # error, because a bad skills shape must not take the whole autofill payload down.
+    raw_skills = p.get("skills", {}) or {}
     skill_list: list[str] = []
     seen = set()
-    for tier in ("expert", "proficient", "familiar", "working"):
-        for s in (skills.get(tier) or []):
-            s = str(s).strip()
-            if s and s.lower() not in seen:
-                seen.add(s.lower())
-                skill_list.append(s)
+
+    def _add(value):
+        s = str(value).strip()
+        if s and s.lower() not in seen:
+            seen.add(s.lower())
+            skill_list.append(s)
+
+    if isinstance(raw_skills, list):
+        for s in raw_skills:
+            _add(s)
+    elif isinstance(raw_skills, dict):
+        for tier in ("expert", "proficient", "familiar", "working"):
+            for s in (raw_skills.get(tier) or []):
+                _add(s)
+        # Any other keys in the dict (custom tiers) — include them too, after the known
+        # ones, so nothing in the profile is silently dropped.
+        for key, values in raw_skills.items():
+            if key not in ("expert", "proficient", "familiar", "working"):
+                for s in (values or []):
+                    _add(s)
 
     return {"experience": experience, "education": education, "skills": skill_list}
 

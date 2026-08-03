@@ -111,3 +111,27 @@ class TestVoluntaryDisclosures:
         assert not result.get("f0"), (
             f"autofill answered a voluntary disclosure: {label!r}"
         )
+
+
+class TestSkillsShape:
+    """profile.yaml may store skills as a list or as tiers; both must work, and a bad
+    shape must not crash the whole autofill payload."""
+
+    def _repeated(self, skills):
+        from unittest.mock import patch
+        from src import autofill
+        prof = {"experience": [], "education": [], "skills": skills}
+        with patch("src.autofill.load_profile", return_value=prof):
+            return autofill.repeated()
+
+    def test_a_plain_list_is_accepted(self):
+        r = self._repeated(["Python", "React", "Python"])
+        assert r["skills"] == ["Python", "React"]      # order kept, dupes dropped
+
+    def test_tiers_are_flattened_expert_first(self):
+        r = self._repeated({"proficient": ["SQL"], "expert": ["Go"]})
+        assert r["skills"] == ["Go", "SQL"]
+
+    def test_a_none_or_odd_shape_yields_no_skills_not_a_crash(self):
+        assert self._repeated(None)["skills"] == []
+        assert self._repeated("Python, React")["skills"] == []   # string: no crash

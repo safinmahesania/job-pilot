@@ -188,3 +188,22 @@ class TestLeverIdShapes:
     def test_a_non_hex_lever_id_is_still_enrichable(self):
         job = _job("https://jobs.lever.co/stripe/some-text-id-123")
         assert enrich.is_enrichable(job) is True
+
+
+class TestTruncatedSnippets:
+    """Adzuna cuts a snippet with a trailing ellipsis even when it runs past the length
+    floor, so a long description ending in "…" is still a fragment worth replacing."""
+
+    def test_a_long_but_ellipsis_truncated_snippet_is_refetched(self):
+        long_cut = ("We are hiring a developer for our team. " * 12).strip() + "…"
+        assert len(long_cut) > 400
+        job = _job("https://jobs.lever.co/acme/abc-123", desc=long_cut)
+        with patch("httpx.get", return_value=_Resp(json_data={"descriptionPlain": FULL, "lists": []})):
+            changed = enrich.enrich_if_needed(job)
+        assert changed is True
+
+    def test_a_long_complete_snippet_is_left_alone(self):
+        job = _job("https://jobs.lever.co/acme/abc-123", desc="x" * 500)
+        with patch("httpx.get") as get:
+            assert enrich.enrich_if_needed(job) is False
+        get.assert_not_called()

@@ -209,7 +209,12 @@ def enrich_if_needed(job: dict) -> bool:
     """
     if not is_enrichable(job):
         return False
-    if len((job.get("description") or "").strip()) >= _MIN_ENRICHED_CHARS:
+    # Already substantial AND not visibly truncated: leave it. Adzuna cuts snippets with
+    # a trailing "…" even when they run past the length floor, so a long description that
+    # ends in an ellipsis is still a fragment worth replacing.
+    current = (job.get("description") or "").strip()
+    truncated = current.endswith("…") or current.endswith("...")
+    if len(current) >= _MIN_ENRICHED_CHARS and not truncated:
         return False
 
     full = full_description(job)

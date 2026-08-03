@@ -24,7 +24,7 @@
 // at a glance — the commonest cause of "the fix didn't work" is an extension that was
 // edited on disk but never reloaded, still running the old code. If this line doesn't
 // show the expected version after a fill, the reload didn't take.
-console.log("[JobPilot] content script v1.9.2 loaded");
+console.log("[JobPilot] content script v1.9.3 loaded");
 
 // Injected on demand by the service worker when you click the extension — never
 // on page load, and never on a page you didn't point it at. Guard against being
@@ -519,6 +519,10 @@ async function fillPage({ silent = false } = {}) {
   try {
     if (!answers) {
       const res = await send({ type: "getAnswers" });
+      if (res?.reason === "context-invalidated") {
+        // send() already toasted the refresh hint; just stop.
+        return { filled: 0, skipped: 0 };
+      }
       if (!res?.ok) {
         if (!silent) toast("Can't reach JobPilot — is it running?", "error");
         return { filled: 0, skipped: 0 };
@@ -921,10 +925,23 @@ function watchForSteps() {
 /** All network calls go through the service worker (it holds the permissions). */
 function send(message) {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage(message, (response) => {
-      if (chrome.runtime.lastError) resolve({ ok: false });
-      else resolve(response);
-    });
+    // After the extension is reloaded, an old content script left running on a page that
+    // wasn't refreshed still tries to talk to a service worker that no longer exists.
+    // chrome.runtime.sendMessage then throws "Extension context invalidated" — not into
+    // the callback, but synchronously, right here. Catch it, tell the user to refresh,
+    // and resolve cleanly instead of letting an uncaught rejection surface as a scary
+    // console error.
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) resolve({ ok: false });
+        else resolve(response);
+      });
+    } catch (e) {
+      if (String(e).includes("context invalidated")) {
+        toast("JobPilot was updated — refresh this page (Ctrl+Shift+R) and try again", "error");
+      }
+      resolve({ ok: false, reason: "context-invalidated" });
+    }
   });
 }
 

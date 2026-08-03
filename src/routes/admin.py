@@ -46,22 +46,44 @@ def enrich_existing(conn=Depends(_db_dep)):
 
     scoring_on = _get_setting(conn, "scoring_enabled", "1") == "1"
 
+    # A breakdown, because "checked: 2" out of a feed full of Adzuna jobs is confusing
+    # without knowing where the rest went. Each number is how many Adzuna jobs fall in
+    # that bucket, so the totals explain themselves.
+    total_adzuna = conn.execute(
+        "SELECT count(*) FROM jobs WHERE source='adzuna'").fetchone()[0]
+    surfaced_adzuna = conn.execute(
+        "SELECT count(*) FROM jobs WHERE source='adzuna' AND status='surfaced'"
+    ).fetchone()[0]
+    already_full = conn.execute(
+        "SELECT count(*) FROM jobs WHERE source='adzuna' AND status='surfaced' "
+        "AND description IS NOT NULL AND length(description) >= 400 "
+        "AND trim(description) NOT LIKE '%…' AND trim(description) NOT LIKE '%...'"
+    ).fetchone()[0]
+
     rows = conn.execute(
         "SELECT id, source, source_url, apply_url, description "
         "FROM jobs WHERE source='adzuna' AND status='surfaced' "
-        "AND (description IS NULL OR length(description) < 400)"
+        # Short, OR ends in an ellipsis — Adzuna truncates its snippet and leaves a "…"
+        # (or "...") behind, so a description can be over 400 characters and still be cut
+        # off mid-sentence. Length alone misses those; the trailing marker catches them.
+        "AND (description IS NULL OR length(description) < 400 "
+        "     OR trim(description) LIKE '%…' OR trim(description) LIKE '%...')"
     ).fetchall()
 
     calibration = build_calibration() if scoring_on else ""
     enriched = 0
     rescored = 0
+    not_fetchable = 0        # short, but the link isn't Adzuna/Lever/Greenhouse
+    fetch_failed = 0         # fetchable, but the page gave nothing usable
     for row in rows[:150]:                  # cap one request; run again for the rest
         job = {"source": row[1], "source_url": row[2], "apply_url": row[3],
                "description": row[4]}
         if not enrich.is_enrichable(job):
+            not_fetchable += 1
             continue
         full = enrich.full_description(job)
         if not full or len(full) < MIN_DESCRIPTION_CHARS:
+            fetch_failed += 1
             continue
         with conn:
             conn.execute("UPDATE jobs SET description=? WHERE id=?", (full, row[0]))
@@ -69,7 +91,17 @@ def enrich_existing(conn=Depends(_db_dep)):
         if scoring_on and _rescore_one(conn, row[0], calibration) is not None:
             rescored += 1
 
-    return {"checked": len(rows), "enriched": enriched, "rescored": rescored}
+    return {
+        "checked": len(rows),
+        "enriched": enriched,
+        "rescored": rescored,
+        # The breakdown that explains the numbers above.
+        "adzuna_total": total_adzuna,
+        "adzuna_surfaced": surfaced_adzuna,
+        "already_full": already_full,
+        "short_but_not_fetchable": not_fetchable,
+        "fetch_returned_nothing": fetch_failed,
+    }
 
 
 @router.post("/api/jobs/score")

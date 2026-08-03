@@ -24,7 +24,7 @@
 // at a glance — the commonest cause of "the fix didn't work" is an extension that was
 // edited on disk but never reloaded, still running the old code. If this line doesn't
 // show the expected version after a fill, the reload didn't take.
-console.log("[JobPilot] content script v1.9.1 loaded");
+console.log("[JobPilot] content script v1.9.2 loaded");
 
 // Injected on demand by the service worker when you click the extension — never
 // on page load, and never on a page you didn't point it at. Guard against being
@@ -117,6 +117,12 @@ const isVisible = (el) => {
 /** A field already has a value the user (or we) put there. */
 const hasValue = (el) => {
   if (el.type === "checkbox" || el.type === "radio") return el.checked;
+  // A button-dropdown holds its choice as text, not .value. "Select One" / "Select a
+  // value" is Workday's placeholder, not a real choice, so treat it as empty and fill it.
+  if (el.tagName === "BUTTON" || el.getAttribute("aria-haspopup")) {
+    const t = (el.textContent || "").trim().toLowerCase();
+    return !!t && !/^select(\s|$)|select one|select a value|choose/i.test(t);
+  }
   return !!(el.value && el.value.trim());
 };
 
@@ -311,7 +317,12 @@ function repeatedValue(key) {
 }
 
 function collectFields() {
-  const nodes = document.querySelectorAll("input, select, textarea");
+  // input/select/textarea, plus the button-dropdowns Workday uses for Degree, Country,
+  // Province and Phone Type — those are <button aria-haspopup>, not <select>, so without
+  // them here their handler never runs.
+  const nodes = document.querySelectorAll(
+    "input, select, textarea, button[aria-haspopup], "
+    + '[role="combobox"], button[data-automation-id*="Prompt" i]');
   return Array.from(nodes).filter((el) => {
     if (SKIP_TYPES.has(el.type)) return false;
     if (!isVisible(el)) return false;
@@ -519,6 +530,8 @@ async function fillPage({ silent = false } = {}) {
 
     const fields = collectFields();
     resetRepeats();          // positions are per pass, not per page lifetime
+    console.log(`[JobPilot] collectFields found ${fields.length} field(s)`,
+                fields.slice(0, 30).map((f) => f.getAttribute("data-automation-id") || f.id || f.name || f.tagName));
     if (!fields.length) {
       if (!silent) toast("Nothing to fill on this page", "info");
       return { filled: 0, skipped: 0 };

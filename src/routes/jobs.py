@@ -188,6 +188,20 @@ def set_notes(job_id: int, body: NotesUpdate, conn=Depends(_db_dep)):
     return {"ok": True}
 
 
+@router.post("/api/jobs/{job_id}/viewed")
+def mark_viewed(job_id: int, conn=Depends(_db_dep)):
+    """Stamp the moment a job's detail was opened, so its card can show 'last seen'.
+
+    Its own tiny write, fired when the detail panel opens — kept separate from anything
+    heavier so opening a job stays instant, and wrapped in its own transaction like every
+    other write here.
+    """
+    with conn:
+        conn.execute(
+            "UPDATE jobs SET last_viewed_at = datetime('now') WHERE id=?", (job_id,))
+    return {"ok": True}
+
+
 # ── Manual edit (fix a job the fetcher got wrong) ──
 
 # Only the descriptive fields a person would correct by hand. The pipeline's own

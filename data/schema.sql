@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     deadline        TEXT,
     language        TEXT,                 -- 'en' / 'fr' / 'bilingual' / 'unknown'
     applied_on      TEXT,                 -- date stamped when status -> 'applied'
+    last_viewed_at  TEXT,                 -- stamped each time the job's detail is opened
     notes           TEXT,                 -- free-text notes from the Applied tab
     followed_up_on  TEXT,                 -- date of the last follow-up you sent
     followup_snooze TEXT                  -- don't nag about this until after this date

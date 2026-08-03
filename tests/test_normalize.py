@@ -149,7 +149,7 @@ class TestSaveJob:
 
         # Columns the database owns, not the writer.
         db_owned = {"id", "fetched_at", "status", "applied_on", "notes",
-                    "followed_up_on", "followup_snooze"}
+                    "followed_up_on", "followup_snooze", "last_viewed_at"}
         expected = declared - db_owned
 
         source = (ROOT / "src" / "store.py").read_text(encoding="utf-8")

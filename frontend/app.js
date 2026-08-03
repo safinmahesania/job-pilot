@@ -474,6 +474,18 @@ function jobpilot() {
       this.sent = null;
       this.sentOpen = null;
       this.loadSent(job.id);
+      this.markViewed(job);
+    },
+
+    async markViewed(job) {
+      // Record that this job was just opened, so its card shows "last seen …". Update the
+      // local copy immediately so the label is right without a reload; the write is
+      // fire-and-forget because a failed stamp is not worth interrupting the user.
+      const now = new Date().toISOString();
+      job.last_viewed_at = now;
+      const inList = this.jobs.find((j) => j.id === job.id);
+      if (inList) inList.last_viewed_at = now;
+      try { await fetch(`/api/jobs/${job.id}/viewed`, { method: "POST" }); } catch { /* ignore */ }
     },
 
     // What went out for this job — documents and answered questions. Fetched when the
@@ -1315,6 +1327,24 @@ function jobpilot() {
         if (isNaN(dt)) return '';
         return dt.toLocaleDateString('en-CA',
           { weekday: 'short', day: 'numeric', month: 'short' });
+      } catch { return ''; }
+    },
+
+    lastSeen(d) {
+      // "last seen 5m ago / 3h ago / Jul 28". The stored value is either SQLite's
+      // "YYYY-MM-DD HH:MM:SS" (UTC, from the server) or an ISO string (set locally on
+      // open), so normalise both and treat the space form as UTC.
+      if (!d) return '';
+      try {
+        const iso = d.includes('T') ? d : d.replace(' ', 'T') + 'Z';
+        const dt = new Date(iso);
+        if (isNaN(dt)) return '';
+        const diff = (Date.now() - dt.getTime()) / 1000;
+        if (diff < 60) return 'just now';
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+        if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+        return dt.toLocaleDateString('en-CA', { day: 'numeric', month: 'short' });
       } catch { return ''; }
     },
   };

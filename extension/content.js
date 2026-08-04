@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.15";
+const JOBPILOT_VERSION = "1.9.16";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -547,9 +547,29 @@ async function _fillSkillsTypeahead(el, skills) {
         .replace(/\s+programming language$/, "")
         .replace(/\s+\(software\)$/, "")
         .trim();
+      // Expand symbols so "C#"/"C++"/"F#" can match "C Sharp"/"C Plus Plus"/"F Sharp".
+      const expand = (s) => s.replace(/\+\+/g, " plus plus").replace(/#/g, " sharp")
+        .replace(/\s+/g, " ").trim();
+      const wantExp = expand(want);
+      // The parenthetical abbreviation an option carries, if any: "Structured Query
+      // Language (SQL)" -> "sql". Lets the abbreviation the user typed match the spelt-out
+      // option.
+      const paren = (s) => {
+        const m = norm(s).match(/\(([^)]+)\)/);
+        return m ? m[1].trim() : "";
+      };
+      const eq = (a, b) => a === b || expand(a) === b;
       const match =
-        opts.find((o) => norm(o.textContent) === want) ||        // exact
-        opts.find((o) => stripQualifier(o.textContent) === want); // skill + qualifier only
+        // exact, or skill + qualifier: "Java (Programming Language)", "Dart Programming
+        // Language". Symbol-expanded too, so "C#" hits "C Sharp (Programming Language)".
+        opts.find((o) => eq(norm(o.textContent), wantExp)) ||
+        opts.find((o) => eq(stripQualifier(o.textContent), wantExp)) ||
+        // vendor prefix: option ends with the skill — "Microsoft Visual Studio",
+        // "JetBrains IntelliJ IDEA". Requires the space so "Studio" alone can't match.
+        opts.find((o) => stripQualifier(o.textContent).endsWith(" " + wantExp)) ||
+        // abbreviation spelt out with the abbr in parens: "Structured Query Language
+        // (SQL)" for "SQL".
+        opts.find((o) => eq(paren(o.textContent), wantExp));
       if (!match) {
         console.log(`[JobPilot] skills: "${skill}" — ${opts.length} options but no match:`,
                     opts.slice(0, 4).map((o) => o.textContent.trim()));

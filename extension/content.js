@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.5";
+const JOBPILOT_VERSION = "1.9.6";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -364,8 +364,29 @@ function _looksLikeTypeahead(el) {
   if (type !== "text" && type !== "search") return false;
   const role = (el.getAttribute("role") || "").toLowerCase();
   const owns = el.getAttribute("aria-autocomplete") || el.getAttribute("aria-controls");
-  const inCombo = el.closest('[role="combobox"], [data-automation-id*="multiSelect" i], [data-automation-id*="skill" i]');
+  // Workday's multiselect (skills, etc.) puts no aria on the input itself — the input is
+  // a bare <input placeholder="Search"> inside a .multiSelectContainer /
+  // multiselectInputContainer. Match that container by class OR automation-id, since the
+  // id may be absent on some tenants.
+  const inCombo = el.closest(
+    '[role="combobox"], [data-automation-id*="multiSelect" i], [data-automation-id*="skill" i], '
+    + '.multiSelectContainer, [class*="multiselect" i]');
   return role === "combobox" || !!owns || !!inCombo;
+}
+
+/** Is this the skills field? True when the label mentions skills, or when it's a
+ *  multiselect typeahead on a page that has skills to add and no better candidate — the
+ *  Workday skills control carries no "skill" text on the input, only a "Search"
+ *  placeholder inside a multiSelectContainer. */
+function _isSkillsField(el, labelText) {
+  if (/\b(skills?|competenc(?:y|ies)|areas? of expertise|expertise)\b/i.test(labelText)) {
+    return true;
+  }
+  // No skill word anywhere near it — fall back to the container shape, but only for a
+  // real multiselect (so a plain "Search" box elsewhere isn't mistaken for skills).
+  const container = el.closest('.multiSelectContainer, [class*="multiselect" i], '
+    + '[data-automation-id*="multiSelect" i]');
+  return !!container && (el.placeholder || "").trim().toLowerCase() === "search";
 }
 
 function _sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -379,9 +400,13 @@ function _typeInto(el, text) {
 
 function _openOptions() {
   // The dropdown options, wherever the framework renders them — usually a listbox
-  // appended to the body rather than a sibling of the input.
+  // appended to the body rather than a sibling of the input. Workday's multiselect menu
+  // uses menuItem/promptOption automation-ids and sometimes plain [role=option]; cover
+  // the common shapes so a match can be found whatever the tenant renders.
   return Array.from(document.querySelectorAll(
-    '[role="option"], [role="listbox"] li, [data-automation-id*="promptOption" i]'
+    '[role="option"], [role="listbox"] li, [data-automation-id*="promptOption" i], '
+    + '[data-automation-id*="menuItem" i], [data-automation-id*="searchResult" i], '
+    + 'ul[role="listbox"] [role="option"]'
   )).filter((o) => o.offsetParent !== null && o.textContent.trim());
 }
 
@@ -588,12 +613,13 @@ async function fillPage({ silent = false } = {}) {
       // A skills field is often a typeahead: you type a skill, pick it from a dropdown,
       // and it becomes a tag; then the next one. Pasting the whole comma-joined list
       // into it enters one nonsense "skill" called "Python, SQL, React, ...". So when
-      // the label looks like skills and the control is a typeahead, add them one at a
-      // time instead. Detected by label rather than by key because this needs the list
-      // form of the answer, which lives in repeatedData.
-      if (key === "skills" && _looksLikeTypeahead(el) && repeatedData?.skills?.length) {
+      // this looks like the skills control and the page has skills to add, add them one
+      // at a time. Recognised by shape as well as label, because Workday's skills input
+      // carries no "skill" text — just a "Search" placeholder in a multiSelectContainer.
+      if (_isSkillsField(el, text) && _looksLikeTypeahead(el) && repeatedData?.skills?.length) {
         const added = await _fillSkillsTypeahead(el, repeatedData.skills);
         if (added) { filled++; continue; }
+        continue;    // it's the skills box; don't let generic logic type into it
       }
 
       if (key) {

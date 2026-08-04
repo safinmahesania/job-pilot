@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.6";
+const JOBPILOT_VERSION = "1.9.7";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -394,8 +394,12 @@ function _sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 function _typeInto(el, text) {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
   if (setter) setter.call(el, text); else el.value = text;
+  // React tracks the value through its own setter and re-reads on input; fire input plus
+  // a keyup so autocompletes that listen for either see the change.
   el.dispatchEvent(new Event("input", { bubbles: true }));
-  el.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: text.slice(-1) }));
+  const last = text.slice(-1) || "";
+  el.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: last }));
+  el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: last }));
 }
 
 function _openOptions() {
@@ -410,34 +414,72 @@ function _openOptions() {
   )).filter((o) => o.offsetParent !== null && o.textContent.trim());
 }
 
+function _pressEnter(el) {
+  // Workday's skills box only runs its search when you press Enter — typing alone shows
+  // nothing. Fire a full key sequence so the framework's keydown handler sees it.
+  for (const type of ["keydown", "keypress", "keyup"]) {
+    el.dispatchEvent(new KeyboardEvent(type, {
+      bubbles: true, cancelable: true, key: "Enter", code: "Enter", keyCode: 13, which: 13,
+    }));
+  }
+}
+
 async function _fillSkillsTypeahead(el, skills) {
   let added = 0;
+  console.log(`[JobPilot] skills: trying ${Math.min(skills.length, 20)} skills`);
   for (const skill of skills.slice(0, 20)) {         // a sane cap for one field
     try {
-      el.focus();
-      _typeInto(el, skill);
-      // Give the dropdown time to query and render.
+      // Re-find the input each round: after a tag is added Workday can replace the input
+      // node, so a stale reference would type into nothing.
+      const input = _currentSkillInput(el) || el;
+      input.focus();
+      _typeInto(input, skill);
+      await _sleep(150);
+
+      // This field searches on Enter, not on keystroke. Press it, then wait for the
+      // results list to appear.
+      _pressEnter(input);
       let opts = [];
-      for (let waited = 0; waited < 1200 && !opts.length; waited += 150) {
+      for (let waited = 0; waited < 2500 && !opts.length; waited += 150) {
         await _sleep(150);
         opts = _openOptions();
       }
-      if (!opts.length) continue;                    // no dropdown — skip this one
+      if (!opts.length) {                            // nothing came back — clear and move on
+        console.log(`[JobPilot] skills: "${skill}" — no options appeared`);
+        _typeInto(input, "");
+        continue;
+      }
 
       const want = skill.toLowerCase();
       const match =
         opts.find((o) => o.textContent.trim().toLowerCase() === want) ||
         opts.find((o) => o.textContent.trim().toLowerCase().startsWith(want)) ||
         opts.find((o) => o.textContent.trim().toLowerCase().includes(want));
-      if (!match) { _typeInto(el, ""); continue; }   // no real match — don't force it
+      if (!match) {
+        console.log(`[JobPilot] skills: "${skill}" — ${opts.length} options but no match:`,
+                    opts.slice(0, 4).map((o) => o.textContent.trim()));
+        _typeInto(input, "");
+        continue;
+      }
 
       match.click();
       added++;
-      await _sleep(120);
-      _typeInto(el, "");                             // clear for the next skill
-    } catch { /* one skill failing must not stop the rest */ }
+      await _sleep(200);                             // let the tag render and the input reset
+    } catch (e) {
+      console.warn(`[JobPilot] skills: "${skill}" threw`, e);
+    }
   }
+  console.log(`[JobPilot] skills: added ${added}`);
   return added;
+}
+
+/** The live skills input — re-queried because adding a tag can swap the node out. */
+function _currentSkillInput(seed) {
+  const container = seed.closest(
+    '.multiSelectContainer, [class*="multiselect" i], [data-automation-id*="multiSelect" i]');
+  if (!container) return seed;
+  const input = container.querySelector('input[type="text"], input:not([type])');
+  return input || seed;
 }
 
 

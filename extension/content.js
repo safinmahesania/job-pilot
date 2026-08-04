@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.14";
+const JOBPILOT_VERSION = "1.9.15";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -459,6 +459,17 @@ function _skillTagCount() {
   return list.querySelectorAll('[data-automation-id="selectedItem"]').length;
 }
 
+/** Text of each skill currently chosen, lower-cased — used to skip re-adding (and thus
+ *  toggling off) skills that are already tags. */
+function _existingSkillLabels() {
+  const host = _skillsHost();
+  if (!host) return [];
+  const list = host.querySelector('[data-automation-id="selectedItemList"]');
+  if (!list) return [];
+  return Array.from(list.querySelectorAll('[data-automation-id="selectedItem"]'))
+    .map((t) => t.textContent.trim().toLowerCase());
+}
+
 /** Select a menu option the way Workday's own handler expects. A bare .click() on the
  *  row was silently doing nothing; a full pointer + mouse sequence on the row (or its
  *  inner clickable, if the row delegates to a checkbox/anchor) registers the choice. */
@@ -483,6 +494,18 @@ async function _fillSkillsTypeahead(el, skills) {
   console.log(`[JobPilot] skills: trying ${Math.min(skills.length, 20)} skills`);
   for (const skill of skills.slice(0, 20)) {         // a sane cap for one field
     try {
+      const want = skill.toLowerCase();
+
+      // Already a tag? Skip it. Clicking an option that's already selected toggles it
+      // OFF, so re-running autofill would remove skills it added the first time. Compare
+      // against the current tags, reducing each to its bare skill (drop qualifiers).
+      const stripQual = (s) => s.trim().toLowerCase()
+        .replace(/\s+/g, " ").replace(/\s*\([^)]*\)/g, "")
+        .replace(/\s+programming language$/, "").trim();
+      const alreadyThere = _existingSkillLabels()
+        .some((lbl) => lbl === want || stripQual(lbl) === want);
+      if (alreadyThere) { added++; continue; }
+
       // Re-find the input each round: after a tag is added Workday can replace the input
       // node, so a stale reference would type into nothing.
       const input = _currentSkillInput(el) || el;
@@ -498,7 +521,6 @@ async function _fillSkillsTypeahead(el, skills) {
       // skill's results: options whose text actually relates to what was typed, so a
       // stale menu from the last skill doesn't get matched.
       _pressEnter(input);
-      const want = skill.toLowerCase();
       const firstWord = want.split(/[^a-z0-9#+]+/i)[0] || want;
       let opts = [];
       let fresh = false;
@@ -516,14 +538,18 @@ async function _fillSkillsTypeahead(el, skills) {
       }
 
       const norm = (s) => s.trim().toLowerCase().replace(/\s+/g, " ");
+      // Strip a trailing qualifier so an option that IS the skill still matches, while a
+      // different compound does not: "Java (Programming Language)" and "Dart Programming
+      // Language" both reduce to the skill, but "Dart Guns"/"Dart Boards" do not — those
+      // must be rejected. Removes any parenthetical and a trailing "programming language".
+      const stripQualifier = (s) => norm(s)
+        .replace(/\s*\([^)]*\)/g, "")
+        .replace(/\s+programming language$/, "")
+        .replace(/\s+\(software\)$/, "")
+        .trim();
       const match =
-        // exact, or the option is the skill plus a qualifier: "Java" -> "Java
-        // (Programming Language)". Also the reverse, and a loose contains as a last try.
-        opts.find((o) => norm(o.textContent) === want) ||
-        opts.find((o) => norm(o.textContent).startsWith(want + " ") || norm(o.textContent).startsWith(want + "(")) ||
-        opts.find((o) => norm(o.textContent).startsWith(want)) ||
-        opts.find((o) => want.startsWith(norm(o.textContent)) && norm(o.textContent).length > 2) ||
-        opts.find((o) => norm(o.textContent).includes(want) && want.length > 2);
+        opts.find((o) => norm(o.textContent) === want) ||        // exact
+        opts.find((o) => stripQualifier(o.textContent) === want); // skill + qualifier only
       if (!match) {
         console.log(`[JobPilot] skills: "${skill}" — ${opts.length} options but no match:`,
                     opts.slice(0, 4).map((o) => o.textContent.trim()));

@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.9";
+const JOBPILOT_VERSION = "1.9.10";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -421,12 +421,31 @@ function _typeInto(el, text) {
 
 function _openOptions(input) {
   // Workday renders the live results in an activeListContainer (menuItem rows); the
-  // already-chosen tags sit in a selectedItemList, which must NOT be read as options —
-  // that's how "Computer Science" (an existing education tag) kept coming back as a
-  // match. Prefer the active list, fall back to menuItems anywhere, and always drop
-  // anything inside a selectedItemList.
-  const active = document.querySelector('[data-automation-id="activeListContainer"]');
-  const scope = active || document;
+  // already-chosen tags sit in a selectedItemList, which must NOT be read as options.
+  // The catch: education's "Field of Study" is the same kind of control and can leave a
+  // stale activeListContainer open, so there can be TWO on the page — and the wrong one
+  // (Accounting, Actuarial Science…) was being read. Pick the results menu tied to the
+  // skills field: prefer the one the input's aria-controls points at, then one inside the
+  // skills wrapper, then the activeListContainer nearest the input in document order.
+  const containers = Array.from(document.querySelectorAll(
+    '[data-automation-id="activeListContainer"]'))
+    .filter((c) => c.offsetParent !== null);
+
+  let menu = null;
+  const controlled = input && input.getAttribute("aria-controls");
+  if (controlled) menu = document.getElementById(controlled);
+
+  if (!menu) {
+    const host = _skillsHost();
+    menu = (host && containers.find((c) => host.contains(c)))
+      // else the container physically closest below the skills input
+      || (input && containers
+        .map((c) => ({ c, d: Math.abs(c.getBoundingClientRect().top - input.getBoundingClientRect().bottom) }))
+        .sort((a, b) => a.d - b.d)[0]?.c)
+      || containers[0];
+  }
+
+  const scope = menu || document;
   const opts = Array.from(scope.querySelectorAll(
     '[data-automation-id="menuItem"], [role="option"], [data-automation-id*="promptOption" i]'
   ));
@@ -495,16 +514,27 @@ async function _fillSkillsTypeahead(el, skills) {
   return added;
 }
 
+// The skills field's wrapper, wherever it is. Its automation-id varies by tenant —
+// "skills--skills" on some, "formField-skills" on others — so match any id that carries
+// "skill". Returned wrapper is used both to find the live input and to scope the results
+// menu, so options come from the skills search and not a neighbouring education dropdown.
+function _skillsHost() {
+  const host = document.querySelector(
+    '[data-automation-id="skills--skills"], [data-automation-id="formField-skills"], '
+    + '[data-automation-id*="skill" i]');
+  if (!host) return null;
+  // Climb to the widget wrapper that contains both the input and its menu.
+  return host.closest('[data-automation-id^="formField-" i]')
+    || host.closest('.multiSelectContainer, [class*="multiselect" i]')
+    || host;
+}
+
 /** The live skills input — re-queried because adding a tag can swap the node out.
- *  Anchored to the skills automation-id so it can't drift onto a neighbouring multiselect
+ *  Anchored to the skills wrapper so it can't drift onto a neighbouring multiselect
  *  (education's Field of Study is the same kind of control and sits nearby). */
 function _currentSkillInput(seed) {
-  // Prefer the skills control by its own id, wherever it is on the page.
-  const skillsHost = document.querySelector(
-    '[data-automation-id="skills--skills"], [data-automation-id*="skills" i]');
-  const host = (skillsHost && (skillsHost.closest(
-    '.multiSelectContainer, [class*="multiselect" i]') || skillsHost)) ||
-    seed.closest('.multiSelectContainer, [class*="multiselect" i], [data-automation-id*="multiSelect" i]');
+  const host = _skillsHost()
+    || seed.closest('.multiSelectContainer, [class*="multiselect" i], [data-automation-id*="multiSelect" i]');
   if (!host) return seed;
   const input = host.querySelector('input[type="text"], input:not([type]), input[type="search"]');
   return input || seed;

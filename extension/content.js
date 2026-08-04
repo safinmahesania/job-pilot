@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.16";
+const JOBPILOT_VERSION = "1.9.17";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -455,33 +455,45 @@ function _skillTagCount() {
   if (!host) return 0;
   const list = host.querySelector('[data-automation-id="selectedItemList"]');
   if (!list) return 0;
-  // Each chosen skill is a pill inside the list.
-  return list.querySelectorAll('[data-automation-id="selectedItem"]').length;
+  // Visible tags only — some tenants keep an invisible phantom selectedItem in the DOM
+  // that would throw the before/after count off.
+  return Array.from(list.querySelectorAll('[data-automation-id="selectedItem"]'))
+    .filter((t) => t.offsetParent !== null).length;
 }
 
-/** Text of each skill currently chosen, lower-cased — used to skip re-adding (and thus
- *  toggling off) skills that are already tags. */
+/** Text of each visible skill tag, lower-cased — used to skip re-adding (toggling off)
+ *  skills already chosen, and to detect an Enter-added tag. */
 function _existingSkillLabels() {
   const host = _skillsHost();
   if (!host) return [];
   const list = host.querySelector('[data-automation-id="selectedItemList"]');
   if (!list) return [];
   return Array.from(list.querySelectorAll('[data-automation-id="selectedItem"]'))
+    .filter((t) => t.offsetParent !== null)
     .map((t) => t.textContent.trim().toLowerCase());
+}
+
+/** The most recently added visible skill tag element, or null. */
+function _newestSkillTag() {
+  const host = _skillsHost();
+  if (!host) return null;
+  const list = host.querySelector('[data-automation-id="selectedItemList"]');
+  if (!list) return null;
+  const tags = Array.from(list.querySelectorAll('[data-automation-id="selectedItem"]'))
+    .filter((t) => t.offsetParent !== null);
+  return tags[tags.length - 1] || null;
 }
 
 /** Select a menu option the way Workday's own handler expects. A bare .click() on the
  *  row was silently doing nothing; a full pointer + mouse sequence on the row (or its
  *  inner clickable, if the row delegates to a checkbox/anchor) registers the choice. */
 function _clickOption(option) {
-  // Workday registers the choice on the option's inner positioned div (the one with
-  // aria-posinset) — not the <li> row, not the promptOption text. Critically, this is a
-  // TOGGLE: one click adds the tag, a second click removes it. An earlier version fired a
-  // pointer sequence AND a native click, which added then immediately removed the tag
-  // (net zero — "clicked but no tag appeared"). So fire exactly ONE native click, which
-  // was proven to add the tag on its own.
+  // Click the option's positioned element. On some tenants that's an inner div carrying
+  // aria-posinset; on others the option element itself carries it. A single native click
+  // registers the choice — firing a pointer sequence as well double-toggled it back off.
   const target =
-    option.querySelector("div[aria-posinset]") ||
+    (option.matches("[aria-posinset]") ? option : null) ||
+    option.querySelector("[aria-posinset]") ||
     option.querySelector('[data-automation-id="promptOption"]') ||
     option.firstElementChild ||
     option;
@@ -517,18 +529,64 @@ async function _fillSkillsTypeahead(el, skills) {
       _typeInto(input, skill);
       await _sleep(150);
 
-      // This field searches on Enter, not on keystroke. Press it, then wait for THIS
-      // skill's results: options whose text actually relates to what was typed, so a
-      // stale menu from the last skill doesn't get matched.
+      // This field searches on Enter. On some tenants Enter also ADDS the top result
+      // directly (no click needed); on others it only opens the results and you must click
+      // an option. Handle both: press Enter, see whether a tag just appeared, and only
+      // click if it didn't.
       _pressEnter(input);
+
+      const norm = (s) => s.trim().toLowerCase().replace(/\s+/g, " ");
+      const stripQualifier = (s) => norm(s)
+        .replace(/\s*\([^)]*\)/g, "")
+        .replace(/\s+programming language$/, "")
+        .replace(/\s+\(software\)$/, "")
+        .trim();
+      const expand = (s) => s.replace(/\+\+/g, " plus plus").replace(/#/g, " sharp")
+        .replace(/\s+/g, " ").trim();
+      const wantExp = expand(want);
+      const paren = (s) => {
+        const m = norm(s).match(/\(([^)]+)\)/);
+        return m ? m[1].trim() : "";
+      };
+      const eq = (a, b) => a === b || expand(a) === b;
+      // Does an option/tag label refer to this skill? (exact, qualifier, vendor prefix,
+      // parenthetical abbreviation, symbol-expanded).
+      const labelMatches = (text) =>
+        eq(norm(text), wantExp) ||
+        eq(stripQualifier(text), wantExp) ||
+        stripQualifier(text).endsWith(" " + wantExp) ||
+        eq(paren(text), wantExp);
+
+      // Did Enter just add a tag on its own? Give it a moment, then look at the newest tag.
+      let enterAdded = false;
+      for (let waited = 0; waited < 700 && !enterAdded; waited += 150) {
+        await _sleep(150);
+        enterAdded = _existingSkillLabels().some((lbl) => labelMatches(lbl));
+      }
+      if (enterAdded) {
+        // Enter added the right skill (equisoft-style). Done — do NOT click, that would
+        // toggle it back off.
+        added++;
+        _typeInto(input, "");
+        await _sleep(150);
+        continue;
+      }
+      // Enter may have added the WRONG thing (top result that isn't our skill). If a new
+      // unmatched tag appeared, remove it before falling back to click-matching.
+      const strayTag = _newestSkillTag();
+      if (strayTag && !labelMatches(strayTag.textContent)) {
+        strayTag.querySelector('[data-automation-id="DELETE_charm"]')?.click();
+        await _sleep(200);
+      }
+
+      // No auto-add: wait for THIS skill's results, then click the matching option
+      // (ptc-style).
       const firstWord = want.split(/[^a-z0-9#+]+/i)[0] || want;
       let opts = [];
       let fresh = false;
-      for (let waited = 0; waited < 2800 && !fresh; waited += 150) {
+      for (let waited = 0; waited < 2500 && !fresh; waited += 150) {
         await _sleep(150);
         opts = _openOptions(input);
-        // "fresh" = at least one option shares the skill's leading word. Skills that
-        // genuinely aren't offered will just time out and be skipped, which is fine.
         fresh = opts.some((o) => o.textContent.trim().toLowerCase().includes(firstWord));
       }
       if (!opts.length) {                            // nothing came back — clear and move on
@@ -537,38 +595,10 @@ async function _fillSkillsTypeahead(el, skills) {
         continue;
       }
 
-      const norm = (s) => s.trim().toLowerCase().replace(/\s+/g, " ");
-      // Strip a trailing qualifier so an option that IS the skill still matches, while a
-      // different compound does not: "Java (Programming Language)" and "Dart Programming
-      // Language" both reduce to the skill, but "Dart Guns"/"Dart Boards" do not — those
-      // must be rejected. Removes any parenthetical and a trailing "programming language".
-      const stripQualifier = (s) => norm(s)
-        .replace(/\s*\([^)]*\)/g, "")
-        .replace(/\s+programming language$/, "")
-        .replace(/\s+\(software\)$/, "")
-        .trim();
-      // Expand symbols so "C#"/"C++"/"F#" can match "C Sharp"/"C Plus Plus"/"F Sharp".
-      const expand = (s) => s.replace(/\+\+/g, " plus plus").replace(/#/g, " sharp")
-        .replace(/\s+/g, " ").trim();
-      const wantExp = expand(want);
-      // The parenthetical abbreviation an option carries, if any: "Structured Query
-      // Language (SQL)" -> "sql". Lets the abbreviation the user typed match the spelt-out
-      // option.
-      const paren = (s) => {
-        const m = norm(s).match(/\(([^)]+)\)/);
-        return m ? m[1].trim() : "";
-      };
-      const eq = (a, b) => a === b || expand(a) === b;
       const match =
-        // exact, or skill + qualifier: "Java (Programming Language)", "Dart Programming
-        // Language". Symbol-expanded too, so "C#" hits "C Sharp (Programming Language)".
         opts.find((o) => eq(norm(o.textContent), wantExp)) ||
         opts.find((o) => eq(stripQualifier(o.textContent), wantExp)) ||
-        // vendor prefix: option ends with the skill — "Microsoft Visual Studio",
-        // "JetBrains IntelliJ IDEA". Requires the space so "Studio" alone can't match.
         opts.find((o) => stripQualifier(o.textContent).endsWith(" " + wantExp)) ||
-        // abbreviation spelt out with the abbr in parens: "Structured Query Language
-        // (SQL)" for "SQL".
         opts.find((o) => eq(paren(o.textContent), wantExp));
       if (!match) {
         console.log(`[JobPilot] skills: "${skill}" — ${opts.length} options but no match:`,
@@ -577,10 +607,7 @@ async function _fillSkillsTypeahead(el, skills) {
         continue;
       }
 
-      // Click and CONFIRM it stuck. A plain .click() on the row was reporting success
-      // while nothing was actually added — Workday's option registers on a real pointer
-      // sequence, and sometimes on an inner checkbox rather than the row. Count the tags
-      // before and after; only count it added if a tag actually appeared.
+      // Click and CONFIRM it stuck (count only visible tags, ignoring any phantom).
       const before = _skillTagCount();
       _clickOption(match);
       let after = before;

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "JobPilot Autofill",
-  "version": "1.9.7",
+  "version": "1.9.8",
   "description": "Fills job application forms from your JobPilot profile and attaches the documents written for that job. Runs only on the page you point it at.",
   "permissions": [
     "storage",

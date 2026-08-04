@@ -452,12 +452,18 @@ def match_job(url: str, conn=Depends(_db_dep)):
 
 @router.get("/api/jobs/search")
 def search_jobs(q: str = "", limit: int = 10, conn=Depends(_db_dep)):
-    """Free-text search over title/company, for the extension's manual picker."""
+    """Free-text search over title/company, for the extension's manual picker.
+
+    Only jobs still in play — the feed (surfaced) or saved — are offered. A dismissed or
+    already-applied job isn't something you're about to fill an application for, so
+    surfacing it in the picker only adds noise and risks binding the tab to the wrong one.
+    """
     like = f"%{q.strip()}%"
     rows = conn.execute(
         "SELECT id, title, company, status FROM jobs "
-        "WHERE title LIKE ? OR company LIKE ? "
-        "ORDER BY CASE status WHEN 'saved' THEN 0 WHEN 'applied' THEN 1 ELSE 2 END, "
+        "WHERE (title LIKE ? OR company LIKE ?) "
+        "AND status IN ('surfaced', 'saved') "
+        "ORDER BY CASE status WHEN 'saved' THEN 0 ELSE 1 END, "
         "score DESC LIMIT ?",
         (like, like, limit),
     ).fetchall()

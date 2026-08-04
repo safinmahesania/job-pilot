@@ -32,7 +32,34 @@ async function apiBase() {
 }
 
 // tabId -> { id, title, company, confidence }
+// Tab -> bound job. Kept in chrome.storage.session, not just a Map, because a Manifest V3
+// service worker is torn down when idle and loses all in-memory state — which is why a
+// bound job "deselected" itself the moment you clicked away and came back. session storage
+// is cleared when the browser closes (bindings shouldn't outlive a session) but survives
+// the worker sleeping. The Map is a synchronous cache in front of it.
 const bindings = new Map();
+
+async function bindingGet(tabId) {
+  if (bindings.has(tabId)) return bindings.get(tabId);
+  try {
+    const { [`bind_${tabId}`]: saved } = await chrome.storage.session.get(`bind_${tabId}`);
+    if (saved) bindings.set(tabId, saved);
+    return saved || null;
+  } catch {
+    return bindings.get(tabId) || null;
+  }
+}
+
+async function bindingSet(tabId, job) {
+  bindings.set(tabId, job);
+  try { await chrome.storage.session.set({ [`bind_${tabId}`]: job }); } catch { /* cache still holds it */ }
+}
+
+// Drop a tab's binding when the tab closes, so storage doesn't accumulate stale entries.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  bindings.delete(tabId);
+  chrome.storage.session.remove(`bind_${tabId}`).catch(() => {});
+});
 
 // The app can be locked with a password (JOBPILOT_PASSWORD). When it is, every call
 // must carry the key as a header — the extension cannot log in through the browser
@@ -90,7 +117,7 @@ async function fetchFile(jobId, kind) {
 async function bindTab(tabId, url) {
   const res = await getJSON(`/api/jobs/match?url=${encodeURIComponent(url)}`);
   if (res.match) {
-    bindings.set(tabId, { ...res.match, confidence: res.confidence });
+    await bindingSet(tabId, { ...res.match, confidence: res.confidence });
     return { bound: res.match, confidence: res.confidence, candidates: [] };
   }
   bindings.delete(tabId);                      // stale binding must not survive
@@ -167,7 +194,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
               ok: true,
               data: await postJSON("/api/autofill/resolve", {
                 fields: msg.fields,
-                job_id: bindings.get(tabId)?.id ?? null,
+                job_id: (await bindingGet(tabId))?.id ?? null,
               }),
             });
           } catch (e) {
@@ -183,7 +210,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
           try {
             const data = await postJSON("/api/autofill/resolve", {
               fields: [{ id: "q", label: msg.question, type: "textarea", options: [] }],
-              job_id: bindings.get(tabId)?.id ?? null,
+              job_id: (await bindingGet(tabId))?.id ?? null,
             });
             respond({ ok: true, answer: (data.answers && data.answers.q) || "" });
           } catch (e) {
@@ -199,12 +226,12 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
 
         // You picked a job by hand in the popup.
         case "bindManual":
-          bindings.set(tabId, { ...msg.job, confidence: "manual" });
+          await bindingSet(tabId, { ...msg.job, confidence: "manual" });
           respond({ ok: true, data: { bound: msg.job, confidence: "manual" } });
           return;
 
         case "getBinding":
-          respond({ ok: true, data: bindings.get(tabId) || null });
+          respond({ ok: true, data: (await bindingGet(tabId)) || null });
           return;
 
         case "searchJobs":
@@ -216,7 +243,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
 
         // What is saved for the bound job — drives the popup's attach button.
         case "getMaterials": {
-          const job = bindings.get(tabId);
+          const job = await bindingGet(tabId);
           if (!job) { respond({ ok: false, error: "no job bound to this tab" }); return; }
           const data = await getJSON(`/api/jobs/${job.id}/materials`);
           respond({ ok: true, data: { job, ...data } });
@@ -225,7 +252,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
 
         // The bytes to attach. Requested by job id — never by filename.
         case "getFiles": {
-          const job = bindings.get(tabId);
+          const job = await bindingGet(tabId);
           if (!job) { respond({ ok: false, error: "no job bound to this tab" }); return; }
 
           const files = {};

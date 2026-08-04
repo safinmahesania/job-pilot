@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.7";
+const JOBPILOT_VERSION = "1.9.8";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -402,15 +402,29 @@ function _typeInto(el, text) {
   el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: last }));
 }
 
-function _openOptions() {
-  // The dropdown options, wherever the framework renders them — usually a listbox
-  // appended to the body rather than a sibling of the input. Workday's multiselect menu
-  // uses menuItem/promptOption automation-ids and sometimes plain [role=option]; cover
-  // the common shapes so a match can be found whatever the tenant renders.
-  return Array.from(document.querySelectorAll(
+function _openOptions(input) {
+  // The dropdown options. Workday renders the menu in a listbox that its input points to
+  // via aria-controls/aria-owns, or appends it to the body. Scoping to the input's own
+  // listbox matters: other open dropdowns on the page (an education "Field of Study"
+  // showing "Computer Science", say) would otherwise be picked up and matched against a
+  // skill — which is exactly what happened.
+  let scope = document;
+  if (input) {
+    const id = input.getAttribute("aria-controls") || input.getAttribute("aria-owns");
+    const owned = id && document.getElementById(id);
+    if (owned) {
+      scope = owned;
+    } else {
+      // No aria link — fall back to the listbox nearest the skills container.
+      const container = input.closest(
+        '.multiSelectContainer, [class*="multiselect" i], [data-automation-id*="multiSelect" i]');
+      const near = container && container.querySelector('[role="listbox"], [data-automation-id*="promptOption" i]');
+      if (near) scope = near;
+    }
+  }
+  return Array.from(scope.querySelectorAll(
     '[role="option"], [role="listbox"] li, [data-automation-id*="promptOption" i], '
-    + '[data-automation-id*="menuItem" i], [data-automation-id*="searchResult" i], '
-    + 'ul[role="listbox"] [role="option"]'
+    + '[data-automation-id*="menuItem" i], [data-automation-id*="searchResult" i]'
   )).filter((o) => o.offsetParent !== null && o.textContent.trim());
 }
 
@@ -442,7 +456,7 @@ async function _fillSkillsTypeahead(el, skills) {
       let opts = [];
       for (let waited = 0; waited < 2500 && !opts.length; waited += 150) {
         await _sleep(150);
-        opts = _openOptions();
+        opts = _openOptions(input);
       }
       if (!opts.length) {                            // nothing came back — clear and move on
         console.log(`[JobPilot] skills: "${skill}" — no options appeared`);

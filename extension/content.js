@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.8";
+const JOBPILOT_VERSION = "1.9.9";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -379,11 +379,28 @@ function _looksLikeTypeahead(el) {
  *  Workday skills control carries no "skill" text on the input, only a "Search"
  *  placeholder inside a multiSelectContainer. */
 function _isSkillsField(el, labelText) {
+  // The field's own automation-id is the surest signal. Workday's skills box is
+  // "skills--skills"; education's "Field of Study" is another multiselect with a Search
+  // placeholder ("education-730--fieldOfStudy") that was being mistaken for skills — its
+  // options are academic fields (Computer Science, Accounting…), not skills. So read the
+  // id off the input and its ancestors: a "skill" id wins, an education/field-of-study/
+  // major/degree/language id disqualifies.
+  const ids = [];
+  for (let n = el, hops = 0; n && hops < 4; n = n.parentElement, hops++) {
+    const id = n.getAttribute && n.getAttribute("data-automation-id");
+    if (id) ids.push(id.toLowerCase());
+  }
+  const idText = ids.join(" ");
+  if (/\bskill/.test(idText)) return true;
+  if (/education|field\s*of\s*study|fieldofstudy|major|degree|language|school/.test(idText)) {
+    return false;                         // a different multiselect — never skills
+  }
+
   if (/\b(skills?|competenc(?:y|ies)|areas? of expertise|expertise)\b/i.test(labelText)) {
     return true;
   }
-  // No skill word anywhere near it — fall back to the container shape, but only for a
-  // real multiselect (so a plain "Search" box elsewhere isn't mistaken for skills).
+  // No skill word and no disqualifying id — fall back to the container shape, but only
+  // for a real multiselect (so a plain "Search" box elsewhere isn't mistaken for skills).
   const container = el.closest('.multiSelectContainer, [class*="multiselect" i], '
     + '[data-automation-id*="multiSelect" i]');
   return !!container && (el.placeholder || "").trim().toLowerCase() === "search";
@@ -403,29 +420,20 @@ function _typeInto(el, text) {
 }
 
 function _openOptions(input) {
-  // The dropdown options. Workday renders the menu in a listbox that its input points to
-  // via aria-controls/aria-owns, or appends it to the body. Scoping to the input's own
-  // listbox matters: other open dropdowns on the page (an education "Field of Study"
-  // showing "Computer Science", say) would otherwise be picked up and matched against a
-  // skill — which is exactly what happened.
-  let scope = document;
-  if (input) {
-    const id = input.getAttribute("aria-controls") || input.getAttribute("aria-owns");
-    const owned = id && document.getElementById(id);
-    if (owned) {
-      scope = owned;
-    } else {
-      // No aria link — fall back to the listbox nearest the skills container.
-      const container = input.closest(
-        '.multiSelectContainer, [class*="multiselect" i], [data-automation-id*="multiSelect" i]');
-      const near = container && container.querySelector('[role="listbox"], [data-automation-id*="promptOption" i]');
-      if (near) scope = near;
-    }
-  }
-  return Array.from(scope.querySelectorAll(
-    '[role="option"], [role="listbox"] li, [data-automation-id*="promptOption" i], '
-    + '[data-automation-id*="menuItem" i], [data-automation-id*="searchResult" i]'
-  )).filter((o) => o.offsetParent !== null && o.textContent.trim());
+  // Workday renders the live results in an activeListContainer (menuItem rows); the
+  // already-chosen tags sit in a selectedItemList, which must NOT be read as options —
+  // that's how "Computer Science" (an existing education tag) kept coming back as a
+  // match. Prefer the active list, fall back to menuItems anywhere, and always drop
+  // anything inside a selectedItemList.
+  const active = document.querySelector('[data-automation-id="activeListContainer"]');
+  const scope = active || document;
+  const opts = Array.from(scope.querySelectorAll(
+    '[data-automation-id="menuItem"], [role="option"], [data-automation-id*="promptOption" i]'
+  ));
+  return opts.filter((o) =>
+    o.offsetParent !== null &&
+    o.textContent.trim() &&
+    !o.closest('[data-automation-id="selectedItemList"]'));   // not an existing tag
 }
 
 function _pressEnter(el) {
@@ -487,12 +495,18 @@ async function _fillSkillsTypeahead(el, skills) {
   return added;
 }
 
-/** The live skills input — re-queried because adding a tag can swap the node out. */
+/** The live skills input — re-queried because adding a tag can swap the node out.
+ *  Anchored to the skills automation-id so it can't drift onto a neighbouring multiselect
+ *  (education's Field of Study is the same kind of control and sits nearby). */
 function _currentSkillInput(seed) {
-  const container = seed.closest(
-    '.multiSelectContainer, [class*="multiselect" i], [data-automation-id*="multiSelect" i]');
-  if (!container) return seed;
-  const input = container.querySelector('input[type="text"], input:not([type])');
+  // Prefer the skills control by its own id, wherever it is on the page.
+  const skillsHost = document.querySelector(
+    '[data-automation-id="skills--skills"], [data-automation-id*="skills" i]');
+  const host = (skillsHost && (skillsHost.closest(
+    '.multiSelectContainer, [class*="multiselect" i]') || skillsHost)) ||
+    seed.closest('.multiSelectContainer, [class*="multiselect" i], [data-automation-id*="multiSelect" i]');
+  if (!host) return seed;
+  const input = host.querySelector('input[type="text"], input:not([type]), input[type="search"]');
   return input || seed;
 }
 

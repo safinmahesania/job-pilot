@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.13";
+const JOBPILOT_VERSION = "1.9.14";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -463,25 +463,18 @@ function _skillTagCount() {
  *  row was silently doing nothing; a full pointer + mouse sequence on the row (or its
  *  inner clickable, if the row delegates to a checkbox/anchor) registers the choice. */
 function _clickOption(option) {
-  // Empirically, Workday only registers the choice when the click lands on the option's
-  // inner positioned div (the one carrying aria-posinset) — not on the <li> row and not
-  // on the promptOption text. A plain li.click() and mouse events on the li both did
-  // nothing; a native click on the inner div, or a pointer+mouse sequence on it, both add
-  // the tag. So target that div and fire the full sequence plus a native click.
+  // Workday registers the choice on the option's inner positioned div (the one with
+  // aria-posinset) — not the <li> row, not the promptOption text. Critically, this is a
+  // TOGGLE: one click adds the tag, a second click removes it. An earlier version fired a
+  // pointer sequence AND a native click, which added then immediately removed the tag
+  // (net zero — "clicked but no tag appeared"). So fire exactly ONE native click, which
+  // was proven to add the tag on its own.
   const target =
     option.querySelector("div[aria-posinset]") ||
     option.querySelector('[data-automation-id="promptOption"]') ||
     option.firstElementChild ||
     option;
-  const opts = { bubbles: true, cancelable: true, view: window };
-  for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
-    try {
-      const Ctor = type.startsWith("pointer") && typeof PointerEvent === "function"
-        ? PointerEvent : MouseEvent;
-      target.dispatchEvent(new Ctor(type, opts));
-    } catch { /* older engines: skip pointer events, mouse ones still fire */ }
-  }
-  try { target.click(); } catch { /* already dispatched above */ }
+  target.click();
 }
 
 

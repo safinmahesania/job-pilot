@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.11";
+const JOBPILOT_VERSION = "1.9.12";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -420,39 +420,22 @@ function _typeInto(el, text) {
 }
 
 function _openOptions(input) {
-  // Workday renders the live results in an activeListContainer (menuItem rows); the
-  // already-chosen tags sit in a selectedItemList, which must NOT be read as options.
-  // The catch: education's "Field of Study" is the same kind of control and can leave a
-  // stale activeListContainer open, so there can be TWO on the page — and the wrong one
-  // (Accounting, Actuarial Science…) was being read. Pick the results menu tied to the
-  // skills field: prefer the one the input's aria-controls points at, then one inside the
-  // skills wrapper, then the activeListContainer nearest the input in document order.
-  const containers = Array.from(document.querySelectorAll(
-    '[data-automation-id="activeListContainer"]'))
-    .filter((c) => c.offsetParent !== null);
-
-  let menu = null;
-  const controlled = input && input.getAttribute("aria-controls");
-  if (controlled) menu = document.getElementById(controlled);
-
-  if (!menu) {
-    const host = _skillsHost();
-    menu = (host && containers.find((c) => host.contains(c)))
-      // else the container physically closest below the skills input
-      || (input && containers
-        .map((c) => ({ c, d: Math.abs(c.getBoundingClientRect().top - input.getBoundingClientRect().bottom) }))
-        .sort((a, b) => a.d - b.d)[0]?.c)
-      || containers[0];
-  }
-
-  const scope = menu || document;
-  const opts = Array.from(scope.querySelectorAll(
-    '[data-automation-id="menuItem"], [role="option"], [data-automation-id*="promptOption" i]'
+  // The live results are menuItems inside an activeListContainer (specifically a
+  // responsiveMonikerPrompt for skills); the already-chosen tags live in a
+  // selectedItemList and must never be read as options — that's how "Computer Science"
+  // (an existing education tag) kept coming back. So: take menuItems from the active
+  // results containers only, and hard-exclude anything under a selectedItemList or a
+  // multiSelectContainer (the input/tag area).
+  const opts = Array.from(document.querySelectorAll(
+    '[data-automation-id="activeListContainer"] [data-automation-id="menuItem"], '
+    + '[data-automation-id="responsiveMonikerPrompt"] [data-automation-id="menuItem"], '
+    + '[data-automation-id="activeListContainer"] [role="option"]'
   ));
   return opts.filter((o) =>
     o.offsetParent !== null &&
     o.textContent.trim() &&
-    !o.closest('[data-automation-id="selectedItemList"]'));   // not an existing tag
+    !o.closest('[data-automation-id="selectedItemList"]') &&
+    !o.closest('[data-automation-id="multiSelectContainer"]'));
 }
 
 function _pressEnter(el) {
@@ -469,13 +452,11 @@ function _pressEnter(el) {
  *  selectedItemList. Used to confirm a click actually added one. */
 function _skillTagCount() {
   const host = _skillsHost();
-  const list = (host && host.querySelector('[data-automation-id="selectedItemList"]'))
-    || document.querySelector('[data-automation-id="selectedItemList"]');
+  if (!host) return 0;
+  const list = host.querySelector('[data-automation-id="selectedItemList"]');
   if (!list) return 0;
-  // Each chosen skill is a pill/button inside the list.
-  return list.querySelectorAll(
-    '[data-automation-id="selectedItem"], [data-automation-id*="pill" i], li, button'
-  ).length;
+  // Each chosen skill is a pill inside the list.
+  return list.querySelectorAll('[data-automation-id="selectedItem"]').length;
 }
 
 /** Select a menu option the way Workday's own handler expects. A bare .click() on the
@@ -522,10 +503,15 @@ async function _fillSkillsTypeahead(el, skills) {
       }
 
       const want = skill.toLowerCase();
+      const norm = (s) => s.trim().toLowerCase().replace(/\s+/g, " ");
       const match =
-        opts.find((o) => o.textContent.trim().toLowerCase() === want) ||
-        opts.find((o) => o.textContent.trim().toLowerCase().startsWith(want)) ||
-        opts.find((o) => o.textContent.trim().toLowerCase().includes(want));
+        // exact, or the option is the skill plus a qualifier: "Java" -> "Java
+        // (Programming Language)". Also the reverse, and a loose contains as a last try.
+        opts.find((o) => norm(o.textContent) === want) ||
+        opts.find((o) => norm(o.textContent).startsWith(want + " ") || norm(o.textContent).startsWith(want + "(")) ||
+        opts.find((o) => norm(o.textContent).startsWith(want)) ||
+        opts.find((o) => want.startsWith(norm(o.textContent)) && norm(o.textContent).length > 2) ||
+        opts.find((o) => norm(o.textContent).includes(want) && want.length > 2);
       if (!match) {
         console.log(`[JobPilot] skills: "${skill}" — ${opts.length} options but no match:`,
                     opts.slice(0, 4).map((o) => o.textContent.trim()));

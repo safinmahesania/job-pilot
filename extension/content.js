@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.10";
+const JOBPILOT_VERSION = "1.9.11";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -465,6 +465,36 @@ function _pressEnter(el) {
   }
 }
 
+/** How many skills are currently chosen — i.e. tags in the skills field's
+ *  selectedItemList. Used to confirm a click actually added one. */
+function _skillTagCount() {
+  const host = _skillsHost();
+  const list = (host && host.querySelector('[data-automation-id="selectedItemList"]'))
+    || document.querySelector('[data-automation-id="selectedItemList"]');
+  if (!list) return 0;
+  // Each chosen skill is a pill/button inside the list.
+  return list.querySelectorAll(
+    '[data-automation-id="selectedItem"], [data-automation-id*="pill" i], li, button'
+  ).length;
+}
+
+/** Select a menu option the way Workday's own handler expects. A bare .click() on the
+ *  row was silently doing nothing; a full pointer + mouse sequence on the row (or its
+ *  inner clickable, if the row delegates to a checkbox/anchor) registers the choice. */
+function _clickOption(option) {
+  // Some rows put the real click target on an inner element.
+  const target = option.querySelector(
+    '[data-automation-id="promptOption"], [role="option"], input[type="checkbox"], a, button'
+  ) || option;
+  const opts = { bubbles: true, cancelable: true, view: window };
+  for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+    try { target.dispatchEvent(new MouseEvent(type, opts)); } catch { /* pointer events fall back to mouse */ }
+  }
+  // Belt and braces: also call the native click, in case the framework listens for it.
+  try { target.click(); } catch { /* already dispatched above */ }
+}
+
+
 async function _fillSkillsTypeahead(el, skills) {
   let added = 0;
   console.log(`[JobPilot] skills: trying ${Math.min(skills.length, 20)} skills`);
@@ -503,9 +533,24 @@ async function _fillSkillsTypeahead(el, skills) {
         continue;
       }
 
-      match.click();
-      added++;
-      await _sleep(200);                             // let the tag render and the input reset
+      // Click and CONFIRM it stuck. A plain .click() on the row was reporting success
+      // while nothing was actually added — Workday's option registers on a real pointer
+      // sequence, and sometimes on an inner checkbox rather than the row. Count the tags
+      // before and after; only count it added if a tag actually appeared.
+      const before = _skillTagCount();
+      _clickOption(match);
+      let after = before;
+      for (let waited = 0; waited < 900 && after <= before; waited += 150) {
+        await _sleep(150);
+        after = _skillTagCount();
+      }
+      if (after > before) {
+        added++;
+      } else {
+        console.log(`[JobPilot] skills: "${skill}" — clicked but no tag appeared`);
+      }
+      _typeInto(input, "");                          // clear for the next skill
+      await _sleep(150);
     } catch (e) {
       console.warn(`[JobPilot] skills: "${skill}" threw`, e);
     }

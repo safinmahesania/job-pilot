@@ -252,7 +252,8 @@
                   class="w-full text-[13px] px-2.5 py-1.5 border border-gray-200 rounded-md outline-none focus:border-brand resize-none bg-white"></textarea>
               </div>
               <div class="flex flex-wrap items-center gap-2">
-                <a :href="job.apply_url" target="_blank" class="text-[13px] h-8 px-4 rounded-md bg-brand text-white flex items-center gap-1"><i class="ti ti-external-link"></i> Apply</a>
+                <a :href="job.apply_url" target="_blank" x-show="job.apply_url" class="text-[13px] h-8 px-4 rounded-md bg-brand text-white flex items-center gap-1"><i class="ti ti-external-link"></i> Apply</a>
+                <a :href="job.source_url" target="_blank" x-show="job.source_url" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1"><i class="ti ti-eye"></i> View job</a>
                 <template x-if="tab!=='dismissed'">
                   <div class="flex items-center gap-2">
                     <button @click="setStatus(job,'saved')" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">Save</button>

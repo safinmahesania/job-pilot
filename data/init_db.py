@@ -81,6 +81,19 @@ def main():
     added = _add_missing_columns(conn, schema)
 
     conn.executescript(schema)               # indexes, triggers, seed rows
+
+    # Backfill: older rows may have an empty source_url (post link) or apply_url. Point
+    # each at the other so "View job" and "Apply" always have somewhere to go. New rows
+    # get this in save_job; this catches everything saved before that.
+    conn.execute(
+        "UPDATE jobs SET source_url = apply_url "
+        "WHERE (source_url IS NULL OR source_url = '') "
+        "AND apply_url IS NOT NULL AND apply_url != ''")
+    conn.execute(
+        "UPDATE jobs SET apply_url = source_url "
+        "WHERE (apply_url IS NULL OR apply_url = '') "
+        "AND source_url IS NOT NULL AND source_url != ''")
+
     conn.commit()
     conn.close()
 

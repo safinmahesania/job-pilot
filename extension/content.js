@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.17";
+const JOBPILOT_VERSION = "1.9.18";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -503,6 +503,8 @@ function _clickOption(option) {
 
 async function _fillSkillsTypeahead(el, skills) {
   let added = 0;
+  const addedNames = [];      // the skills that actually became tags, for a clear log
+  const skippedNames = [];    // asked for but not offered / no match
   console.log(`[JobPilot] skills: trying ${Math.min(skills.length, 20)} skills`);
   for (const skill of skills.slice(0, 20)) {         // a sane cap for one field
     try {
@@ -516,7 +518,7 @@ async function _fillSkillsTypeahead(el, skills) {
         .replace(/\s+programming language$/, "").trim();
       const alreadyThere = _existingSkillLabels()
         .some((lbl) => lbl === want || stripQual(lbl) === want);
-      if (alreadyThere) { added++; continue; }
+      if (alreadyThere) { added++; addedNames.push(skill + " (already)"); continue; }
 
       // Re-find the input each round: after a tag is added Workday can replace the input
       // node, so a stale reference would type into nothing.
@@ -567,6 +569,7 @@ async function _fillSkillsTypeahead(el, skills) {
         // Enter added the right skill (equisoft-style). Done — do NOT click, that would
         // toggle it back off.
         added++;
+        addedNames.push(skill);
         _typeInto(input, "");
         await _sleep(150);
         continue;
@@ -591,6 +594,7 @@ async function _fillSkillsTypeahead(el, skills) {
       }
       if (!opts.length) {                            // nothing came back — clear and move on
         console.log(`[JobPilot] skills: "${skill}" — no options appeared`);
+        skippedNames.push(skill + " (not offered)");
         _typeInto(input, "");
         continue;
       }
@@ -603,6 +607,7 @@ async function _fillSkillsTypeahead(el, skills) {
       if (!match) {
         console.log(`[JobPilot] skills: "${skill}" — ${opts.length} options but no match:`,
                     opts.slice(0, 4).map((o) => o.textContent.trim()));
+        skippedNames.push(skill + " (no exact match)");
         _typeInto(input, "");
         continue;
       }
@@ -617,16 +622,20 @@ async function _fillSkillsTypeahead(el, skills) {
       }
       if (after > before) {
         added++;
+        addedNames.push(skill);
       } else {
         console.log(`[JobPilot] skills: "${skill}" — clicked but no tag appeared`);
+        skippedNames.push(skill + " (click didn't stick)");
       }
       _typeInto(input, "");                          // clear for the next skill
       await _sleep(150);
     } catch (e) {
       console.warn(`[JobPilot] skills: "${skill}" threw`, e);
+      skippedNames.push(skill + " (error)");
     }
   }
-  console.log(`[JobPilot] skills: added ${added}`);
+  console.log(`[JobPilot] skills: added ${added} ->`, addedNames);
+  if (skippedNames.length) console.log("[JobPilot] skills: skipped ->", skippedNames);
   return added;
 }
 

@@ -51,6 +51,16 @@ def save_job(conn, job: dict):
     # adapters filled them and the columns stayed NULL — which quietly disabled
     # profile.yaml's `salary_floor` filter. Anything the schema stores must be
     # named here.
+
+    # A job's post URL (source_url) is what "View posting" opens. Some boards only give
+    # an apply link, leaving source_url empty — so the card would have nothing to view.
+    # Fall back to apply_url so there's always a posting to open; the reverse too, so
+    # "Apply" is never dead either.
+    if not (job.get("source_url") or "").strip():
+        job["source_url"] = job.get("apply_url") or ""
+    if not (job.get("apply_url") or "").strip():
+        job["apply_url"] = job.get("source_url") or ""
+
     conn.execute(
         """INSERT OR IGNORE INTO jobs
            (dedupe_hash, source, source_url, apply_url, title, company,

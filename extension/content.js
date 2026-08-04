@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.12";
+const JOBPILOT_VERSION = "1.9.13";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -463,15 +463,24 @@ function _skillTagCount() {
  *  row was silently doing nothing; a full pointer + mouse sequence on the row (or its
  *  inner clickable, if the row delegates to a checkbox/anchor) registers the choice. */
 function _clickOption(option) {
-  // Some rows put the real click target on an inner element.
-  const target = option.querySelector(
-    '[data-automation-id="promptOption"], [role="option"], input[type="checkbox"], a, button'
-  ) || option;
+  // Empirically, Workday only registers the choice when the click lands on the option's
+  // inner positioned div (the one carrying aria-posinset) — not on the <li> row and not
+  // on the promptOption text. A plain li.click() and mouse events on the li both did
+  // nothing; a native click on the inner div, or a pointer+mouse sequence on it, both add
+  // the tag. So target that div and fire the full sequence plus a native click.
+  const target =
+    option.querySelector("div[aria-posinset]") ||
+    option.querySelector('[data-automation-id="promptOption"]') ||
+    option.firstElementChild ||
+    option;
   const opts = { bubbles: true, cancelable: true, view: window };
   for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
-    try { target.dispatchEvent(new MouseEvent(type, opts)); } catch { /* pointer events fall back to mouse */ }
+    try {
+      const Ctor = type.startsWith("pointer") && typeof PointerEvent === "function"
+        ? PointerEvent : MouseEvent;
+      target.dispatchEvent(new Ctor(type, opts));
+    } catch { /* older engines: skip pointer events, mouse ones still fire */ }
   }
-  // Belt and braces: also call the native click, in case the framework listens for it.
   try { target.click(); } catch { /* already dispatched above */ }
 }
 
@@ -485,16 +494,27 @@ async function _fillSkillsTypeahead(el, skills) {
       // node, so a stale reference would type into nothing.
       const input = _currentSkillInput(el) || el;
       input.focus();
+      // Clear first so the previous search's results can't be mistaken for this one's —
+      // the menu lagged a query behind, matching "PyCharm" against Android options.
+      _typeInto(input, "");
+      await _sleep(120);
       _typeInto(input, skill);
       await _sleep(150);
 
-      // This field searches on Enter, not on keystroke. Press it, then wait for the
-      // results list to appear.
+      // This field searches on Enter, not on keystroke. Press it, then wait for THIS
+      // skill's results: options whose text actually relates to what was typed, so a
+      // stale menu from the last skill doesn't get matched.
       _pressEnter(input);
+      const want = skill.toLowerCase();
+      const firstWord = want.split(/[^a-z0-9#+]+/i)[0] || want;
       let opts = [];
-      for (let waited = 0; waited < 2500 && !opts.length; waited += 150) {
+      let fresh = false;
+      for (let waited = 0; waited < 2800 && !fresh; waited += 150) {
         await _sleep(150);
         opts = _openOptions(input);
+        // "fresh" = at least one option shares the skill's leading word. Skills that
+        // genuinely aren't offered will just time out and be skipped, which is fine.
+        fresh = opts.some((o) => o.textContent.trim().toLowerCase().includes(firstWord));
       }
       if (!opts.length) {                            // nothing came back — clear and move on
         console.log(`[JobPilot] skills: "${skill}" — no options appeared`);
@@ -502,7 +522,6 @@ async function _fillSkillsTypeahead(el, skills) {
         continue;
       }
 
-      const want = skill.toLowerCase();
       const norm = (s) => s.trim().toLowerCase().replace(/\s+/g, " ");
       const match =
         // exact, or the option is the skill plus a qualifier: "Java" -> "Java

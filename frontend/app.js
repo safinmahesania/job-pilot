@@ -280,6 +280,14 @@ function jobpilot() {
     async loadSources() {
       this.sourceCfg = await fetch('/api/sources/config').then(r=>r.json()).catch(()=>[]);
     },
+    async pruneHealth() {
+      // Clear health rows for boards no longer in the config (e.g. a deleted source that
+      // still shows its last error). Safe: only removes rows with no matching source.
+      const r = await fetch('/api/sources/prune-health', { method:'POST' }).then(r=>r.json()).catch(()=>({count:0}));
+      await this.loadSources();
+      await this.loadHealth?.();
+      this.showSnack(r.count ? `Cleared ${r.count} removed source(s)` : 'Nothing to clean up');
+    },
     async toggleSource(s) {
       await fetch(`/api/sources/${s.index}/toggle`, { method:'POST' });
       await this.loadSources();

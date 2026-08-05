@@ -211,6 +211,24 @@ def toggle_source(index: int):
     return {"index": index, "active": items[index]["active"]}
 
 
+@router.post("/api/sources/prune-health")
+def prune_orphaned_health(conn=Depends(_db_dep)):
+    """Delete source_health rows for boards that are no longer in the config.
+
+    When a source is removed (or was removed before delete cleaned up health), its last
+    error lingers in the Health view because health is a separate table keyed by name.
+    This clears every health row whose name isn't a current board.
+    """
+    data = configio.read_yaml("companies-backup.yaml") or {}
+    live = {c.get("name") for c in data.get("companies", []) if c.get("name")}
+    rows = conn.execute("SELECT name FROM source_health").fetchall()
+    removed = [r[0] for r in rows if r[0] not in live]
+    for name in removed:
+        conn.execute("DELETE FROM source_health WHERE name = ?", (name,))
+    conn.commit()
+    return {"pruned": removed, "count": len(removed)}
+
+
 class NewSource(BaseModel):
     # A source with no name or no ats used to be accepted and written to
     # companies-backup.yaml, where it did nothing except produce a "No adapter for ats=''"
@@ -252,11 +270,17 @@ def add_source(body: NewSource):
 
 
 @router.delete("/api/sources/{index}")
-def delete_source(index: int):
+def delete_source(index: int, conn=Depends(_db_dep)):
     data = configio.read_yaml("companies-backup.yaml") or {}
     items = data.get("companies", [])
     if not 0 <= index < len(items):
         raise HTTPException(404, "source not found")
     removed = items.pop(index)
     configio.write_yaml("companies-backup.yaml", data)
-    return {"removed": removed.get("name")}
+    # Health lives in its own table keyed by name; without this the deleted board keeps
+    # showing its last error in the Health view forever.
+    name = removed.get("name")
+    if name:
+        conn.execute("DELETE FROM source_health WHERE name = ?", (name,))
+        conn.commit()
+    return {"removed": name}

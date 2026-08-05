@@ -49,6 +49,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0,
                     help="only test the first N active sources (0 = all)")
+    ap.add_argument("--source", default="",
+                    help="only test sources whose name contains this (e.g. '1Password')")
     ap.add_argument("--show", action="store_true",
                     help="print example jobs for each rule")
     args = ap.parse_args()
@@ -60,10 +62,15 @@ def main():
 
     companies = (configio.read_yaml(COMPANIES_FILE) or {}).get("companies", [])
     active = [c for c in companies if c.get("active")]
+    # A --source filter looks at one board even if it's inactive, so you can inspect a
+    # source you've turned off; without it, only active sources are tested.
+    if args.source:
+        needle = args.source.lower()
+        active = [c for c in companies if needle in (c.get("name") or "").lower()]
     if args.limit:
         active = active[: args.limit]
     if not active:
-        print("No active sources configured.")
+        print("No matching sources configured.")
         return
 
     c = profile.get("constraints", {})
@@ -108,13 +115,14 @@ def main():
     print(f"\n  Would reach scoring: {passed}  ({round(100 * passed / total, 1)}%)")
 
     if args.show:
+        limit = 15 if args.source else 6      # more detail when looking at one board
         print("\n  ── Examples per rule (title | location) ──")
         for name, jobs in buckets.items():
             if not jobs:
                 continue
             label = "PASSED" if name == "passes_all" else name
-            print(f"\n  [{label}]")
-            for j in jobs[:6]:
+            print(f"\n  [{label}]  ({len(jobs)})")
+            for j in jobs[:limit]:
                 print(f"    · {(j.get('title') or '')[:50]:50} | "
                       f"{(j.get('location') or '')[:30]}")
 

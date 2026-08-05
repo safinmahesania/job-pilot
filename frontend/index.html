@@ -1297,6 +1297,9 @@
             <button @click="genDoc(detail,'resume')" class="text-sm h-9 px-4 rounded-md border border-brand text-brand hover:bg-brand/5 flex items-center gap-1"><i class="ti ti-file-cv"></i> Resume</button>
             <button @click="setStatus(detail,'saved'); detail=null" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Save</button>
             <button @click="openEdit(detail); detail=null" class="text-sm h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1" title="Fix a wrong or half-fetched job"><i class="ti ti-edit"></i> Edit</button>
+            <select @change="setStatus(detail, $event.target.value); detail.status=$event.target.value" class="text-sm h-9 px-2 rounded-md border border-gray-200 text-gray-600 bg-white" title="Set this job's status">
+              <template x-for="s in statuses" :key="s"><option :value="s" :selected="detail.status===s" x-text="cap(s)"></option></template>
+            </select>
             <a :href="detail.source_url" target="_blank" class="text-sm h-9 px-4 rounded-md text-gray-500 hover:bg-gray-50 flex items-center sm:ml-auto">View posting <i class="ti ti-external-link ml-1"></i></a>
           </div>
         </div>

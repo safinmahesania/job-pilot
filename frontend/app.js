@@ -956,6 +956,10 @@ function jobpilot() {
         deadline: job.deadline || '',
         busy: false,
       };
+      // Remember the starting values so Save can send ONLY what actually changed.
+      // Sending every field (as before) made the backend see "description" on every
+      // save and re-score even when you only fixed the location or a link.
+      this.editOriginal = { ...this.edit };
     },
 
     cancelEdit() { this.edit = null; },
@@ -963,8 +967,21 @@ function jobpilot() {
     async saveEdit() {
       if (!this.edit) return;
       this.edit.busy = true;
-      const { id, busy, ...fields } = this.edit;   // don't send id/busy in the body
+      const { id, busy, ...all } = this.edit;      // don't send id/busy in the body
       const title = this.edit.title || 'this job';
+
+      // Send ONLY the fields whose value actually changed. Sending everything made the
+      // backend treat every save as a description edit and re-score needlessly — a
+      // location or link fix now stays a cheap, no-rescore save.
+      const orig = this.editOriginal || {};
+      const fields = {};
+      for (const [k, v] of Object.entries(all)) {
+        if (v !== (orig[k] ?? '')) fields[k] = v;
+      }
+      if (!Object.keys(fields).length) {           // nothing changed — close, no request
+        this.edit = null;
+        return;
+      }
 
       // The edit is put back through the same steps a fetched job goes through, one at
       // a time, so the box in the corner can name the step that is actually running

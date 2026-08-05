@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 import httpx
 from .base import SourceAdapter
 
-FEED = "https://jobspresso.co/remote-work/feed/"
+FEED = "https://jobspresso.co/feed/?post_type=job_listing"
 
 
 class JobspressoAdapter(SourceAdapter):

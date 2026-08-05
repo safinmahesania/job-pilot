@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.21";
+const JOBPILOT_VERSION = "1.9.22";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -484,6 +484,20 @@ function _newestSkillTag() {
   return tags[tags.length - 1] || null;
 }
 
+/** Is a tag with this exact text actually present (and visible) in the skills field?
+ *  Presence beats a bare count: on some tenants a tag flashes in then vanishes, so a
+ *  count that momentarily ticked up isn't proof the skill stuck. */
+function _hasSkillTag(text) {
+  const host = _skillsHost();
+  if (!host) return false;
+  const list = host.querySelector('[data-automation-id="selectedItemList"]');
+  if (!list) return false;
+  const want = text.trim().toLowerCase();
+  return Array.from(list.querySelectorAll('[data-automation-id="selectedItem"]'))
+    .filter((t) => t.offsetParent !== null)
+    .some((t) => t.textContent.trim().toLowerCase().includes(want));
+}
+
 /** Select a menu option the way Workday's own handler expects. A bare .click() on the
  *  row was silently doing nothing; a full pointer + mouse sequence on the row (or its
  *  inner clickable, if the row delegates to a checkbox/anchor) registers the choice. */
@@ -526,10 +540,14 @@ async function _trySelectOption(optionText, verify) {
     if (!opt) return verify();              // options gone — added if a tag is there
     if (isSelected(opt)) return true;       // it's already chosen; leave it alone
     try { strat(opt); } catch { /* try the next mechanism */ }
-    // Poll briefly; the moment a tag appears, return — before the next strategy runs.
+    // Poll briefly; the moment a tag appears, confirm it STAYS (some tenants flash a tag
+    // in and then drop it), and only then call it added.
     for (let waited = 0; waited < 800; waited += 100) {
       await _sleep(100);
-      if (verify()) return true;
+      if (verify()) {
+        await _sleep(250);                  // settle
+        if (verify()) return true;          // still there — real
+      }
     }
   }
   return verify();
@@ -540,6 +558,7 @@ async function _fillSkillsTypeahead(el, skills) {
   let added = 0;
   const addedNames = [];      // the skills that actually became tags, for a clear log
   const skippedNames = [];    // asked for but not offered / no match
+  const startCount = _skillTagCount();   // to report how many tags actually landed
   console.log(`[JobPilot] skills: trying ${Math.min(skills.length, 20)} skills`);
   for (const skill of skills.slice(0, 20)) {         // a sane cap for one field
     try {
@@ -690,8 +709,7 @@ async function _fillSkillsTypeahead(el, skills) {
       // Select it, trying several click mechanisms until a tag actually appears anywhere
       // in the skills field (page-wide count within the host, ignoring the phantom).
       const optionText = match.textContent.trim();
-      const before = _skillTagCount();
-      const ok = await _trySelectOption(optionText, () => _skillTagCount() > before);
+      const ok = await _trySelectOption(optionText, () => _hasSkillTag(optionText));
       if (ok) {
         added++;
         addedNames.push(skill + (labelMatches(optionText) ? "" : ` (as "${optionText}")`));
@@ -706,7 +724,12 @@ async function _fillSkillsTypeahead(el, skills) {
       skippedNames.push(skill + " (error)");
     }
   }
+  const realDelta = _skillTagCount() - startCount;   // tags that actually stuck
   console.log(`[JobPilot] skills: added ${added} ->`, addedNames);
+  if (realDelta !== added) {
+    console.warn(`[JobPilot] skills: only ${realDelta} tags actually stuck `
+      + `(the field may drop tags — try running autofill again)`);
+  }
   if (skippedNames.length) console.log("[JobPilot] skills: skipped ->", skippedNames);
   return added;
 }

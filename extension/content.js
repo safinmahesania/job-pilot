@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.20";
+const JOBPILOT_VERSION = "1.9.21";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -627,19 +627,36 @@ async function _fillSkillsTypeahead(el, skills) {
       }
 
       // No auto-add: wait for THIS skill's results, then click the matching option
-      // (ptc-style).
+      // (ptc-style). Some tenants (BMO) return 504s on their own skillsearch API when hit
+      // rapidly, so the first search can come back empty; retry once with a pause before
+      // giving up, which clears most transient timeouts.
       const firstWord = want.split(/[^a-z0-9#+]+/i)[0] || want;
-      let opts = [];
-      let fresh = false;
-      for (let waited = 0; waited < 2500 && !fresh; waited += 150) {
-        await _sleep(150);
-        opts = _openOptions(input);
-        fresh = opts.some((o) => o.textContent.trim().toLowerCase().includes(firstWord));
-      }
-      if (!opts.length) {                            // nothing came back — clear and move on
-        console.log(`[JobPilot] skills: "${skill}" — no options appeared`);
-        skippedNames.push(skill + " (not offered)");
+      const waitForOptions = async () => {
+        let found = [];
+        let ready = false;
+        for (let waited = 0; waited < 2500 && !ready; waited += 150) {
+          await _sleep(150);
+          found = _openOptions(input);
+          ready = found.some((o) => o.textContent.trim().toLowerCase().includes(firstWord));
+        }
+        return found;
+      };
+      let opts = await waitForOptions();
+      if (!opts.length) {
+        // Retry once: re-type and re-Enter after a breather for the server to recover.
+        await _sleep(600);
         _typeInto(input, "");
+        await _sleep(150);
+        _typeInto(input, skill);
+        await _sleep(150);
+        _pressEnter(input);
+        opts = await waitForOptions();
+      }
+      if (!opts.length) {                            // still nothing — likely a real miss
+        console.log(`[JobPilot] skills: "${skill}" — no options appeared`);
+        skippedNames.push(skill + " (not offered / server timeout)");
+        _typeInto(input, "");
+        await _sleep(200);                           // pace the next search
         continue;
       }
 
@@ -683,7 +700,7 @@ async function _fillSkillsTypeahead(el, skills) {
         skippedNames.push(skill + " (click didn't stick)");
       }
       _typeInto(input, "");                          // clear for the next skill
-      await _sleep(150);
+      await _sleep(300);                             // pace searches so the API keeps up
     } catch (e) {
       console.warn(`[JobPilot] skills: "${skill}" threw`, e);
       skippedNames.push(skill + " (error)");

@@ -391,7 +391,7 @@
         </button>
       </div>
       <div class="card divide-y divide-gray-100">
-        <template x-for="s in sourceCfg" :key="s.index">
+        <template x-for="s in sortedSourceCfg()" :key="s.index">
           <div class="flex items-center gap-3 px-3 sm:px-4 py-3">
             <input type="checkbox" :checked="isSelected(s.name)" @change="toggleSelected(s.name)"
                    class="shrink-0 w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand/40 cursor-pointer"

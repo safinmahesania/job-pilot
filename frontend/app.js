@@ -1357,6 +1357,16 @@ function jobpilot() {
       return { bg:'#E5E7EB', fg:'#374151', stripe:'#E5E7EB' };
     },
     cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); },
+
+    // Sources for display: active ones first, inactive at the bottom. Each item keeps its
+    // original `index` (used by toggle/delete), so only the display order changes — the
+    // stored order and every index stay intact. Stable within each group (name order).
+    sortedSourceCfg() {
+      return [...this.sourceCfg].sort((a, b) => {
+        if (!!a.active !== !!b.active) return a.active ? -1 : 1;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+    },
     modelShort(m) { return (m || '').replace('qwen2.5:',''); },
     timeAgo(d) { try { const days = Math.floor((Date.now() - new Date(d)) / 8.64e7); return days <= 0 ? 'today' : days + 'd ago'; } catch { return ''; } },
 

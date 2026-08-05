@@ -7,7 +7,7 @@ numbers, so moving a folder or renaming the database is a one-line edit.
 Layout assumed by these paths::
 
     job-pilot/
-    ├── config/     companies-backup.yaml, profile.yaml, profile.example.yaml
+    ├── config/     companies.yaml, profile.yaml, profile.example.yaml
     ├── data/       jobpilot.db, schema.sql
     ├── backups/    <name>.yaml.bak   (written automatically before each save)
     ├── src/        application code   (this package)
@@ -28,7 +28,13 @@ BACKUP_DIR = ROOT / "backups"     # timestamped .bak copies of config
 FRONTEND_DIR = ROOT / "frontend"  # static single-page app
 
 # ── Config files ────────────────────────────────────────────────────────────
-COMPANIES_FILE = "companies-backup.yaml"   # names are resolved inside CONFIG_DIR
+# The live source list. Historically this was companies-backup.yaml; it's now
+# companies.yaml. If only the old file exists (e.g. an existing install that hasn't
+# been renamed), fall back to it so nothing breaks.
+COMPANIES_FILE = "companies.yaml"
+COMPANIES_FILE_LEGACY = "companies-backup.yaml"
+if not (CONFIG_DIR / COMPANIES_FILE).exists() and (CONFIG_DIR / COMPANIES_FILE_LEGACY).exists():
+    COMPANIES_FILE = COMPANIES_FILE_LEGACY
 PROFILE_FILE = "profile.yaml"
 
 # ── Database ────────────────────────────────────────────────────────────────
@@ -142,7 +148,7 @@ CONFIG_FILES = [
     {
         "label": "Companies & sources",
         "description": "Which boards to fetch, filters, active toggles.",
-        "path": "config/companies-backup.yaml",
+        "path": f"config/{COMPANIES_FILE}",
     },
     {
         "label": "Resume template",

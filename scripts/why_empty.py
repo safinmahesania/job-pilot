@@ -17,6 +17,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 sys.modules.setdefault("ollama", types.ModuleType("ollama"))
 
 from src import configio                     # noqa: E402
+from src.paths import COMPANIES_FILE          # noqa: E402
 from src.adapters.base import get_adapter    # noqa: E402
 from src.normalize import normalize, is_valid  # noqa: E402
 from src.scoring import prefilter            # noqa: E402
@@ -57,7 +58,7 @@ def main():
         print("No profile.yaml found — nothing to filter against.")
         return
 
-    companies = (configio.read_yaml("companies-backup.yaml") or {}).get("companies", [])
+    companies = (configio.read_yaml(COMPANIES_FILE) or {}).get("companies", [])
     active = [c for c in companies if c.get("active")]
     if args.limit:
         active = active[: args.limit]

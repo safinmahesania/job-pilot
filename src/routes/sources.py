@@ -1,7 +1,7 @@
 """Managing job sources — the company career pages and boards JobPilot fetches from.
 
 Two lists sit behind this: the distinct sources that jobs have actually arrived from
-(read from the jobs table), and the configured companies in companies-backup.yaml that the
+(read from the jobs table), and the configured companies in companies.yaml that the
 fetcher will try next time. Adding a source validates its ats against the adapters that
 exist, so a typo is caught at the form instead of failing silently on the next fetch.
 """
@@ -12,6 +12,7 @@ import re
 
 from src import configio
 from src.deps import _db_dep
+from src.paths import COMPANIES_FILE
 
 router = APIRouter()
 
@@ -81,7 +82,7 @@ def detect_source(body: DetectRequest):
 
     if "oraclecloud.com" in low or "/hcmui/" in low:
         return {"ats": "oracle", "identifier": "", "needs_detail": True,
-                "note": "Looks like Oracle Cloud — needs host and site; edit companies-backup.yaml."}
+                "note": "Looks like Oracle Cloud — needs host and site; edit companies.yaml."}
 
     for ats, pattern, group in _DETECT_RULES:
         m = pattern.search(url)
@@ -107,7 +108,7 @@ def test_source(body: SourceProbe):
     if body.source is not None:
         company = dict(body.source)
     elif body.index is not None:
-        data = configio.read_yaml("companies-backup.yaml") or {}
+        data = configio.read_yaml(COMPANIES_FILE) or {}
         items = data.get("companies", [])
         if not 0 <= body.index < len(items):
             raise HTTPException(404, "source not found")
@@ -166,7 +167,7 @@ def sources_list(conn=Depends(_db_dep)):
 
 @router.get("/api/sources/config")
 def sources_config(conn=Depends(_db_dep)):
-    data = configio.read_yaml("companies-backup.yaml") or {}
+    data = configio.read_yaml(COMPANIES_FILE) or {}
 
     # Pull the health verdict for every board once, keyed by name, so each configured
     # source can carry its own last-run health inline — fetched/kept counts, an ok/broken
@@ -202,12 +203,12 @@ def sources_config(conn=Depends(_db_dep)):
 
 @router.post("/api/sources/{index}/toggle")
 def toggle_source(index: int):
-    data = configio.read_yaml("companies-backup.yaml") or {}
+    data = configio.read_yaml(COMPANIES_FILE) or {}
     items = data.get("companies", [])
     if not 0 <= index < len(items):
         raise HTTPException(404, "source not found")
     items[index]["active"] = not bool(items[index].get("active"))
-    configio.write_yaml("companies-backup.yaml", data)
+    configio.write_yaml(COMPANIES_FILE, data)
     return {"index": index, "active": items[index]["active"]}
 
 
@@ -219,7 +220,7 @@ def prune_orphaned_health(conn=Depends(_db_dep)):
     error lingers in the Health view because health is a separate table keyed by name.
     This clears every health row whose name isn't a current board.
     """
-    data = configio.read_yaml("companies-backup.yaml") or {}
+    data = configio.read_yaml(COMPANIES_FILE) or {}
     live = {c.get("name") for c in data.get("companies", []) if c.get("name")}
     rows = conn.execute("SELECT name FROM source_health").fetchall()
     removed = [r[0] for r in rows if r[0] not in live]
@@ -231,7 +232,7 @@ def prune_orphaned_health(conn=Depends(_db_dep)):
 
 class NewSource(BaseModel):
     # A source with no name or no ats used to be accepted and written to
-    # companies-backup.yaml, where it did nothing except produce a "No adapter for ats=''"
+    # companies.yaml, where it did nothing except produce a "No adapter for ats=''"
     # error on the next fetch — with a blank name, so you could not even tell which
     # row was broken. min_length rejects the empty case at the form.
     name: str = Field(min_length=1)
@@ -257,7 +258,7 @@ def add_source(body: NewSource):
         raise HTTPException(
             400, f"unknown ats '{ats}' — must be one of: {', '.join(sorted(KNOWN_ATS))}")
 
-    data = configio.read_yaml("companies-backup.yaml") or {"companies": []}
+    data = configio.read_yaml(COMPANIES_FILE) or {"companies": []}
     entry: dict = {"name": name, "ats": ats}
     for k in ("identifier", "tenant", "host", "site", "base", "query"):
         v = getattr(body, k)
@@ -265,18 +266,18 @@ def add_source(body: NewSource):
             entry[k] = v
     entry["active"] = body.active
     data.setdefault("companies", []).append(entry)
-    configio.write_yaml("companies-backup.yaml", data)
+    configio.write_yaml(COMPANIES_FILE, data)
     return {"added": name, "total": len(data["companies"])}
 
 
 @router.delete("/api/sources/{index}")
 def delete_source(index: int, conn=Depends(_db_dep)):
-    data = configio.read_yaml("companies-backup.yaml") or {}
+    data = configio.read_yaml(COMPANIES_FILE) or {}
     items = data.get("companies", [])
     if not 0 <= index < len(items):
         raise HTTPException(404, "source not found")
     removed = items.pop(index)
-    configio.write_yaml("companies-backup.yaml", data)
+    configio.write_yaml(COMPANIES_FILE, data)
     # Health lives in its own table keyed by name; without this the deleted board keeps
     # showing its last error in the Health view forever.
     name = removed.get("name")

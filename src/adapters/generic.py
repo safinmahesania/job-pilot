@@ -66,7 +66,7 @@ class GenericCareersAdapter(SourceAdapter):
             raise RuntimeError(
                 f"{self.name}: no careers_url set. An HTML-scraped source needs the "
                 f"page to read — add `careers_url: https://…` to it in "
-                f"config/companies-backup.yaml."
+                f"config/companies.yaml."
             )
 
         ats = c.get("ats", "custom")

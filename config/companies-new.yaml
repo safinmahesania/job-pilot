@@ -1,0 +1,185 @@
+# ============================================================
+#  JobPilot — 40 Canadian tech company boards (imported from CSV)
+#
+#  34 boards (Greenhouse / Ashby / Workable) are ACTIVE and ready to fetch.
+#  6 Workday boards are INACTIVE — fill in tenant/host/site from each careers
+#  URL (https://<tenant>.<host>.myworkdayjobs.com/<site>) then set active: true.
+#
+#  To merge these into your existing companies-backup.yaml, use:
+#    python scripts/import_sources_csv.py <the-csv-you-sent>.csv
+#  (it skips duplicates, so your current sources stay untouched).
+# ============================================================
+
+companies:
+- name: Shopify
+  ats: greenhouse
+  identifier: shopify
+  active: true
+- name: Coveo
+  ats: greenhouse
+  identifier: coveo
+  active: true
+- name: Lightspeed
+  ats: greenhouse
+  identifier: lightspeedhq
+  active: true
+- name: AppDirect
+  ats: greenhouse
+  identifier: appdirect
+  active: true
+- name: Dialogue
+  ats: greenhouse
+  identifier: dialogue
+  active: true
+- name: Hopper
+  ats: greenhouse
+  identifier: hopper
+  active: true
+- name: Plusgrade
+  ats: greenhouse
+  identifier: plusgrade
+  active: true
+- name: Botpress
+  ats: ashby
+  identifier: botpress
+  active: true
+- name: Plotly
+  ats: greenhouse
+  identifier: plotly
+  active: true
+- name: Vention
+  ats: workable
+  identifier: vention
+  active: true
+- name: Fluent.ai
+  ats: workable
+  identifier: fluent-ai
+  active: true
+- name: Intelcom
+  ats: workday
+  tenant: intelcom
+  host: ''
+  site: ''
+  active: false
+- name: Workleap (GSoft)
+  ats: greenhouse
+  identifier: workleap
+  active: true
+- name: Valsoft
+  ats: workday
+  tenant: valsoft
+  host: ''
+  site: ''
+  active: false
+- name: Paper
+  ats: greenhouse
+  identifier: paper
+  active: true
+- name: Nuvei
+  ats: workday
+  tenant: nuvei
+  host: ''
+  site: ''
+  active: false
+- name: Wealthsimple
+  ats: greenhouse
+  identifier: wealthsimple
+  active: true
+- name: Cohere
+  ats: ashby
+  identifier: cohere
+  active: true
+- name: Waabi
+  ats: ashby
+  identifier: waabi
+  active: true
+- name: BenchSci
+  ats: greenhouse
+  identifier: benchsci
+  active: true
+- name: Ada
+  ats: greenhouse
+  identifier: ada
+  active: true
+- name: StackAdapt
+  ats: greenhouse
+  identifier: stackadapt
+  active: true
+- name: 1Password
+  ats: greenhouse
+  identifier: 1password
+  active: true
+- name: Float Financial
+  ats: ashby
+  identifier: floatfinancial
+  active: true
+- name: Neo Financial
+  ats: greenhouse
+  identifier: neofinancial
+  active: true
+- name: Clearco
+  ats: greenhouse
+  identifier: clearco
+  active: true
+- name: TouchBistro
+  ats: greenhouse
+  identifier: touchbistro
+  active: true
+- name: Loopio
+  ats: greenhouse
+  identifier: loopio
+  active: true
+- name: ApplyBoard
+  ats: greenhouse
+  identifier: applyboard
+  active: true
+- name: Jobber
+  ats: greenhouse
+  identifier: jobber
+  active: true
+- name: Clio
+  ats: greenhouse
+  identifier: clio
+  active: true
+- name: Thinkific
+  ats: greenhouse
+  identifier: thinkific
+  active: true
+- name: Jane App
+  ats: ashby
+  identifier: jane
+  active: true
+- name: Visier
+  ats: greenhouse
+  identifier: visier
+  active: true
+- name: D2L
+  ats: greenhouse
+  identifier: d2l
+  active: true
+- name: PointClickCare
+  ats: greenhouse
+  identifier: pointclickcare
+  active: true
+- name: ecobee
+  ats: greenhouse
+  identifier: ecobee
+  active: true
+- name: SOTI
+  ats: workday
+  tenant: soti
+  host: ''
+  site: ''
+  active: false
+- name: OpenText
+  ats: workday
+  tenant: opentext
+  host: ''
+  site: ''
+  active: false
+- name: Kinaxis
+  ats: workday
+  tenant: kinaxis
+  host: ''
+  site: ''
+  active: false

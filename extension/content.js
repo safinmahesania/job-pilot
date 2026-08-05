@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.19";
+const JOBPILOT_VERSION = "1.9.20";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -497,6 +497,13 @@ async function _trySelectOption(optionText, verify) {
   const find = () => _openOptions().find(
     (o) => o.textContent.trim() === optionText) || null;
 
+  // Is this option already selected? (aria-selected / data-automation-selected). If so,
+  // clicking it would toggle it OFF — the cause of "skill added then removed": a later
+  // strategy re-clicked an option the first strategy had already selected.
+  const isSelected = (o) =>
+    o.getAttribute("aria-selected") === "true" ||
+    o.getAttribute("data-automation-selected") === "true";
+
   const strategies = [
     (o) => (o.querySelector("[aria-posinset]") || o).click(),
     (o) => o.click(),
@@ -513,16 +520,19 @@ async function _trySelectOption(optionText, verify) {
   ];
 
   for (const strat of strategies) {
+    // Already verified as added? Stop — don't let another strategy toggle it back off.
+    if (verify()) return true;
     const opt = find();
-    if (!opt) return false;                 // options gone — nothing to click
+    if (!opt) return verify();              // options gone — added if a tag is there
+    if (isSelected(opt)) return true;       // it's already chosen; leave it alone
     try { strat(opt); } catch { /* try the next mechanism */ }
-    // Give it a moment; if a tag appeared, we're done.
-    for (let waited = 0; waited < 700; waited += 150) {
-      await _sleep(150);
+    // Poll briefly; the moment a tag appears, return — before the next strategy runs.
+    for (let waited = 0; waited < 800; waited += 100) {
+      await _sleep(100);
       if (verify()) return true;
     }
   }
-  return false;
+  return verify();
 }
 
 
@@ -584,11 +594,17 @@ async function _fillSkillsTypeahead(el, skills) {
         stripQualifier(text).endsWith(" " + wantExp) ||
         eq(paren(text), wantExp);
 
+      // Count tags BEFORE pressing Enter, so we can tell whether Enter itself added one.
+      // Without this, the newest tag (a correctly-added PREVIOUS skill) was being treated
+      // as a stray and deleted — so only the last skill survived.
+      const tagsBeforeEnter = _skillTagCount();
+
       // Did Enter just add a tag on its own? Give it a moment, then look at the newest tag.
       let enterAdded = false;
       for (let waited = 0; waited < 700 && !enterAdded; waited += 150) {
         await _sleep(150);
-        enterAdded = _existingSkillLabels().some((lbl) => labelMatches(lbl));
+        enterAdded = _skillTagCount() > tagsBeforeEnter &&
+          _existingSkillLabels().some((lbl) => labelMatches(lbl));
       }
       if (enterAdded) {
         // Enter added the right skill (equisoft-style). Done — do NOT click, that would
@@ -599,12 +615,15 @@ async function _fillSkillsTypeahead(el, skills) {
         await _sleep(150);
         continue;
       }
-      // Enter may have added the WRONG thing (top result that isn't our skill). If a new
-      // unmatched tag appeared, remove it before falling back to click-matching.
-      const strayTag = _newestSkillTag();
-      if (strayTag && !labelMatches(strayTag.textContent)) {
-        strayTag.querySelector('[data-automation-id="DELETE_charm"]')?.click();
-        await _sleep(200);
+      // Enter may have added the WRONG thing (top result that isn't our skill). Only treat
+      // it as stray if a NEW tag actually appeared during THIS Enter (count went up) and it
+      // doesn't match — never touch a previously-added skill.
+      if (_skillTagCount() > tagsBeforeEnter) {
+        const strayTag = _newestSkillTag();
+        if (strayTag && !labelMatches(strayTag.textContent)) {
+          strayTag.querySelector('[data-automation-id="DELETE_charm"]')?.click();
+          await _sleep(200);
+        }
       }
 
       // No auto-add: wait for THIS skill's results, then click the matching option

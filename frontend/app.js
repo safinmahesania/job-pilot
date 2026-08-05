@@ -20,6 +20,7 @@ function jobpilot() {
     cover: null,   // { loading, text, provider, title, company }
     edit: null,    // { id, title, company, location, description, apply_url, ... } when editing a job by hand
     sourceTest: null,  // { name, loading, ok, count, jobs, error, elapsed_ms } when testing a source
+    whyEmptyData: null,  // { name, loading, total, passed, rules, error } for the filter breakdown
     selectedSources: [],  // source names ticked for a selective run
     restarting: false,    // true while the server restarts and we wait for it to return
     scoring: false,       // true while scoring unscored jobs on demand
@@ -349,6 +350,43 @@ function jobpilot() {
       }
     },
     closeSourceTest() { this.sourceTest = null; },
+
+    async whyEmpty(s) {
+      // Fetch this source and show which prefilter rule drops each job — the UI version
+      // of scripts.why_empty, scoped to one source.
+      this.whyEmptyData = { name: s.name, loading: true, rules: [] };
+      try {
+        const r = await fetch('/api/sources/why-empty', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ index: s.index }),
+        });
+        const d = await r.json();
+        this.whyEmptyData = { ...d, loading: false };
+      } catch (e) {
+        this.whyEmptyData = { name: s.name, loading: false, error: 'Request failed' };
+      }
+    },
+    // Friendly names + one-line hints for each prefilter rule.
+    ruleLabel(rule) {
+      return {
+        invalid: 'Invalid', location: 'Location', salary: 'Salary floor',
+        sponsorship: 'Sponsorship', level: 'Seniority level', domain: 'Domain / field',
+        job_type: 'Job type', recency: 'Too old', exclude_keywords: 'Excluded keyword',
+      }[rule] || rule;
+    },
+    ruleHint(rule) {
+      return {
+        location: 'not in your allowed locations',
+        salary: 'below your salary floor',
+        sponsorship: 'no visa sponsorship',
+        level: 'wrong seniority for you',
+        domain: 'outside your target field',
+        job_type: 'wrong employment type',
+        recency: 'posted too long ago',
+        exclude_keywords: 'matched an excluded keyword',
+        invalid: 'missing required fields',
+      }[rule] || '';
+    },
 
     // ───────── jobs ─────────
     // ── Application instructions buried in the description ────────────────────

@@ -230,6 +230,95 @@ def prune_orphaned_health(conn=Depends(_db_dep)):
     return {"pruned": removed, "count": len(removed)}
 
 
+class WhyEmptyProbe(BaseModel):
+    index: int | None = None
+    source: dict | None = None
+
+
+@router.post("/api/sources/why-empty")
+def why_empty(body: WhyEmptyProbe):
+    """Fetch one source now and report which prefilter rule drops each job, so you can see
+    WHY good-looking jobs never reach the feed. Nothing is saved. Mirrors the
+    scripts.why_empty breakdown, but for a single source and returned as JSON."""
+    from src.adapters.base import get_adapter
+    from src.normalize import normalize, is_valid
+    from src.scoring import prefilter
+
+    # Resolve the source (inline config or an index into companies.yaml).
+    if body.source is not None:
+        company = dict(body.source)
+    elif body.index is not None:
+        items = (configio.read_yaml(COMPANIES_FILE) or {}).get("companies", [])
+        if not 0 <= body.index < len(items):
+            raise HTTPException(404, "source not found")
+        company = dict(items[body.index])
+    else:
+        raise HTTPException(400, "pass either an index or an inline source config")
+
+    profile = configio.read_yaml("profile.yaml") or {}
+    c = profile.get("constraints", {})
+    s = profile.get("search", {})
+
+    # First failing rule wins — same order the real pipeline applies them.
+    def classify(job):
+        if not is_valid(job):
+            return "invalid"
+        if not prefilter._check_locations(job, c.get("locations")):
+            return "location"
+        if not prefilter._check_salary_floor(job, c.get("salary_floor")):
+            return "salary"
+        if not prefilter._check_sponsorship(job, c.get("needs_sponsorship")):
+            return "sponsorship"
+        if not prefilter._ok_level(job, s):
+            return "level"
+        if not prefilter._ok_domain(job, s):
+            return "domain"
+        if not prefilter._ok_job_type(job, s):
+            return "job_type"
+        if not prefilter._ok_recency(job, s):
+            return "recency"
+        if not prefilter._ok_exclude_keywords(job, s):
+            return "exclude_keywords"
+        return "passes_all"
+
+    try:
+        raw = get_adapter(company).fetch()
+    except Exception as e:                             # noqa: BLE001
+        return {"ok": False, "name": company.get("name"), "error": str(e)[:200],
+                "total": 0, "rules": {}, "passed": 0}
+
+    rules: dict[str, list] = {}
+    total = 0
+    for r in raw:
+        try:
+            job = normalize(r)
+        except Exception:                              # noqa: BLE001
+            continue
+        total += 1
+        verdict = classify(job)
+        rules.setdefault(verdict, []).append({
+            "title": (job.get("title") or "")[:80],
+            "location": (job.get("location") or "")[:50],
+        })
+
+    passed = len(rules.get("passes_all", []))
+    # Order rules by how many they dropped, biggest first (passes_all last).
+    ordered = sorted(
+        ((name, jobs) for name, jobs in rules.items() if name != "passes_all"),
+        key=lambda kv: len(kv[1]), reverse=True)
+    return {
+        "ok": True,
+        "name": company.get("name"),
+        "total": total,
+        "passed": passed,
+        "rules": [
+            {"rule": name, "count": len(jobs), "examples": jobs[:15]}
+            for name, jobs in ordered
+        ],
+        "passed_examples": rules.get("passes_all", [])[:15],
+    }
+
+
 class NewSource(BaseModel):
     # A source with no name or no ats used to be accepted and written to
     # companies.yaml, where it did nothing except produce a "No adapter for ats=''"

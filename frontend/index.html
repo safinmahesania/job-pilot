@@ -130,6 +130,17 @@
             <option value="all">All sources</option>
             <template x-for="s in sources" :key="s"><option :value="s" x-text="s"></option></template>
           </select>
+          <select x-model="dateFilter" class="flex-1 sm:flex-none h-9 px-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600">
+            <option value="all">Any date</option>
+            <option value="today">Today</option>
+            <option value="week">Past week</option>
+            <option value="month">Past month</option>
+          </select>
+          <select x-model="seenFilter" class="flex-1 sm:flex-none h-9 px-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600">
+            <option value="all">Seen &amp; unseen</option>
+            <option value="unseen">Unseen only</option>
+            <option value="seen">Seen only</option>
+          </select>
           <span class="hidden sm:inline self-center text-xs text-gray-400 whitespace-nowrap" x-text="filtered().length + ' jobs'"></span>
         </div>
       </div>

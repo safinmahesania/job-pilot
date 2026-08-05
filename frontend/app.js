@@ -11,6 +11,9 @@ function jobpilot() {
     runPanelOpen: false,
     running: false, lastRun: null, nextRun: null, threshold: 70,
     sort: 'score', source: 'all', sources: [],
+    // Extra feed filters. dateFilter: how recently the job was fetched. seenFilter:
+    // whether you've opened it yet. Both default to no filtering.
+    dateFilter: 'all', seenFilter: 'all',
     busy: null, snack: null, blocking: null, confirmBox: null,
     // The corner progress box: one long-running thing, named while it runs.
     task: null,
@@ -461,12 +464,36 @@ function jobpilot() {
     },
 
     filtered() {
-      if (!this.q.trim()) return this.jobs;
-      const s = this.q.toLowerCase();
-      return this.jobs.filter(j =>
-        (j.title||'').toLowerCase().includes(s) ||
-        (j.company||'').toLowerCase().includes(s) ||
-        (j.rationale||'').toLowerCase().includes(s));
+      let list = this.jobs;
+
+      // Fetched-within filter.
+      if (this.dateFilter !== 'all') {
+        const now = Date.now();
+        const spans = { today: 1, week: 7, month: 30 };
+        const days = spans[this.dateFilter];
+        if (days) {
+          const cutoff = now - days * 86400000;
+          list = list.filter(j => {
+            if (!j.fetched_at) return false;
+            const t = new Date(j.fetched_at.replace(' ', 'T') + 'Z').getTime();
+            return !isNaN(t) && t >= cutoff;
+          });
+        }
+      }
+
+      // Seen / not-seen filter.
+      if (this.seenFilter === 'seen') list = list.filter(j => j.last_viewed_at);
+      else if (this.seenFilter === 'unseen') list = list.filter(j => !j.last_viewed_at);
+
+      // Text search over title / company / rationale.
+      const s = this.q.trim().toLowerCase();
+      if (s) {
+        list = list.filter(j =>
+          (j.title || '').toLowerCase().includes(s) ||
+          (j.company || '').toLowerCase().includes(s) ||
+          (j.rationale || '').toLowerCase().includes(s));
+      }
+      return list;
     },
 
     openDetail(job) {

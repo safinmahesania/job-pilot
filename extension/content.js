@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.23";
+const JOBPILOT_VERSION = "1.9.24";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -714,12 +714,15 @@ async function _fillSkillsTypeahead(el, skills) {
       _typeInto(input, "");                          // clear for the next skill
       await _sleep(300);                             // pace searches so the API keeps up
 
-      // Sanity: if we think we've added several but the field isn't actually growing, the
-      // tenant is dropping tags as fast as we add them. Stop rather than churn for a
-      // minute — the user gets a clear message and can add skills manually.
-      if (added >= 4 && (_skillTagCount() - startCount) < 2) {
-        console.warn("[JobPilot] skills: this field isn't keeping added skills "
-          + "(a Workday tenant quirk) — stopping. Please add skills manually here.");
+      // Sanity: if the "successes" aren't turning into real tags, this tenant is
+      // rejecting programmatic selection (some Workday builds only accept trusted, real
+      // user clicks). Stop after a couple of these rather than churning for a minute.
+      if (added >= 2 && (_skillTagCount() - startCount) < 1) {
+        console.warn("[JobPilot] skills: this Workday page only accepts real clicks for "
+          + "skills — the extension can't add them here. Please add your skills manually "
+          + "on this page. (Other fields were still filled.)");
+        try { toast("Add your skills manually here — this page blocks auto-fill for skills", "info"); } catch { /* toast optional */ }
+        skippedNames.length = 0;   // don't spam a per-skill skip list on top of this
         break;
       }
     } catch (e) {

@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.22";
+const JOBPILOT_VERSION = "1.9.23";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -634,16 +634,10 @@ async function _fillSkillsTypeahead(el, skills) {
         await _sleep(150);
         continue;
       }
-      // Enter may have added the WRONG thing (top result that isn't our skill). Only treat
-      // it as stray if a NEW tag actually appeared during THIS Enter (count went up) and it
-      // doesn't match — never touch a previously-added skill.
-      if (_skillTagCount() > tagsBeforeEnter) {
-        const strayTag = _newestSkillTag();
-        if (strayTag && !labelMatches(strayTag.textContent)) {
-          strayTag.querySelector('[data-automation-id="DELETE_charm"]')?.click();
-          await _sleep(200);
-        }
-      }
+      // (Previously there was "stray tag" deletion here to undo a wrong Enter-add. It was
+      // the only code path that REMOVED tags, and on some tenants it misfired and deleted
+      // correctly-added skills. Removed — a rare wrong auto-add is better than losing good
+      // skills, and the user can delete a stray manually.)
 
       // No auto-add: wait for THIS skill's results, then click the matching option
       // (ptc-style). Some tenants (BMO) return 504s on their own skillsearch API when hit
@@ -719,6 +713,15 @@ async function _fillSkillsTypeahead(el, skills) {
       }
       _typeInto(input, "");                          // clear for the next skill
       await _sleep(300);                             // pace searches so the API keeps up
+
+      // Sanity: if we think we've added several but the field isn't actually growing, the
+      // tenant is dropping tags as fast as we add them. Stop rather than churn for a
+      // minute — the user gets a clear message and can add skills manually.
+      if (added >= 4 && (_skillTagCount() - startCount) < 2) {
+        console.warn("[JobPilot] skills: this field isn't keeping added skills "
+          + "(a Workday tenant quirk) — stopping. Please add skills manually here.");
+        break;
+      }
     } catch (e) {
       console.warn(`[JobPilot] skills: "${skill}" threw`, e);
       skippedNames.push(skill + " (error)");

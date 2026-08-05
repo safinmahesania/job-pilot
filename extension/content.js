@@ -29,7 +29,7 @@
 // code would bail and the stale code would keep running (and keep throwing "context
 // invalidated"). So the flag carries a version. A newer script signals the old one to
 // stand down (its observer/timers check window.__jobpilotActive) and then takes over.
-const JOBPILOT_VERSION = "1.9.18";
+const JOBPILOT_VERSION = "1.9.19";
 if (window.__jobpilotVersion && window.__jobpilotVersion !== JOBPILOT_VERSION) {
   // A different build was here — tell it to stop, then let this one proceed.
   window.__jobpilotActive = false;
@@ -487,17 +487,42 @@ function _newestSkillTag() {
 /** Select a menu option the way Workday's own handler expects. A bare .click() on the
  *  row was silently doing nothing; a full pointer + mouse sequence on the row (or its
  *  inner clickable, if the row delegates to a checkbox/anchor) registers the choice. */
-function _clickOption(option) {
-  // Click the option's positioned element. On some tenants that's an inner div carrying
-  // aria-posinset; on others the option element itself carries it. A single native click
-  // registers the choice — firing a pointer sequence as well double-toggled it back off.
-  const target =
-    (option.matches("[aria-posinset]") ? option : null) ||
-    option.querySelector("[aria-posinset]") ||
-    option.querySelector('[data-automation-id="promptOption"]') ||
-    option.firstElementChild ||
-    option;
-  target.click();
+/** Try to select an option, trying several click mechanisms until a tag appears. Workday
+ *  tenants differ in what registers a selection — some take a native click on the inner
+ *  positioned div, some the <li>, some a full pointer sequence — so try them in turn and
+ *  stop as soon as verify() reports a new tag. Returns true if selected. The option is
+ *  looked up fresh each attempt (by text) because the results list re-renders and a stale
+ *  node click hits nothing. */
+async function _trySelectOption(optionText, verify) {
+  const find = () => _openOptions().find(
+    (o) => o.textContent.trim() === optionText) || null;
+
+  const strategies = [
+    (o) => (o.querySelector("[aria-posinset]") || o).click(),
+    (o) => o.click(),
+    (o) => o.querySelector('[data-automation-id="promptOption"]')?.click(),
+    (o) => o.querySelector('[data-automation-id="promptLeafNode"]')?.click(),
+    (o) => {
+      const t = o.querySelector("[aria-posinset]") || o;
+      for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+        const Ctor = type.startsWith("pointer") && typeof PointerEvent === "function"
+          ? PointerEvent : MouseEvent;
+        t.dispatchEvent(new Ctor(type, { bubbles: true, cancelable: true, view: window }));
+      }
+    },
+  ];
+
+  for (const strat of strategies) {
+    const opt = find();
+    if (!opt) return false;                 // options gone — nothing to click
+    try { strat(opt); } catch { /* try the next mechanism */ }
+    // Give it a moment; if a tag appeared, we're done.
+    for (let waited = 0; waited < 700; waited += 150) {
+      await _sleep(150);
+      if (verify()) return true;
+    }
+  }
+  return false;
 }
 
 
@@ -603,26 +628,37 @@ async function _fillSkillsTypeahead(el, skills) {
         opts.find((o) => eq(norm(o.textContent), wantExp)) ||
         opts.find((o) => eq(stripQualifier(o.textContent), wantExp)) ||
         opts.find((o) => stripQualifier(o.textContent).endsWith(" " + wantExp)) ||
-        opts.find((o) => eq(paren(o.textContent), wantExp));
+        opts.find((o) => eq(paren(o.textContent), wantExp)) ||
+        // Last resort: an option that STARTS WITH the skill as a whole phrase — catches
+        // "Flutter Software Development Kit (SDK)" for "Flutter", "Data Structures" for
+        // "Data Structures & Algorithms". Only used when nothing cleaner matched, so exact
+        // forms still win. Requires a word boundary so "Java" can't grab "Javascript".
+        opts.find((o) => {
+          const t = norm(o.textContent);
+          return t === wantExp || t.startsWith(wantExp + " ") || t.startsWith(wantExp + "(");
+        }) ||
+        // Or the skill starts with the option (user typed the longer form): "Data
+        // Structures & Algorithms" -> option "Data Structures".
+        opts.find((o) => {
+          const t = stripQualifier(o.textContent);
+          return t.length > 3 && (wantExp === t || wantExp.startsWith(t + " "));
+        });
       if (!match) {
         console.log(`[JobPilot] skills: "${skill}" — ${opts.length} options but no match:`,
                     opts.slice(0, 4).map((o) => o.textContent.trim()));
-        skippedNames.push(skill + " (no exact match)");
+        skippedNames.push(skill + " (no match)");
         _typeInto(input, "");
         continue;
       }
 
-      // Click and CONFIRM it stuck (count only visible tags, ignoring any phantom).
+      // Select it, trying several click mechanisms until a tag actually appears anywhere
+      // in the skills field (page-wide count within the host, ignoring the phantom).
+      const optionText = match.textContent.trim();
       const before = _skillTagCount();
-      _clickOption(match);
-      let after = before;
-      for (let waited = 0; waited < 900 && after <= before; waited += 150) {
-        await _sleep(150);
-        after = _skillTagCount();
-      }
-      if (after > before) {
+      const ok = await _trySelectOption(optionText, () => _skillTagCount() > before);
+      if (ok) {
         added++;
-        addedNames.push(skill);
+        addedNames.push(skill + (labelMatches(optionText) ? "" : ` (as "${optionText}")`));
       } else {
         console.log(`[JobPilot] skills: "${skill}" — clicked but no tag appeared`);
         skippedNames.push(skill + " (click didn't stick)");

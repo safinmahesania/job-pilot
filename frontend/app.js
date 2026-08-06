@@ -1421,6 +1421,29 @@ function jobpilot() {
     },
     cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); },
 
+    // Colour a work-mode chip: remote green, hybrid amber, onsite grey.
+    workModeClass(mode) {
+      return {
+        remote: 'bg-green-50 text-green-700',
+        hybrid: 'bg-amber-50 text-amber-700',
+        onsite: 'bg-gray-100 text-gray-500',
+      }[mode] || 'bg-gray-100 text-gray-500';
+    },
+    // Normalise raw job-type text into a clean label.
+    jobTypeLabel(t) {
+      if (!t) return '';
+      const s = t.toLowerCase();
+      if (s.includes('intern') || s.includes('co-op') || s.includes('coop')) return 'Internship';
+      if (s.includes('part')) return 'Part-time';
+      if (s.includes('contract') || s.includes('temporary')) return 'Contract';
+      if (s.includes('full')) return 'Full-time';
+      return t;
+    },
+    // User-facing status names — "surfaced" is internal; show "New".
+    statusLabel(s) {
+      return { surfaced: 'New' }[s] || this.cap(s);
+    },
+
     // Sources for display: active ones first, inactive at the bottom. Each item keeps its
     // original `index` (used by toggle/delete), so only the display order changes — the
     // stored order and every index stay intact. Stable within each group (name order).

@@ -270,59 +270,65 @@
         </div>
 
         <template x-for="job in filtered()" :key="job.id">
-          <div class="flex gap-3 sm:gap-3.5 card card-hover p-3 sm:p-4" :style="`border-left:3px solid ${tier(job.score).stripe}`">
-            <input type="checkbox" :checked="isJobPicked(job.id)" @change="toggleJobPicked(job.id)"
-                   class="shrink-0 self-start mt-1 w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand/40 cursor-pointer"
-                   title="Tick to score just these">
-            <div class="shrink-0 w-11 h-11 sm:w-14 sm:h-14 rounded-full flex flex-col items-center justify-center" :style="`background:${tier(job.score).bg}`">
-              <span class="text-base sm:text-xl font-semibold leading-none" :style="`color:${tier(job.score).fg}`" x-text="job.score === null ? '?' : Math.round(job.score)"></span>
-              <span class="text-[9px] sm:text-[10px]" :style="`color:${tier(job.score).fg}`">match</span>
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-baseline justify-between gap-2">
-                <span class="flex items-baseline gap-1.5 min-w-0">
-                  <span class="font-medium text-[15px] cursor-pointer hover:text-brand truncate" @click="openDetail(job)" x-text="job.title"></span>
-                  <!-- French-only in amber (you'll need French to apply), bilingual in a
-                       quieter grey (English is fine). English and unknown carry none. -->
-                  <span x-show="job.language==='fr'" class="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800" title="This posting is in French only">FR only</span>
-                  <span x-show="job.language==='bilingual'" class="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500" title="Posting is in French and English">FR / EN</span>
-                </span>
-                <span class="hidden sm:block text-xs text-gray-400 whitespace-nowrap" x-text="job.posted_date ? timeAgo(job.posted_date) : ''"></span>
+          <div class="card card-hover p-4 sm:p-5">
+            <div class="flex gap-3 sm:gap-4">
+              <input type="checkbox" :checked="isJobPicked(job.id)" @change="toggleJobPicked(job.id)"
+                     class="shrink-0 self-start mt-1.5 w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand/40 cursor-pointer"
+                     title="Tick to score just these">
+              <!-- Score: compact rounded square, no redundant "match" label -->
+              <div class="shrink-0 w-12 h-12 rounded-xl flex items-center justify-center self-start" :style="`background:${tier(job.score).bg}`">
+                <span class="text-lg font-bold leading-none score" :style="`color:${tier(job.score).fg}`" x-text="job.score === null ? '?' : Math.round(job.score)"></span>
               </div>
-              <div class="text-[13px] text-gray-500 mt-0.5">
-                <span x-text="job.company"></span> · <span x-text="job.location"></span><template x-if="job.salary_max"><span> · <span class="text-brand font-medium" x-text="salaryLabel(job)"></span></span></template>
-                <span class="text-gray-400" x-show="job.job_type && job.job_type!=='Unknown'"> · <span x-text="job.job_type"></span></span>
-                <span class="text-amber-700" x-show="job.deadline"> · <i class="ti ti-calendar text-xs"></i> <span x-text="job.deadline"></span></span>
-                <span class="text-gray-400" x-show="fetchedDay(job.fetched_at)"> · <i class="ti ti-download text-xs"></i> <span x-text="fetchedDay(job.fetched_at)"></span></span>
-                <span class="text-gray-400" x-show="lastSeen(job.last_viewed_at)"> · <i class="ti ti-eye text-xs"></i> seen <span x-text="lastSeen(job.last_viewed_at)"></span></span>
-              </div>
-              <div class="text-[13px] rounded-lg px-3 py-2 my-2.5 leading-relaxed flex gap-1.5" style="background:var(--brand-tint); color:var(--brand-strong)" x-show="job.rationale">
-                <i class="ti ti-bulb mt-0.5 shrink-0"></i><span x-text="job.rationale"></span>
-              </div>
-              <div x-show="tab==='applied'" class="mt-2 mb-2.5 rounded-md border border-gray-100 bg-gray-50 p-2.5">
-                <div class="flex items-center gap-1.5 text-xs text-gray-500 mb-2">
-                  <i class="ti ti-calendar-check"></i>
-                  Applied <span class="font-medium text-gray-700" x-text="job.applied_on || '—'"></span>
+              <div class="flex-1 min-w-0">
+                <!-- Title leads -->
+                <div class="font-semibold text-[16px] leading-snug cursor-pointer hover:text-brand" @click="openDetail(job)" x-text="job.title"></div>
+                <!-- Company + location, one quiet line -->
+                <div class="text-[13.5px] text-gray-500 mt-1 font-medium">
+                  <span x-text="job.company"></span><span x-show="job.location"> · <span x-text="job.location"></span></span>
                 </div>
-                <textarea x-model="job.notes" @blur="saveNotes(job)" rows="2"
-                  placeholder="Notes — referral, follow-up date, contact…"
-                  class="w-full text-[13px] px-2.5 py-1.5 border border-gray-200 rounded-md outline-none focus:border-brand resize-none bg-white"></textarea>
-              </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <a :href="job.apply_url" target="_blank" x-show="job.apply_url" class="btn btn-primary" style="height:34px; font-size:13px; padding:0 15px"><i class="ti ti-external-link"></i> Apply</a>
-                <a :href="job.source_url" target="_blank" x-show="job.source_url" class="btn btn-ghost" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-eye"></i> View job</a>
-                <template x-if="tab!=='dismissed'">
-                  <div class="flex items-center gap-2">
-                    <button @click="setStatus(job,'saved')" class="btn btn-ghost" style="height:34px; font-size:13px; padding:0 13px">Save</button>
-                    <button @click="setStatus(job,'dismissed')" class="btn btn-ghost" style="height:34px; font-size:13px; padding:0 13px; color:var(--ink-3); border-color:transparent">Dismiss</button>
+                <!-- Facts as quiet chips -->
+                <div class="flex flex-wrap items-center gap-1.5 mt-2.5">
+                  <span x-show="job.work_mode" class="text-[10.5px] font-semibold px-2 py-0.5 rounded-md" :class="workModeClass(job.work_mode)" x-text="cap(job.work_mode || '')"></span>
+                  <span x-show="job.job_type && job.job_type!=='Unknown'" class="text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700" x-text="jobTypeLabel(job.job_type)"></span>
+                  <span x-show="job.salary_max" class="text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-gray-600" x-text="salaryLabel(job)"></span>
+                  <span x-show="job.language==='fr'" class="text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800" title="This posting is in French only">FR only</span>
+                  <span x-show="job.language==='bilingual'" class="text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-gray-500" title="Posting is in French and English">FR / EN</span>
+                  <span x-show="job.deadline" class="text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-red-50 text-red-600"><i class="ti ti-calendar text-[11px]"></i> <span x-text="job.deadline"></span></span>
+                </div>
+                <!-- Rationale: one calm line -->
+                <div class="text-[13px] rounded-lg px-3 py-2 mt-3 leading-relaxed flex gap-2" style="background:var(--brand-tint); color:var(--brand-strong)" x-show="job.rationale">
+                  <i class="ti ti-bulb mt-0.5 shrink-0"></i><span x-text="job.rationale"></span>
+                </div>
+                <!-- Applied notes -->
+                <div x-show="tab==='applied'" class="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
+                  <div class="flex items-center gap-1.5 text-xs text-gray-500 mb-2">
+                    <i class="ti ti-calendar-check"></i>
+                    Applied <span class="font-medium text-gray-700" x-text="job.applied_on || '—'"></span>
                   </div>
-                </template>
-                <template x-if="tab==='dismissed'">
-                  <button @click="setStatus(job,'surfaced')" class="btn btn-ghost" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-arrow-back-up"></i> Restore</button>
-                </template>
-                <select @change="setStatus(job, $event.target.value)" class="w-full sm:w-auto sm:ml-auto text-[13px] h-8 px-2 rounded-md border border-gray-200 text-gray-600 bg-white">
-                  <template x-for="s in statuses" :key="s"><option :value="s" :selected="job.status===s" x-text="cap(s)"></option></template>
-                </select>
+                  <textarea x-model="job.notes" @blur="saveNotes(job)" rows="2"
+                    placeholder="Notes — referral, follow-up date, contact…"
+                    class="w-full text-[13px] px-2.5 py-1.5 border border-gray-200 rounded-md outline-none focus:border-brand resize-none bg-white"></textarea>
+                </div>
+                <!-- Footer: separated by a hairline. Apply prominent, rest quiet. -->
+                <div class="flex flex-wrap items-center gap-2 mt-3.5 pt-3.5 border-t border-gray-100">
+                  <a :href="job.apply_url" target="_blank" x-show="job.apply_url" class="btn btn-primary" style="height:34px; font-size:13px; padding:0 15px"><i class="ti ti-external-link"></i> Apply</a>
+                  <a :href="job.source_url" target="_blank" x-show="job.source_url" class="btn btn-ghost" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-eye"></i> View</a>
+                  <template x-if="tab!=='dismissed'">
+                    <button @click="setStatus(job,'saved')" class="btn" style="height:34px; font-size:13px; padding:0 13px; background:transparent; color:var(--ink-3)">Save</button>
+                  </template>
+                  <template x-if="tab!=='dismissed'">
+                    <button @click="setStatus(job,'dismissed')" class="btn" style="height:34px; font-size:13px; padding:0 13px; background:transparent; color:var(--ink-3)">Dismiss</button>
+                  </template>
+                  <template x-if="tab==='dismissed'">
+                    <button @click="setStatus(job,'surfaced')" class="btn btn-ghost" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-arrow-back-up"></i> Restore</button>
+                  </template>
+                  <div class="flex items-center gap-2 ml-auto">
+                    <span class="hidden sm:block text-xs text-gray-400 whitespace-nowrap" x-show="fetchedDay(job.fetched_at)">Added <span x-text="fetchedDay(job.fetched_at)"></span></span>
+                    <select @change="setStatus(job, $event.target.value)" class="text-[13px] h-8 px-2 rounded-md border border-gray-200 text-gray-600 bg-white">
+                      <template x-for="s in statuses" :key="s"><option :value="s" :selected="job.status===s" x-text="statusLabel(s)"></option></template>
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

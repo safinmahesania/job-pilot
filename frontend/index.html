@@ -152,8 +152,19 @@
 
     <!-- ─── Job views ─── -->
     <div x-show="isJobView()">
+      <div class="hidden md:flex items-baseline justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-semibold" x-text="tabLabel()"></h2>
+          <p class="text-[13px] text-gray-400 mt-0.5" x-show="tab==='feed'">Your best matches, scored against your profile.</p>
+          <p class="text-[13px] text-gray-400 mt-0.5" x-show="tab==='saved'">Jobs you bookmarked to revisit.</p>
+          <p class="text-[13px] text-gray-400 mt-0.5" x-show="tab==='applied'">Jobs you've applied to — track follow-ups here.</p>
+          <p class="text-[13px] text-gray-400 mt-0.5" x-show="tab==='dismissed'">Jobs you passed on. Restore any that were a mistake.</p>
+          <p class="text-[13px] text-gray-400 mt-0.5" x-show="tab==='unscored'">Imported jobs with no readable description — judge these yourself.</p>
+        </div>
+        <span class="text-[13px] text-gray-400 self-center tnum" x-text="filtered().length + ' jobs'"></span>
+      </div>
       <div class="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
-        <div class="flex-1 flex items-center gap-2 h-9 px-3 border border-gray-200 rounded-lg bg-white">
+        <div class="flex-1 flex items-center gap-2 h-9 px-3 border border-gray-200 rounded-lg bg-white focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20 transition">
           <i class="ti ti-search text-gray-400"></i>
           <input x-model="q" placeholder="Search title, company, skill…" class="flex-1 text-sm outline-none bg-transparent">
         </div>
@@ -259,7 +270,7 @@
         </div>
 
         <template x-for="job in filtered()" :key="job.id">
-          <div class="flex gap-3 sm:gap-3.5 card p-3 sm:p-4" :style="`border-left:3px solid ${tier(job.score).stripe}`">
+          <div class="flex gap-3 sm:gap-3.5 card card-hover p-3 sm:p-4" :style="`border-left:3px solid ${tier(job.score).stripe}`">
             <input type="checkbox" :checked="isJobPicked(job.id)" @change="toggleJobPicked(job.id)"
                    class="shrink-0 self-start mt-1 w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand/40 cursor-pointer"
                    title="Tick to score just these">
@@ -285,7 +296,7 @@
                 <span class="text-gray-400" x-show="fetchedDay(job.fetched_at)"> · <i class="ti ti-download text-xs"></i> <span x-text="fetchedDay(job.fetched_at)"></span></span>
                 <span class="text-gray-400" x-show="lastSeen(job.last_viewed_at)"> · <i class="ti ti-eye text-xs"></i> seen <span x-text="lastSeen(job.last_viewed_at)"></span></span>
               </div>
-              <div class="text-[13px] rounded-md px-2.5 py-2 my-2.5 leading-relaxed flex gap-1.5" style="background:#F7EDD8; color:#7A4E0C;" x-show="job.rationale">
+              <div class="text-[13px] rounded-lg px-3 py-2 my-2.5 leading-relaxed flex gap-1.5" style="background:var(--brand-tint); color:var(--brand-strong)" x-show="job.rationale">
                 <i class="ti ti-bulb mt-0.5 shrink-0"></i><span x-text="job.rationale"></span>
               </div>
               <div x-show="tab==='applied'" class="mt-2 mb-2.5 rounded-md border border-gray-100 bg-gray-50 p-2.5">
@@ -298,16 +309,16 @@
                   class="w-full text-[13px] px-2.5 py-1.5 border border-gray-200 rounded-md outline-none focus:border-brand resize-none bg-white"></textarea>
               </div>
               <div class="flex flex-wrap items-center gap-2">
-                <a :href="job.apply_url" target="_blank" x-show="job.apply_url" class="text-[13px] h-8 px-4 rounded-md bg-brand text-white flex items-center gap-1"><i class="ti ti-external-link"></i> Apply</a>
-                <a :href="job.source_url" target="_blank" x-show="job.source_url" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1"><i class="ti ti-eye"></i> View job</a>
+                <a :href="job.apply_url" target="_blank" x-show="job.apply_url" class="btn btn-primary" style="height:34px; font-size:13px; padding:0 15px"><i class="ti ti-external-link"></i> Apply</a>
+                <a :href="job.source_url" target="_blank" x-show="job.source_url" class="btn btn-ghost" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-eye"></i> View job</a>
                 <template x-if="tab!=='dismissed'">
                   <div class="flex items-center gap-2">
-                    <button @click="setStatus(job,'saved')" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50">Save</button>
-                    <button @click="setStatus(job,'dismissed')" class="text-[13px] h-8 px-3 rounded-md text-gray-400 hover:bg-gray-50">Dismiss</button>
+                    <button @click="setStatus(job,'saved')" class="btn btn-ghost" style="height:34px; font-size:13px; padding:0 13px">Save</button>
+                    <button @click="setStatus(job,'dismissed')" class="btn btn-ghost" style="height:34px; font-size:13px; padding:0 13px; color:var(--ink-3); border-color:transparent">Dismiss</button>
                   </div>
                 </template>
                 <template x-if="tab==='dismissed'">
-                  <button @click="setStatus(job,'surfaced')" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50"><i class="ti ti-arrow-back-up"></i> Restore</button>
+                  <button @click="setStatus(job,'surfaced')" class="btn btn-ghost" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-arrow-back-up"></i> Restore</button>
                 </template>
                 <select @change="setStatus(job, $event.target.value)" class="w-full sm:w-auto sm:ml-auto text-[13px] h-8 px-2 rounded-md border border-gray-200 text-gray-600 bg-white">
                   <template x-for="s in statuses" :key="s"><option :value="s" :selected="job.status===s" x-text="cap(s)"></option></template>

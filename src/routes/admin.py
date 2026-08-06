@@ -9,10 +9,57 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from src import maintenance, scheduler, store
+from src import configio, maintenance, scheduler, store
 from src.deps import _db_dep, _get_setting
 
 router = APIRouter()
+
+
+@router.get("/api/setup-status")
+def setup_status(conn=Depends(_db_dep)):
+    """Tell the UI how far along setup is, so a new user gets a checklist instead of a
+    blank feed. Each step is a plain boolean plus a short label the frontend renders."""
+    profile = configio.read_yaml("profile.yaml") or {}
+    companies = (configio.read_yaml("companies.yaml") or {}).get("companies", [])
+    active_sources = [c for c in companies if c.get("active")]
+
+    # A profile is "set up" once it has any of the fields that actually drive scoring —
+    # not just an empty file with headers.
+    prof_search = profile.get("search", {}) or {}
+    prof_constraints = profile.get("constraints", {}) or {}
+    has_profile = bool(prof_search or prof_constraints)
+
+    def _count(sql):
+        try:
+            return conn.execute(sql).fetchone()[0]
+        except Exception:                              # table not created yet
+            return 0
+
+    runs = _count("SELECT COUNT(*) FROM runs")
+    total_jobs = _count("SELECT COUNT(*) FROM jobs")
+
+    steps = [
+        {"key": "profile", "done": has_profile,
+         "label": "Set up your profile",
+         "hint": "Tell JobPilot what roles, locations and level you want."},
+        {"key": "sources", "done": len(active_sources) > 0,
+         "label": "Add job sources",
+         "hint": "Pick the company boards to fetch jobs from."},
+        {"key": "run", "done": runs > 0,
+         "label": "Run your first fetch",
+         "hint": "Pull jobs from your sources and score them against your profile."},
+        {"key": "review", "done": total_jobs > 0,
+         "label": "Review your matches",
+         "hint": "See scored jobs in your feed and start applying."},
+    ]
+    done = sum(1 for s in steps if s["done"])
+    return {
+        "steps": steps,
+        "completed": done,
+        "total": len(steps),
+        "all_done": done == len(steps),
+        "active_sources": len(active_sources),
+    }
 
 
 # ── Maintenance ──

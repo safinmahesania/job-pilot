@@ -1,6 +1,9 @@
 function jobpilot() {
   return {
     tab: 'feed', jobs: [], counts: {}, health: [], runs: [], errors: [], stats: null, loading: true, q: '', detail: null, sent: null, sentOpen: null,
+    // Admin mode reveals the Manage pages (Sources, Stats, Import, Settings, Admin).
+    // Off by default so the everyday view stays clean; remembered across reloads.
+    adminMode: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_admin_mode') === '1'),
     // Job ids ticked for a selective score. Cleared on tab change: acting on
     // jobs that scrolled out of view is never what was meant.
     pickedJobs: [],
@@ -64,25 +67,28 @@ function jobpilot() {
     seniorityOpts: ['intern','junior','entry','mid','senior'],
 
     statuses: ['surfaced','saved','applied','interview','offer','rejected','dismissed'],
-    jobsNav: [
+    // Everyday: the pages you use to actually job-hunt — always visible.
+    everydayNav: [
       { k:'feed', label:'Feed', icon:'ti-inbox' },
       { k:'unscored', label:'Unscored', icon:'ti-help-circle' },
       { k:'saved', label:'Saved', icon:'ti-bookmark' },
       { k:'applied', label:'Applied', icon:'ti-send' },
       { k:'dismissed', label:'Dismissed', icon:'ti-archive' },
-    ],
-    sysNav: [
-      { k:'importTab', label:'Import', icon:'ti-file-import' },
-      { k:'stats', label:'Stats', icon:'ti-chart-bar' },
-      { k:'sourcesTab', label:'Sources', icon:'ti-plug' },
       { k:'profile', label:'Profile', icon:'ti-user' },
-      { k:'admin', label:'Admin', icon:'ti-activity-heartbeat' },
+    ],
+    // Manage: setup and maintenance — hidden until admin mode is on, so the
+    // everyday view stays uncluttered.
+    manageNav: [
+      { k:'sourcesTab', label:'Sources', icon:'ti-plug' },
+      { k:'stats', label:'Stats', icon:'ti-chart-bar' },
+      { k:'importTab', label:'Import', icon:'ti-file-import' },
       { k:'settings', label:'Settings', icon:'ti-settings' },
+      { k:'admin', label:'Admin', icon:'ti-activity-heartbeat' },
     ],
 
     isJobView() { return ['feed','unscored','saved','applied','dismissed'].includes(this.tab); },
     tabLabel() {
-      const all = [...this.jobsNav, ...this.sysNav].find(n => n.k === this.tab);
+      const all = [...this.everydayNav, ...this.manageNav].find(n => n.k === this.tab);
       return all ? all.label : this.tab;
     },
 
@@ -138,6 +144,17 @@ function jobpilot() {
       if (tab === 'profile') await this.loadProfile();
       if (tab === 'settings') { await this.loadLLM(); await this.loadAI(); await this.loadPrivacy(); await this.loadFeedback(); }
       await this.load();
+    },
+
+    // Flip admin mode. When turning it off while on a Manage page, fall back to Feed so
+    // the user isn't stranded on a page that just disappeared from the nav.
+    toggleAdminMode() {
+      this.adminMode = !this.adminMode;
+      try { localStorage.setItem('jp_admin_mode', this.adminMode ? '1' : '0'); } catch (e) {}
+      const manageKeys = this.manageNav.map(n => n.k);
+      if (!this.adminMode && manageKeys.includes(this.tab)) {
+        this.go('feed');
+      }
     },
 
     async load() {

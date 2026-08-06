@@ -5,11 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>JobPilot</title>
   <link rel="icon" href="/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = { theme: { extend: { colors: {
-      brand: '#B4791A', brandtint: '#F7EDD8', branddark: '#7A4E0C'
-    } } } };
+    tailwind.config = { theme: { extend: {
+      colors: { brand: '#A96D14', brandtint: '#F6EEDD', branddark: '#7A4E0C' },
+      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+      boxShadow: { soft: '0 1px 3px rgba(24,24,22,.06), 0 4px 12px rgba(24,24,22,.05)' },
+    } } };
   </script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
   <link rel="stylesheet" href="/styles.css">
@@ -22,7 +27,7 @@
   <!-- ══ Mobile top bar ══ -->
   <header class="md:hidden sticky top-0 z-40 flex items-center gap-3 px-4 h-14 bg-white border-b border-gray-200">
     <button @click="mobileNav = true" class="text-gray-500 -ml-1"><i class="ti ti-menu-2 text-2xl"></i></button>
-    <svg viewBox="0 0 48 48" class="w-7 h-7 cursor-pointer" @click="go('feed')"><rect width="48" height="48" rx="12" fill="#B4791A"/><circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/><path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/><path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/><path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/><path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/><circle cx="24" cy="24" r="1.8" fill="#fff"/></svg>
+    <svg viewBox="0 0 48 48" class="w-7 h-7 cursor-pointer" @click="go('feed')"><rect width="48" height="48" rx="12" fill="#A96D14"/><circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/><path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/><path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/><path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/><path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/><circle cx="24" cy="24" r="1.8" fill="#fff"/></svg>
     <span class="font-semibold" x-text="tabLabel()"></span>
     <button @click="openNotifications()" class="ml-auto relative text-gray-500 h-8 w-8 flex items-center justify-center" title="Notifications">
       <i class="ti ti-bell text-xl"></i>
@@ -40,7 +45,7 @@
     x-transition:enter="transition ease-out duration-200" x-transition:enter-start="-translate-x-full" x-transition:enter-end="translate-x-0"
     class="md:hidden fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col px-3 py-5 overflow-y-auto">
     <div class="flex items-center gap-2 px-2 pb-5">
-      <svg viewBox="0 0 48 48" class="w-8 h-8"><rect width="48" height="48" rx="12" fill="#B4791A"/><circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/><path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/><path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/><path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/><path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/><circle cx="24" cy="24" r="1.8" fill="#fff"/></svg>
+      <svg viewBox="0 0 48 48" class="w-8 h-8"><rect width="48" height="48" rx="12" fill="#A96D14"/><circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/><path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/><path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/><path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/><path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/><circle cx="24" cy="24" r="1.8" fill="#fff"/></svg>
       <span class="text-lg font-semibold">JobPilot</span>
       <button @click="mobileNav=false" class="ml-auto text-gray-400"><i class="ti ti-x text-xl"></i></button>
     </div>
@@ -85,7 +90,7 @@
   <aside class="hidden md:flex w-56 shrink-0 border-r border-gray-200 flex-col px-3 py-5 h-screen sticky top-0">
     <div class="flex items-center gap-2 px-2 pb-5 shrink-0">
       <div class="flex items-center gap-2 cursor-pointer flex-1" @click="go('feed')">
-        <svg viewBox="0 0 48 48" class="w-8 h-8"><rect width="48" height="48" rx="12" fill="#B4791A"/><circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/><path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/><path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/><path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/><path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/><circle cx="24" cy="24" r="1.8" fill="#fff"/></svg>
+        <svg viewBox="0 0 48 48" class="w-8 h-8"><rect width="48" height="48" rx="12" fill="#A96D14"/><circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/><path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/><path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/><path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/><path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/><circle cx="24" cy="24" r="1.8" fill="#fff"/></svg>
         <span class="text-lg font-semibold">JobPilot</span>
       </div>
       <button @click="openNotifications()" class="relative text-gray-500 hover:text-gray-700 h-8 w-8 flex items-center justify-center" title="Notifications">
@@ -338,7 +343,7 @@
           </div>
           <div class="card p-4">
             <div class="text-sm font-medium mb-3">Score distribution</div>
-            <template x-for="[label,color] in [['80+','#1D9E75'],['70-79','#B4791A'],['60-69','#C0C0C0'],['<60','#E5A0A0']]" :key="label">
+            <template x-for="[label,color] in [['80+','#1D9E75'],['70-79','#A96D14'],['60-69','#C0C0C0'],['<60','#E5A0A0']]" :key="label">
               <div class="flex items-center gap-2 sm:gap-3 mb-2">
                 <span class="text-xs text-gray-500 w-12 shrink-0" x-text="label"></span>
                 <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
@@ -822,7 +827,7 @@
           <input type="number" min="0" max="100" x-model.number="threshold" @change="clampThreshold(); saveThreshold()" class="w-16 text-sm font-semibold text-brand text-right border border-gray-200 rounded-md px-2 py-1 outline-none">
         </div>
         <div class="text-xs text-gray-400 mb-3">Feed shows only jobs scoring at or above this.</div>
-        <input type="range" min="0" max="100" step="1" x-model.number="threshold" @change="saveThreshold()" class="w-full accent-[#B4791A]">
+        <input type="range" min="0" max="100" step="1" x-model.number="threshold" @change="saveThreshold()" class="w-full accent-[#A96D14]">
         <div class="flex justify-between text-[11px] text-gray-400 mt-1"><span>0</span><span>50</span><span>100</span></div>
       </div>
 
@@ -1031,7 +1036,7 @@
           <template x-for="m in privacyModes" :key="m.key">
             <label class="flex items-start gap-3 p-4 cursor-pointer hover:bg-gray-50">
               <input type="radio" :value="m.key" x-model="privacy.mode" @change="savePrivacy()"
-                class="mt-1 accent-[#B4791A]">
+                class="mt-1 accent-[#A96D14]">
               <div>
                 <div class="text-sm font-medium flex items-center gap-1.5">
                   <span x-text="m.label"></span>
@@ -1752,7 +1757,7 @@
     <div class="bg-white rounded-2xl px-8 py-7 flex flex-col items-center gap-3 shadow-xl max-w-xs text-center">
       <i class="ti ti-loader-2 animate-spin text-brand text-4xl"></i>
       <div class="text-sm font-medium text-gray-700" x-text="blocking ? blocking.label : ''"></div>
-      <div class="text-xs" x-show="modelState.fallback_active" style="color:#B4791A;">
+      <div class="text-xs" x-show="modelState.fallback_active" style="color:#A96D14;">
         <i class="ti ti-arrow-down-circle"></i> Fell back to 7b for speed
       </div>
       <div class="text-xs text-gray-400" x-show="!modelState.fallback_active">

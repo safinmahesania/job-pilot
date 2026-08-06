@@ -45,6 +45,7 @@ def get_adapter(company: dict) -> SourceAdapter:
     from .generic import GenericCareersAdapter
     from .smartrecruiters import SmartRecruitersAdapter
     from .workable import WorkableAdapter
+    from .teamtailor import TeamTailorAdapter
     from .jsearch import JSearchAdapter
     from .adzuna import AdzunaAdapter
 
@@ -63,6 +64,7 @@ def get_adapter(company: dict) -> SourceAdapter:
         "ashby": AshbyAdapter,
         "smartrecruiters": SmartRecruitersAdapter,
         "workable": WorkableAdapter,
+        "teamtailor": TeamTailorAdapter,
         "jsearch": JSearchAdapter,
         "adzuna": AdzunaAdapter,
         # HTML-scrape sources with no JSON API — all served by one generic adapter that
@@ -83,6 +85,6 @@ def get_adapter(company: dict) -> SourceAdapter:
 KNOWN_ATS = frozenset({
     "greenhouse", "lever", "themuse", "remotive", "workday", "remoteok",
     "weworkremotely", "jobspresso", "oracle", "phenom", "ashby",
-    "smartrecruiters", "workable", "jsearch", "adzuna",
+    "smartrecruiters", "workable", "teamtailor", "jsearch", "adzuna",
     "custom", "aggregator", "successfactors",
 })

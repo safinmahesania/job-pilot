@@ -16,6 +16,8 @@ Needs network access (run it on your own machine, not in a sandbox). Nothing is 
 """
 import argparse
 import re
+import sys
+from pathlib import Path
 
 import httpx
 
@@ -37,6 +39,12 @@ PROBES = [
     ("workable",
      "https://apply.workable.com/api/v1/widget/accounts/{slug}?details=true",
      lambda d: len(d.get("jobs", []))),
+    ("smartrecruiters",
+     "https://api.smartrecruiters.com/v1/companies/{slug}/postings",
+     lambda d: d.get("totalFound", 0) if isinstance(d, dict) else 0),
+    ("recruitee",
+     "https://{slug}.recruitee.com/api/offers/",
+     lambda d: len(d.get("offers", []))),
 ]
 
 
@@ -67,12 +75,31 @@ def _probe(ats: str, url_tpl: str, counter, slug: str):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("names", nargs="+", help="source names to find slugs for")
+    ap.add_argument("names", nargs="*", help="source names to find slugs for")
     ap.add_argument("--extra", nargs="*", default=[],
                     help="extra slug guesses to try for every name")
+    ap.add_argument("--from-broken", action="store_true",
+                    help="pull every broken source name from health automatically")
     args = ap.parse_args()
 
-    for name in args.names:
+    names = list(args.names)
+    if args.from_broken:
+        # Pull names of sources health considers broken, so you don't type them all.
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from src.store import connect
+        from src import health
+        broken = health.broken(connect())
+        names += [b["name"] for b in broken]
+        # De-dupe while preserving order.
+        seen = set()
+        names = [n for n in names if not (n in seen or seen.add(n))]
+        print(f"Checking {len(names)} broken source(s): {', '.join(names)}")
+
+    if not names:
+        print("No names given. Pass source names or use --from-broken.")
+        return 1
+
+    for name in names:
         print(f"\n=== {name} ===")
         guesses = _slug_guesses(name, args.extra)
         hits = []
@@ -85,7 +112,7 @@ def main() -> int:
         if not hits:
             print(f"  no board found for any of: {', '.join(guesses)}")
             print("  → try --extra with the token from the careers URL, or it may be "
-                  "Workday/SuccessFactors/custom (not one of these four).")
+                  "Workday/SuccessFactors/custom (not one of these).")
         else:
             best = max(hits, key=lambda h: h[2])
             print(f"  BEST: ats: {best[0]}  identifier: {best[1]}  ({best[2]} jobs)")

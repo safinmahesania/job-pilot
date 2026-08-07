@@ -522,12 +522,13 @@
 
     <!-- ─── Profile (form) ─── -->
     <div x-show="tab==='profile'">
-      <div class="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
-        <div class="flex-1">
-          <h2 class="text-lg font-semibold hidden md:block">Profile</h2>
-          <div class="text-xs text-gray-400">The scorer reads this on every run. Comma-separate lists; one highlight per line.</div>
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-5">
+        <div>
+          <h2 class="text-lg font-semibold">Profile</h2>
+          <p class="text-[13px] text-gray-400 mt-0.5">What you're looking for. The scorer reads this on every run to rank jobs for you.</p>
         </div>
-        <button @click="toggleRaw()" class="text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">
+        <button @click="toggleRaw()" class="btn btn-ghost self-start shrink-0" style="height:36px; font-size:13px">
+          <i class="ti" :class="rawMode ? 'ti-forms' : 'ti-code'"></i>
           <span x-text="rawMode ? 'Form editor' : 'Raw YAML'"></span>
         </button>
       </div>
@@ -537,7 +538,8 @@
       <template x-if="!rawMode && profile">
         <div class="flex flex-col gap-4">
           <div class="card p-4">
-            <div class="text-sm font-medium mb-3">Identity</div>
+            <div class="flex items-center gap-2 mb-1"><i class="ti ti-user text-brand"></i><span class="text-sm font-semibold">Identity</span></div>
+            <p class="text-xs text-gray-400 mb-3">Who you are and the roles you're targeting.</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label class="lbl">Name</label><input x-model="profile.identity.name" @input="profileDirty=true" class="fld"></div>
               <div><label class="lbl">Seniority</label>
@@ -552,7 +554,8 @@
             </div>
           </div>
           <div class="card p-4">
-            <div class="text-sm font-medium mb-3">Constraints</div>
+            <div class="flex items-center gap-2 mb-1"><i class="ti ti-adjustments text-brand"></i><span class="text-sm font-semibold">Constraints</span></div>
+            <p class="text-xs text-gray-400 mb-3">Hard limits — jobs outside these are filtered out before scoring.</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div class="sm:col-span-2"><label class="lbl">Locations</label>
                 <input :value="csv(profile.constraints.locations)" @change="setList(profile.constraints,'locations',$event.target.value)" class="fld"></div>
@@ -568,7 +571,8 @@
             </div>
           </div>
           <div class="card p-4">
-            <div class="text-sm font-medium mb-3">Search filters</div>
+            <div class="flex items-center gap-2 mb-1"><i class="ti ti-filter text-brand"></i><span class="text-sm font-semibold">Search filters</span></div>
+            <p class="text-xs text-gray-400 mb-3">Which roles to include and how recent they should be.</p>
             <div class="grid grid-cols-1 gap-3">
               <div><label class="lbl">Role levels to include</label>
                 <input :value="csv(profile.search.role_levels)" @change="setList(profile.search,'role_levels',$event.target.value)" class="fld"></div>
@@ -587,7 +591,8 @@
             </div>
           </div>
           <div class="card p-4">
-            <div class="text-sm font-medium mb-3">Skills</div>
+            <div class="flex items-center gap-2 mb-1"><i class="ti ti-code text-brand"></i><span class="text-sm font-semibold">Skills</span></div>
+            <p class="text-xs text-gray-400 mb-3">Your strengths — jobs matching these score higher.</p>
             <div class="grid grid-cols-1 gap-3">
               <div><label class="lbl">Expert</label>
                 <input :value="csv(profile.skills.expert)" @change="setList(profile.skills,'expert',$event.target.value)" class="fld"></div>
@@ -599,8 +604,8 @@
           </div>
           <div class="card p-4">
             <div class="flex items-center justify-between mb-3">
-              <span class="text-sm font-medium">Experience</span>
-              <button @click="addExp()" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50"><i class="ti ti-plus"></i> Add</button>
+              <span class="flex items-center gap-2 text-sm font-semibold"><i class="ti ti-briefcase text-brand"></i> Experience</span>
+              <button @click="addExp()" class="btn btn-ghost" style="height:32px; font-size:13px; padding:0 12px"><i class="ti ti-plus"></i> Add</button>
             </div>
             <template x-for="(e, i) in profile.experience" :key="'e'+i">
               <div class="border border-gray-100 rounded-lg p-3 mb-3 last:mb-0">
@@ -640,8 +645,8 @@
           </div>
           <div class="card p-4">
             <div class="flex items-center justify-between mb-3">
-              <span class="text-sm font-medium">Education</span>
-              <button @click="addEdu()" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50"><i class="ti ti-plus"></i> Add</button>
+              <span class="flex items-center gap-2 text-sm font-semibold"><i class="ti ti-school text-brand"></i> Education</span>
+              <button @click="addEdu()" class="btn btn-ghost" style="height:32px; font-size:13px; padding:0 12px"><i class="ti ti-plus"></i> Add</button>
             </div>
             <template x-for="(e, i) in profile.education" :key="'d'+i">
               <div class="border border-gray-100 rounded-lg p-3 mb-3 last:mb-0">
@@ -661,10 +666,13 @@
           </div>
         </div>
       </template>
-      <div class="sticky bottom-0 -mx-4 md:mx-0 mt-4 px-4 py-3 bg-white/95 backdrop-blur border-t border-gray-200 md:static md:bg-transparent md:border-0 md:px-0 md:py-0 flex items-center gap-3">
-        <button @click="saveProfile()" :disabled="!profileDirty" class="text-[13px] h-9 px-5 rounded-md bg-brand text-white disabled:opacity-40">Save profile</button>
-        <button @click="rawMode ? loadRaw() : loadProfile()" class="text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Revert</button>
-        <span class="text-xs text-gray-400 hidden sm:inline">A .bak copy is written on every save.</span>
+      <div class="sticky bottom-0 -mx-4 md:mx-0 mt-4 px-4 py-3 bg-white/95 backdrop-blur border-t border-gray-200 md:static md:bg-transparent md:border-0 md:px-0 md:py-0 md:pt-2 flex items-center gap-3">
+        <button @click="saveProfile()" :disabled="!profileDirty" class="btn btn-primary disabled:opacity-40" style="height:38px; font-size:13px">
+          <i class="ti ti-device-floppy"></i> Save profile
+        </button>
+        <button @click="rawMode ? loadRaw() : loadProfile()" class="btn btn-ghost" style="height:38px; font-size:13px">Revert</button>
+        <span x-show="profileDirty" class="flex items-center gap-1.5 text-xs text-amber-600"><i class="ti ti-point-filled"></i> Unsaved changes</span>
+        <span x-show="!profileDirty" class="text-xs text-gray-400 hidden sm:inline">A backup copy is saved automatically.</span>
       </div>
     </div>
 

@@ -7,6 +7,7 @@ function jobpilot() {
     // Job ids ticked for a selective score. Cleared on tab change: acting on
     // jobs that scrolled out of view is never what was meant.
     pickedJobs: [],
+    selectMode: false,    // when on, clicking a card selects it for bulk rescore
     // What the running pipeline is doing, polled from /api/run/status.
     runProgress: null,
     // The run panel starts collapsed. The phase and a percentage are what you check
@@ -103,6 +104,12 @@ function jobpilot() {
     // a handful worth a model call, out of a list where most are not.
     isJobPicked(id) { return this.pickedJobs.includes(id); },
 
+    // Enter/exit "select to rescore" mode. In this mode a click anywhere on a card
+    // toggles its selection (instead of opening the detail view), and a floating
+    // action button appears to run the rescore.
+    enterSelectMode() { this.selectMode = true; this.pickedJobs = []; },
+    exitSelectMode() { this.selectMode = false; this.pickedJobs = []; },
+
     toggleJobPicked(id) {
       this.pickedJobs = this.isJobPicked(id)
         ? this.pickedJobs.filter(x => x !== id)
@@ -123,6 +130,7 @@ function jobpilot() {
         const res = await this.scoreIds(ids, 'Selected jobs');
         if (!res) return;
         this.pickedJobs = [];
+        this.selectMode = false;
         await this.load();
         // Say how many actually got a number: a job with no description is skipped on
         // purpose, and reporting it as scored would be a lie.
@@ -139,6 +147,7 @@ function jobpilot() {
     async go(tab) {
       this.tab = tab;
       this.pickedJobs = [];
+      this.selectMode = false;
       this.mobileNav = false;
       if (tab === 'sourcesTab') await this.loadSources();
       if (tab === 'profile') await this.loadProfile();

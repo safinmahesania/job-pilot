@@ -267,40 +267,46 @@
           </div>
         </template>
 
-        <!-- Appears only once something is ticked, so the list is unchanged until you
-             actually want to act on a few jobs rather than all of them. -->
-        <div x-show="pickedJobs.length" x-cloak
-          class="flex items-center gap-2 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2.5 mb-1">
-          <span class="text-[13px] text-gray-700 flex-1"
-            x-text="pickedJobs.length + (pickedJobs.length===1 ? ' job selected' : ' jobs selected')"></span>
-          <button @click="scorePicked()" :disabled="scoring"
-            class="text-[13px] h-8 px-3 rounded-md bg-brand text-white disabled:opacity-50 flex items-center gap-1.5">
-            <i class="ti" :class="scoring ? 'ti-loader-2 animate-spin' : 'ti-sparkles'"></i>
-            <span x-text="scoring ? 'Scoring…' : 'Score these'"></span>
-          </button>
-          <button @click="pickAllVisible()"
-            class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-white">Select all</button>
-          <button @click="pickedJobs = []"
-            class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-white">Clear</button>
+        <!-- Select-mode trigger: a quiet button that turns the list into a picker.
+             In normal mode it's just an affordance; in select mode it becomes a
+             control bar with select-all / clear. -->
+        <div class="flex items-center gap-2 mb-3" x-show="filtered().length">
+          <template x-if="!selectMode">
+            <button @click="enterSelectMode()"
+              class="text-[13px] h-8 px-3 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-white flex items-center gap-1.5 transition">
+              <i class="ti ti-checkbox"></i> Select to rescore
+            </button>
+          </template>
+          <template x-if="selectMode">
+            <div class="flex items-center gap-2 w-full">
+              <span class="text-[13px] font-medium text-gray-700" x-text="pickedJobs.length + ' selected'"></span>
+              <button @click="pickAllVisible()" class="text-[13px] h-8 px-3 rounded-lg border border-gray-200 text-gray-600 hover:bg-white">Select all</button>
+              <button @click="pickedJobs = []" x-show="pickedJobs.length" class="text-[13px] h-8 px-3 rounded-lg border border-gray-200 text-gray-600 hover:bg-white">Clear</button>
+              <button @click="exitSelectMode()" class="text-[13px] h-8 px-3 rounded-lg text-gray-400 hover:text-gray-600 ml-auto">Cancel</button>
+            </div>
+          </template>
         </div>
 
         <template x-for="job in filtered()" :key="job.id">
-          <div class="card card-hover p-4 sm:p-5 group">
+          <div class="card p-4 sm:p-5 group transition"
+               :class="selectMode ? (isJobPicked(job.id) ? 'ring-2 ring-brand border-brand cursor-pointer' : 'cursor-pointer hover:border-gray-300') : 'card-hover'"
+               @click="selectMode && toggleJobPicked(job.id)">
             <div class="flex gap-3 sm:gap-4">
-              <!-- Select checkbox: hidden by default, appears on hover, or stays visible
-                   once this job is picked or any selection is in progress. Keeps the
-                   card clean until you actually want to bulk-score. -->
-              <input type="checkbox" :checked="isJobPicked(job.id)" @change="toggleJobPicked(job.id)"
-                     class="shrink-0 self-start mt-1.5 w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand/40 cursor-pointer transition-opacity"
-                     :class="(isJobPicked(job.id) || pickedJobs.length) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
-                     title="Tick to score just these">
+              <!-- Selection indicator: only in select mode. A tick circle that fills
+                   when the card is picked. Whole card is the click target. -->
+              <div x-show="selectMode" class="shrink-0 self-start mt-1">
+                <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center transition"
+                     :class="isJobPicked(job.id) ? 'bg-brand border-brand' : 'border-gray-300'">
+                  <i class="ti ti-check text-white text-xs" x-show="isJobPicked(job.id)"></i>
+                </div>
+              </div>
               <!-- Score: compact rounded square, no redundant "match" label -->
               <div class="shrink-0 w-12 h-12 rounded-xl flex items-center justify-center self-start" :style="`background:${tier(job.score).bg}`">
                 <span class="text-lg font-bold leading-none score" :style="`color:${tier(job.score).fg}`" x-text="job.score === null ? '?' : Math.round(job.score)"></span>
               </div>
               <div class="flex-1 min-w-0">
                 <!-- Title leads -->
-                <div class="font-semibold text-[16px] leading-snug cursor-pointer hover:text-brand" @click="openDetail(job)" x-text="job.title"></div>
+                <div class="font-semibold text-[16px] leading-snug hover:text-brand" :class="!selectMode && 'cursor-pointer'" @click="!selectMode && openDetail(job)" x-text="job.title"></div>
                 <!-- Company + location, one quiet line -->
                 <div class="text-[13.5px] text-gray-500 mt-1 font-medium">
                   <span x-text="job.company"></span><span x-show="job.location"> · <span x-text="job.location"></span></span>
@@ -328,8 +334,9 @@
                     placeholder="Notes — referral, follow-up date, contact…"
                     class="w-full text-[13px] px-2.5 py-1.5 border border-gray-200 rounded-md outline-none focus:border-brand resize-none bg-white"></textarea>
                 </div>
-                <!-- Footer: separated by a hairline. Apply prominent, rest quiet. -->
-                <div class="flex flex-wrap items-center gap-2 mt-3.5 pt-3.5 border-t border-gray-100">
+                <!-- Footer: separated by a hairline. Apply prominent, rest quiet.
+                     Hidden in select mode so the whole card is a clean click target. -->
+                <div class="flex flex-wrap items-center gap-2 mt-3.5 pt-3.5 border-t border-gray-100" x-show="!selectMode" @click.stop>
                   <a :href="job.apply_url" target="_blank" x-show="job.apply_url" class="btn btn-primary" style="height:34px; font-size:13px; padding:0 15px"><i class="ti ti-external-link"></i> Apply</a>
                   <a :href="job.source_url" target="_blank" x-show="job.source_url" class="btn btn-ghost" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-eye"></i> View</a>
                   <template x-if="tab!=='dismissed'">
@@ -352,6 +359,17 @@
             </div>
           </div>
         </template>
+      </div>
+
+      <!-- Floating rescore button: appears bottom-right in select mode once at least one
+           job is picked. The primary action of select mode, always within thumb reach. -->
+      <div x-show="selectMode && pickedJobs.length" x-cloak
+           class="fixed bottom-6 right-6 z-40 jp-enter">
+        <button @click="scorePicked()" :disabled="scoring"
+          class="btn btn-primary shadow-lg" style="height:48px; padding:0 22px; font-size:14px; border-radius:14px">
+          <i class="ti" :class="scoring ? 'ti-loader-2 animate-spin' : 'ti-sparkles'"></i>
+          <span x-text="scoring ? 'Scoring…' : ('Rescore ' + pickedJobs.length + (pickedJobs.length===1 ? ' job' : ' jobs'))"></span>
+        </button>
       </div>
     </div>
 

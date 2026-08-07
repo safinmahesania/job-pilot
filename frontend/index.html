@@ -163,31 +163,46 @@
         </div>
         <span class="text-[13px] text-gray-400 self-center tnum" x-text="filtered().length + ' jobs'"></span>
       </div>
-      <div class="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
-        <div class="flex-1 flex items-center gap-2 h-9 px-3 border border-gray-200 rounded-lg bg-white focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20 transition">
-          <i class="ti ti-search text-gray-400"></i>
-          <input x-model="q" placeholder="Search title, company, skill…" class="flex-1 text-sm outline-none bg-transparent">
+      <div class="mb-5">
+        <!-- Search: prominent, full-width, taller -->
+        <div class="flex items-center gap-2.5 h-11 px-4 bg-white border border-gray-200 rounded-xl shadow-sm focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/15 transition">
+          <i class="ti ti-search text-gray-400 text-lg"></i>
+          <input x-model="q" placeholder="Search by title, company, or skill…" class="flex-1 text-[14px] outline-none bg-transparent placeholder:text-gray-400">
+          <button x-show="q" @click="q=''" class="text-gray-300 hover:text-gray-500 shrink-0"><i class="ti ti-x"></i></button>
         </div>
-        <div class="flex gap-2">
-          <select x-model="sort" @change="load()" class="flex-1 sm:flex-none h-9 px-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600">
-            <option value="score">Score</option><option value="newest">Newest</option><option value="company">Company</option>
-          </select>
-          <select x-model="source" @change="load()" class="flex-1 sm:flex-none h-9 px-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 max-w-[45vw]">
-            <option value="all">All sources</option>
-            <template x-for="s in sources" :key="s"><option :value="s" x-text="s"></option></template>
-          </select>
-          <select x-model="dateFilter" class="flex-1 sm:flex-none h-9 px-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600">
-            <option value="all">Any date</option>
-            <option value="today">Today</option>
-            <option value="week">Past week</option>
-            <option value="month">Past month</option>
-          </select>
-          <select x-model="seenFilter" class="flex-1 sm:flex-none h-9 px-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600">
-            <option value="all">Seen &amp; unseen</option>
-            <option value="unseen">Unseen only</option>
-            <option value="seen">Seen only</option>
-          </select>
-          <span class="hidden sm:inline self-center text-xs text-gray-400 whitespace-nowrap" x-text="filtered().length + ' jobs'"></span>
+        <!-- Filters: a quiet second row of pill-style selects -->
+        <div class="flex flex-wrap items-center gap-2 mt-3">
+          <div class="relative">
+            <select x-model="sort" @change="load()" class="appearance-none h-8 pl-3 pr-8 text-[13px] font-medium border border-gray-200 rounded-lg bg-white text-gray-700 hover:border-gray-300 cursor-pointer transition">
+              <option value="score">Top score</option><option value="newest">Newest</option><option value="company">Company</option>
+            </select>
+            <i class="ti ti-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+          </div>
+          <div class="relative">
+            <select x-model="source" @change="load()" class="appearance-none h-8 pl-3 pr-8 text-[13px] font-medium border border-gray-200 rounded-lg bg-white text-gray-700 hover:border-gray-300 cursor-pointer transition max-w-[40vw] truncate">
+              <option value="all">All sources</option>
+              <template x-for="s in sources" :key="s"><option :value="s" x-text="s"></option></template>
+            </select>
+            <i class="ti ti-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+          </div>
+          <div class="relative">
+            <select x-model="dateFilter" class="appearance-none h-8 pl-3 pr-8 text-[13px] font-medium border border-gray-200 rounded-lg bg-white text-gray-700 hover:border-gray-300 cursor-pointer transition">
+              <option value="all">Any date</option>
+              <option value="today">Today</option>
+              <option value="week">Past week</option>
+              <option value="month">Past month</option>
+            </select>
+            <i class="ti ti-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+          </div>
+          <div class="relative">
+            <select x-model="seenFilter" class="appearance-none h-8 pl-3 pr-8 text-[13px] font-medium border border-gray-200 rounded-lg bg-white text-gray-700 hover:border-gray-300 cursor-pointer transition">
+              <option value="all">Seen &amp; unseen</option>
+              <option value="unseen">Unseen only</option>
+              <option value="seen">Seen only</option>
+            </select>
+            <i class="ti ti-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+          </div>
+          <span class="ml-auto text-[13px] text-gray-400 tnum" x-text="filtered().length + ' jobs'"></span>
         </div>
       </div>
 
@@ -270,10 +285,14 @@
         </div>
 
         <template x-for="job in filtered()" :key="job.id">
-          <div class="card card-hover p-4 sm:p-5">
+          <div class="card card-hover p-4 sm:p-5 group">
             <div class="flex gap-3 sm:gap-4">
+              <!-- Select checkbox: hidden by default, appears on hover, or stays visible
+                   once this job is picked or any selection is in progress. Keeps the
+                   card clean until you actually want to bulk-score. -->
               <input type="checkbox" :checked="isJobPicked(job.id)" @change="toggleJobPicked(job.id)"
-                     class="shrink-0 self-start mt-1.5 w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand/40 cursor-pointer"
+                     class="shrink-0 self-start mt-1.5 w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand/40 cursor-pointer transition-opacity"
+                     :class="(isJobPicked(job.id) || pickedJobs.length) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
                      title="Tick to score just these">
               <!-- Score: compact rounded square, no redundant "match" label -->
               <div class="shrink-0 w-12 h-12 rounded-xl flex items-center justify-center self-start" :style="`background:${tier(job.score).bg}`">

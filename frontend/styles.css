@@ -147,3 +147,39 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+/* ============================================================================
+   Profile section treatments — skills segmented pills, timeline, filter split,
+   project blocks. View-mode only; edit mode uses the plain chip inputs.
+   ============================================================================ */
+
+/* Skills — segmented pills. Tier sets the badge colour. */
+.skill-pill { display:inline-flex; align-items:center; border-radius:16px; overflow:hidden; font-size:12px; font-weight:500; border:1px solid var(--line); }
+.skill-pill .n { padding:4px 11px; background:#fff; color:var(--ink); }
+.skill-pill .lv { padding:4px 10px; font-size:9.5px; font-weight:700; letter-spacing:.03em; }
+.skill-pill .lv.expert     { background:#7A4E0C; color:#fff; }
+.skill-pill .lv.proficient { background:#A96D14; color:#fff; }
+.skill-pill .lv.familiar   { background:var(--brand-tint); color:var(--brand-strong); }
+
+/* Search filters — include / exclude split columns. */
+.filter-col { border-radius:11px; padding:13px; }
+.filter-col.inc { background:var(--green-bg); border:1px solid rgba(31,157,107,.2); }
+.filter-col.exc { background:var(--red-bg);   border:1px solid rgba(220,91,75,.2); }
+.filter-col .h { font-size:11px; font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:5px; }
+.filter-col.inc .h { color:var(--green); }
+.filter-col.exc .h { color:var(--red); }
+.filter-tag { font-size:11.5px; padding:3px 10px; border-radius:14px; margin:0 4px 5px 0; display:inline-block; font-weight:500; background:#fff; }
+.filter-col.inc .filter-tag { color:var(--green); }
+.filter-col.exc .filter-tag { color:var(--red); }
+
+/* Experience — vertical timeline. */
+.timeline { position:relative; padding-left:26px; }
+.timeline::before { content:''; position:absolute; left:7px; top:6px; bottom:6px; width:2px; background:var(--line); }
+.timeline-item { position:relative; margin-bottom:18px; }
+.timeline-item:last-child { margin-bottom:0; }
+.timeline-item::before { content:''; position:absolute; left:-23px; top:4px; width:12px; height:12px; border-radius:50%; background:#fff; border:2.5px solid var(--brand); }
+
+/* Projects — bordered blocks with a gold left accent. */
+.proj-block { border:1px solid var(--line); border-left:3px solid var(--brand); border-radius:11px; padding:14px 16px; margin-bottom:10px; }
+.proj-block:last-child { margin-bottom:0; }
+.proj-tag { font-size:10.5px; padding:3px 9px; border-radius:6px; background:var(--brand-tint); color:var(--brand-strong); font-weight:600; }

@@ -649,17 +649,25 @@
           <div class="card p-4">
             <div class="flex items-center gap-2 mb-1"><i class="ti ti-filter text-brand"></i><span class="text-sm font-semibold">Search filters</span></div>
             <p class="text-xs text-gray-400 mb-3">Which roles to include and how recent they should be.</p>
-            <!-- VIEW -->
-            <div x-show="!profileEdit" class="space-y-3">
-              <template x-for="f in [{k:'role_levels',l:'Role levels to include'},{k:'exclude_levels',l:'Levels to exclude'},{k:'domains',l:'Domains'},{k:'exclude_keywords',l:'Exclude keywords'},{k:'job_types',l:'Job types'}]" :key="f.k">
-                <div x-show="profile.search[f.k]?.length">
-                  <div class="lbl" x-text="f.l"></div>
-                  <div class="flex flex-wrap gap-1.5">
-                    <template x-for="v in (profile.search[f.k]||[])" :key="v"><span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full" style="background:var(--brand-tint); color:var(--brand-strong)" x-text="v"></span></template>
+            <!-- VIEW: include / exclude split -->
+            <div x-show="!profileEdit">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="filter-col inc">
+                  <div class="h"><i class="ti ti-plus"></i> Include</div>
+                  <div class="flex flex-wrap">
+                    <template x-for="v in [...(profile.search.role_levels||[]), ...(profile.search.domains||[]), ...(profile.search.job_types||[])]" :key="v"><span class="filter-tag" x-text="v"></span></template>
                   </div>
+                  <div class="text-xs text-green-700/60" x-show="!(profile.search.role_levels?.length || profile.search.domains?.length || profile.search.job_types?.length)">Nothing set — all roles surface.</div>
                 </div>
-              </template>
-              <div><div class="lbl">Posted within</div><div class="text-sm font-medium" x-text="(profile.search.posted_within_days || '—') + (profile.search.posted_within_days ? ' days' : '')"></div></div>
+                <div class="filter-col exc">
+                  <div class="h"><i class="ti ti-minus"></i> Exclude</div>
+                  <div class="flex flex-wrap">
+                    <template x-for="v in [...(profile.search.exclude_levels||[]), ...(profile.search.exclude_keywords||[])]" :key="v"><span class="filter-tag" x-text="v"></span></template>
+                  </div>
+                  <div class="text-xs text-red-700/50" x-show="!(profile.search.exclude_levels?.length || profile.search.exclude_keywords?.length)">Nothing excluded.</div>
+                </div>
+              </div>
+              <div class="mt-3"><span class="lbl">Posted within</span> <span class="text-sm font-medium ml-1" x-text="(profile.search.posted_within_days || '—') + (profile.search.posted_within_days ? ' days' : '')"></span></div>
             </div>
             <!-- EDIT -->
             <div x-show="profileEdit" class="space-y-3">
@@ -681,16 +689,15 @@
           <div class="card p-4">
             <div class="flex items-center gap-2 mb-1"><i class="ti ti-code text-brand"></i><span class="text-sm font-semibold">Skills</span></div>
             <p class="text-xs text-gray-400 mb-3">Your strengths — jobs matching these score higher.</p>
-            <!-- VIEW -->
-            <div x-show="!profileEdit" class="space-y-3">
-              <template x-for="f in [{k:'expert',l:'Expert'},{k:'proficient',l:'Proficient'},{k:'familiar',l:'Familiar'}]" :key="f.k">
-                <div x-show="profile.skills[f.k]?.length">
-                  <div class="lbl" x-text="f.l"></div>
-                  <div class="flex flex-wrap gap-1.5">
-                    <template x-for="v in (profile.skills[f.k]||[])" :key="v"><span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full" style="background:var(--brand-tint); color:var(--brand-strong)" x-text="v"></span></template>
-                  </div>
-                </div>
-              </template>
+            <!-- VIEW: segmented pills, one flow, tier badge on each -->
+            <div x-show="!profileEdit">
+              <div class="flex flex-wrap gap-2">
+                <template x-for="f in [{k:'expert',c:'expert',l:'Expert'},{k:'proficient',c:'proficient',l:'Proficient'},{k:'familiar',c:'familiar',l:'Familiar'}]" :key="f.k">
+                  <template x-for="v in (profile.skills[f.k]||[])" :key="f.k+v">
+                    <span class="skill-pill"><span class="n" x-text="v"></span><span class="lv" :class="f.c" x-text="f.l.toUpperCase()"></span></span>
+                  </template>
+                </template>
+              </div>
               <div class="text-sm text-gray-400" x-show="!profile.skills.expert?.length && !profile.skills.proficient?.length && !profile.skills.familiar?.length">No skills yet.</div>
             </div>
             <!-- EDIT -->
@@ -713,17 +720,20 @@
               <span class="flex items-center gap-2 text-sm font-semibold"><i class="ti ti-briefcase text-brand"></i> Experience</span>
               <button x-show="profileEdit" @click="addExp()" class="btn btn-ghost" style="height:32px; font-size:13px; padding:0 12px"><i class="ti ti-plus"></i> Add</button>
             </div>
-            <!-- VIEW -->
+            <!-- VIEW: vertical timeline -->
             <div x-show="!profileEdit">
-              <template x-for="(e, i) in profile.experience" :key="'ev'+i">
-                <div class="py-2 border-b border-gray-50 last:border-0">
-                  <div class="text-sm font-medium" x-text="(e.role || 'Role') + (e.company ? ' · ' + e.company : '')"></div>
-                  <div class="text-xs text-gray-400 mt-0.5" x-show="e.start || e.end" x-text="[e.start, e.end].filter(Boolean).join(' – ')"></div>
-                  <ul class="mt-1.5 space-y-0.5" x-show="e.highlights?.length">
-                    <template x-for="h in (e.highlights||[])" :key="h"><li class="text-[13px] text-gray-600 flex gap-1.5"><span class="text-gray-300">•</span><span x-text="h"></span></li></template>
-                  </ul>
-                </div>
-              </template>
+              <div class="timeline" x-show="profile.experience.length">
+                <template x-for="(e, i) in profile.experience" :key="'ev'+i">
+                  <div class="timeline-item">
+                    <div class="text-sm font-semibold" x-text="e.role || 'Role'"></div>
+                    <div class="text-[12.5px] font-medium" style="color:var(--brand-strong)" x-show="e.company" x-text="e.company"></div>
+                    <div class="text-[11px] text-gray-400 mt-0.5" x-show="e.start || e.end" x-text="[e.start, e.end].filter(Boolean).join(' – ')"></div>
+                    <div class="mt-1.5 space-y-0.5" x-show="e.highlights?.length">
+                      <template x-for="h in (e.highlights||[])" :key="h"><div class="text-[12.5px] text-gray-600 flex gap-1.5"><span style="color:var(--brand)">•</span><span x-text="h"></span></div></template>
+                    </div>
+                  </div>
+                </template>
+              </div>
               <div x-show="profile.experience.length===0" class="text-sm text-gray-400 py-1">None yet.</div>
             </div>
             <!-- EDIT -->
@@ -749,15 +759,20 @@
               <span class="flex items-center gap-2 text-sm font-semibold"><i class="ti ti-bulb text-brand"></i> Projects</span>
               <button x-show="profileEdit" @click="addProj()" class="btn btn-ghost" style="height:32px; font-size:13px; padding:0 12px"><i class="ti ti-plus"></i> Add</button>
             </div>
-            <!-- VIEW -->
+            <!-- VIEW: bordered blocks with gold left accent -->
             <div x-show="!profileEdit">
               <template x-for="(p, i) in profile.projects" :key="'pv'+i">
-                <div class="py-2 border-b border-gray-50 last:border-0">
-                  <div class="text-sm font-medium" x-text="p.name || 'Project'"></div>
-                  <div class="flex flex-wrap gap-1.5 mt-1" x-show="p.tech?.length">
-                    <template x-for="t in (p.tech||[])" :key="t"><span class="text-[11px] px-2 py-0.5 rounded-md bg-gray-100 text-gray-600" x-text="t"></span></template>
+                <div class="proj-block">
+                  <div class="flex items-baseline justify-between gap-3">
+                    <span class="text-sm font-semibold" x-text="p.name || 'Project'"></span>
+                    <div class="flex gap-1.5 flex-wrap shrink-0" x-show="p.tech?.length">
+                      <template x-for="t in (p.tech||[])" :key="t"><span class="proj-tag" x-text="t"></span></template>
+                    </div>
                   </div>
-                  <div class="text-[13px] text-gray-600 mt-1" x-show="p.description" x-text="p.description"></div>
+                  <div class="text-[12.5px] text-gray-600 mt-1.5 leading-relaxed" x-show="p.description" x-text="p.description"></div>
+                  <div class="mt-1.5 space-y-0.5" x-show="p.highlights?.length">
+                    <template x-for="h in (p.highlights||[])" :key="h"><div class="text-[12.5px] text-gray-600 flex gap-1.5"><span style="color:var(--brand)">•</span><span x-text="h"></span></div></template>
+                  </div>
                 </div>
               </template>
               <div x-show="profile.projects.length===0" class="text-sm text-gray-400 py-1">None yet.</div>

@@ -522,12 +522,49 @@
 
     <!-- ─── Profile (form) ─── -->
     <div x-show="tab==='profile'">
-      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-5">
-        <div>
-          <h2 class="text-lg font-semibold">Profile</h2>
-          <p class="text-[13px] text-gray-400 mt-0.5">What you're looking for. The scorer reads this on every run to rank jobs for you.</p>
+      <!-- Hero: identity summary + completion, with the edit / save controls -->
+      <template x-if="profile">
+        <div class="rounded-2xl border border-gray-200 p-5 sm:p-6 mb-4" style="background:linear-gradient(135deg, var(--brand-tint), #FBF6EC)">
+          <div class="flex items-center gap-4">
+            <div class="w-16 h-16 rounded-2xl bg-brand text-white flex items-center justify-center text-2xl font-bold shrink-0 shadow-lg" x-text="profileInitials()"></div>
+            <div class="flex-1 min-w-0">
+              <div class="text-xl font-bold tracking-tight truncate" x-text="profile.identity.name || 'Your name'"></div>
+              <div class="text-[13px] font-medium mt-0.5" style="color:var(--brand-strong)" x-text="profileRole()"></div>
+            </div>
+            <!-- Edit controls: Edit in view mode; Save + Cancel in edit mode -->
+            <div class="shrink-0 flex items-center gap-2">
+              <template x-if="!profileEdit">
+                <button @click="startEdit()" class="btn btn-primary" style="height:36px; font-size:13px"><i class="ti ti-pencil"></i> <span class="hidden sm:inline">Edit profile</span></button>
+              </template>
+              <template x-if="profileEdit">
+                <div class="flex items-center gap-2">
+                  <button @click="saveProfile()" class="btn btn-primary" style="height:36px; font-size:13px"><i class="ti ti-check"></i> Save</button>
+                  <button @click="cancelEdit()" class="btn btn-ghost" style="height:36px; font-size:13px">Cancel</button>
+                </div>
+              </template>
+            </div>
+          </div>
+          <!-- Completion bar -->
+          <div class="mt-4 pt-4" style="border-top:1px solid rgba(169,109,20,.15)">
+            <div class="flex items-baseline justify-between mb-2">
+              <span class="text-[13px] font-semibold" style="color:var(--brand-strong)" x-text="'Profile ' + profileComplete().pct + '% complete'"></span>
+              <span class="text-xs text-gray-500" x-text="profileComplete().done + ' of ' + profileComplete().total + ' sections'"></span>
+            </div>
+            <div class="h-1.5 rounded-full overflow-hidden" style="background:rgba(255,255,255,.6)">
+              <div class="h-full rounded-full transition-all" style="background:linear-gradient(90deg, var(--brand), #C8912B)" :style="`width:${profileComplete().pct}%`"></div>
+            </div>
+            <div class="flex flex-wrap gap-2 mt-3">
+              <template x-for="s in profileSections().filter(x=>!x.done)" :key="s.key">
+                <span class="text-[11.5px] font-medium px-2.5 py-1 rounded-lg flex items-center gap-1" style="background:rgba(255,255,255,.7); color:var(--amber)"><i class="ti ti-plus text-xs"></i> Add <span x-text="s.label.toLowerCase()"></span></span>
+              </template>
+            </div>
+          </div>
         </div>
-        <button @click="toggleRaw()" class="btn btn-ghost self-start shrink-0" style="height:36px; font-size:13px">
+      </template>
+
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-[13px] text-gray-400">The scorer reads this on every run to rank jobs for you.</p>
+        <button @click="toggleRaw()" class="btn btn-ghost shrink-0" style="height:34px; font-size:12.5px">
           <i class="ti" :class="rawMode ? 'ti-forms' : 'ti-code'"></i>
           <span x-text="rawMode ? 'Form editor' : 'Raw YAML'"></span>
         </button>
@@ -540,15 +577,34 @@
           <div class="card p-4">
             <div class="flex items-center gap-2 mb-1"><i class="ti ti-user text-brand"></i><span class="text-sm font-semibold">Identity</span></div>
             <p class="text-xs text-gray-400 mb-3">Who you are and the roles you're targeting.</p>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- VIEW -->
+            <div x-show="!profileEdit" class="space-y-3">
+              <div><div class="lbl">Name</div><div class="text-sm font-medium" x-text="profile.identity.name || '—'"></div></div>
+              <div><div class="lbl">Seniority</div><div class="text-sm font-medium" x-text="profile.identity.seniority ? cap(profile.identity.seniority) : '—'"></div></div>
+              <div><div class="lbl">Target titles</div>
+                <div class="flex flex-wrap gap-1.5" x-show="profile.identity.titles?.length">
+                  <template x-for="t in (profile.identity.titles||[])" :key="t"><span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full" style="background:var(--brand-tint); color:var(--brand-strong)" x-text="t"></span></template>
+                </div>
+                <div class="text-sm text-gray-400" x-show="!profile.identity.titles?.length">—</div>
+              </div>
+              <div x-show="profile.summary"><div class="lbl">Summary</div><div class="text-sm text-gray-600 leading-relaxed" x-text="profile.summary"></div></div>
+            </div>
+            <!-- EDIT -->
+            <div x-show="profileEdit" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label class="lbl">Name</label><input x-model="profile.identity.name" @input="profileDirty=true" class="fld"></div>
               <div><label class="lbl">Seniority</label>
                 <select x-model="profile.identity.seniority" @change="profileDirty=true" class="fld">
                   <template x-for="s in seniorityOpts" :key="s"><option :value="s" x-text="s"></option></template>
                 </select>
               </div>
-              <div class="sm:col-span-2"><label class="lbl">Target titles (comma separated)</label>
-                <input :value="csv(profile.identity.titles)" @change="setList(profile.identity,'titles',$event.target.value)" class="fld"></div>
+              <div class="sm:col-span-2"><label class="lbl">Target titles</label>
+                <div class="flex flex-wrap gap-1.5 items-center">
+                  <template x-for="t in (profile.identity.titles||[])" :key="t">
+                    <span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5" style="background:var(--brand-tint); color:var(--brand-strong)"><span x-text="t"></span><i class="ti ti-x text-[11px] opacity-50 cursor-pointer hover:opacity-100" @click="chipRemove(profile.identity,'titles',t)"></i></span>
+                  </template>
+                  <input @keydown="chipKey($event, profile.identity, 'titles')" placeholder="Add title, Enter" class="text-[12.5px] px-2.5 h-7 border border-dashed border-gray-300 rounded-full outline-none focus:border-brand w-36">
+                </div>
+              </div>
               <div class="sm:col-span-2"><label class="lbl">Summary</label>
                 <textarea x-model="profile.summary" @input="profileDirty=true" rows="3" class="ta"></textarea></div>
             </div>
@@ -556,9 +612,29 @@
           <div class="card p-4">
             <div class="flex items-center gap-2 mb-1"><i class="ti ti-adjustments text-brand"></i><span class="text-sm font-semibold">Constraints</span></div>
             <p class="text-xs text-gray-400 mb-3">Hard limits — jobs outside these are filtered out before scoring.</p>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- VIEW -->
+            <div x-show="!profileEdit" class="space-y-3">
+              <div><div class="lbl">Locations</div>
+                <div class="flex flex-wrap gap-1.5" x-show="profile.constraints.locations?.length">
+                  <template x-for="l in (profile.constraints.locations||[])" :key="l"><span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full" style="background:var(--brand-tint); color:var(--brand-strong)" x-text="l"></span></template>
+                </div>
+                <div class="text-sm text-gray-400" x-show="!profile.constraints.locations?.length">—</div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div><div class="lbl">Salary floor</div><div class="text-sm font-medium" x-text="profile.constraints.salary_floor ? (profile.constraints.currency||'$') + ' ' + profile.constraints.salary_floor.toLocaleString() : '—'"></div></div>
+                <div><div class="lbl">Needs sponsorship</div><div class="text-sm font-medium" x-text="profile.constraints.needs_sponsorship ? 'Yes' : 'No'"></div></div>
+              </div>
+            </div>
+            <!-- EDIT -->
+            <div x-show="profileEdit" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div class="sm:col-span-2"><label class="lbl">Locations</label>
-                <input :value="csv(profile.constraints.locations)" @change="setList(profile.constraints,'locations',$event.target.value)" class="fld"></div>
+                <div class="flex flex-wrap gap-1.5 items-center">
+                  <template x-for="l in (profile.constraints.locations||[])" :key="l">
+                    <span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5" style="background:var(--brand-tint); color:var(--brand-strong)"><span x-text="l"></span><i class="ti ti-x text-[11px] opacity-50 cursor-pointer hover:opacity-100" @click="chipRemove(profile.constraints,'locations',l)"></i></span>
+                  </template>
+                  <input @keydown="chipKey($event, profile.constraints, 'locations')" placeholder="Add location, Enter" class="text-[12.5px] px-2.5 h-7 border border-dashed border-gray-300 rounded-full outline-none focus:border-brand w-40">
+                </div>
+              </div>
               <div><label class="lbl">Salary floor</label>
                 <input type="number" x-model.number="profile.constraints.salary_floor" @input="profileDirty=true" class="fld"></div>
               <div><label class="lbl">Currency</label>
@@ -573,100 +649,175 @@
           <div class="card p-4">
             <div class="flex items-center gap-2 mb-1"><i class="ti ti-filter text-brand"></i><span class="text-sm font-semibold">Search filters</span></div>
             <p class="text-xs text-gray-400 mb-3">Which roles to include and how recent they should be.</p>
-            <div class="grid grid-cols-1 gap-3">
-              <div><label class="lbl">Role levels to include</label>
-                <input :value="csv(profile.search.role_levels)" @change="setList(profile.search,'role_levels',$event.target.value)" class="fld"></div>
-              <div><label class="lbl">Levels to exclude</label>
-                <input :value="csv(profile.search.exclude_levels)" @change="setList(profile.search,'exclude_levels',$event.target.value)" class="fld"></div>
-              <div><label class="lbl">Domains (matched against job title)</label>
-                <input :value="csv(profile.search.domains)" @change="setList(profile.search,'domains',$event.target.value)" class="fld"></div>
-              <div><label class="lbl">Exclude keywords</label>
-                <input :value="csv(profile.search.exclude_keywords)" @change="setList(profile.search,'exclude_keywords',$event.target.value)" class="fld"></div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label class="lbl">Job types</label>
-                  <input :value="csv(profile.search.job_types)" @change="setList(profile.search,'job_types',$event.target.value)" class="fld"></div>
-                <div><label class="lbl">Posted within (days)</label>
-                  <input type="number" x-model.number="profile.search.posted_within_days" @input="profileDirty=true" class="fld"></div>
-              </div>
+            <!-- VIEW -->
+            <div x-show="!profileEdit" class="space-y-3">
+              <template x-for="f in [{k:'role_levels',l:'Role levels to include'},{k:'exclude_levels',l:'Levels to exclude'},{k:'domains',l:'Domains'},{k:'exclude_keywords',l:'Exclude keywords'},{k:'job_types',l:'Job types'}]" :key="f.k">
+                <div x-show="profile.search[f.k]?.length">
+                  <div class="lbl" x-text="f.l"></div>
+                  <div class="flex flex-wrap gap-1.5">
+                    <template x-for="v in (profile.search[f.k]||[])" :key="v"><span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full" style="background:var(--brand-tint); color:var(--brand-strong)" x-text="v"></span></template>
+                  </div>
+                </div>
+              </template>
+              <div><div class="lbl">Posted within</div><div class="text-sm font-medium" x-text="(profile.search.posted_within_days || '—') + (profile.search.posted_within_days ? ' days' : '')"></div></div>
+            </div>
+            <!-- EDIT -->
+            <div x-show="profileEdit" class="space-y-3">
+              <template x-for="f in [{k:'role_levels',l:'Role levels to include'},{k:'exclude_levels',l:'Levels to exclude'},{k:'domains',l:'Domains (matched against job title)'},{k:'exclude_keywords',l:'Exclude keywords'},{k:'job_types',l:'Job types'}]" :key="f.k">
+                <div>
+                  <label class="lbl" x-text="f.l"></label>
+                  <div class="flex flex-wrap gap-1.5 items-center">
+                    <template x-for="v in (profile.search[f.k]||[])" :key="v">
+                      <span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5" style="background:var(--brand-tint); color:var(--brand-strong)"><span x-text="v"></span><i class="ti ti-x text-[11px] opacity-50 cursor-pointer hover:opacity-100" @click="chipRemove(profile.search, f.k, v)"></i></span>
+                    </template>
+                    <input @keydown="chipKey($event, profile.search, f.k)" placeholder="Add, Enter" class="text-[12.5px] px-2.5 h-7 border border-dashed border-gray-300 rounded-full outline-none focus:border-brand w-32">
+                  </div>
+                </div>
+              </template>
+              <div class="max-w-[200px]"><label class="lbl">Posted within (days)</label>
+                <input type="number" x-model.number="profile.search.posted_within_days" @input="profileDirty=true" class="fld"></div>
             </div>
           </div>
           <div class="card p-4">
             <div class="flex items-center gap-2 mb-1"><i class="ti ti-code text-brand"></i><span class="text-sm font-semibold">Skills</span></div>
             <p class="text-xs text-gray-400 mb-3">Your strengths — jobs matching these score higher.</p>
-            <div class="grid grid-cols-1 gap-3">
-              <div><label class="lbl">Expert</label>
-                <input :value="csv(profile.skills.expert)" @change="setList(profile.skills,'expert',$event.target.value)" class="fld"></div>
-              <div><label class="lbl">Proficient</label>
-                <input :value="csv(profile.skills.proficient)" @change="setList(profile.skills,'proficient',$event.target.value)" class="fld"></div>
-              <div><label class="lbl">Familiar</label>
-                <input :value="csv(profile.skills.familiar)" @change="setList(profile.skills,'familiar',$event.target.value)" class="fld"></div>
+            <!-- VIEW -->
+            <div x-show="!profileEdit" class="space-y-3">
+              <template x-for="f in [{k:'expert',l:'Expert'},{k:'proficient',l:'Proficient'},{k:'familiar',l:'Familiar'}]" :key="f.k">
+                <div x-show="profile.skills[f.k]?.length">
+                  <div class="lbl" x-text="f.l"></div>
+                  <div class="flex flex-wrap gap-1.5">
+                    <template x-for="v in (profile.skills[f.k]||[])" :key="v"><span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full" style="background:var(--brand-tint); color:var(--brand-strong)" x-text="v"></span></template>
+                  </div>
+                </div>
+              </template>
+              <div class="text-sm text-gray-400" x-show="!profile.skills.expert?.length && !profile.skills.proficient?.length && !profile.skills.familiar?.length">No skills yet.</div>
+            </div>
+            <!-- EDIT -->
+            <div x-show="profileEdit" class="space-y-3">
+              <template x-for="f in [{k:'expert',l:'Expert'},{k:'proficient',l:'Proficient'},{k:'familiar',l:'Familiar'}]" :key="f.k">
+                <div>
+                  <label class="lbl" x-text="f.l"></label>
+                  <div class="flex flex-wrap gap-1.5 items-center">
+                    <template x-for="v in (profile.skills[f.k]||[])" :key="v">
+                      <span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5" style="background:var(--brand-tint); color:var(--brand-strong)"><span x-text="v"></span><i class="ti ti-x text-[11px] opacity-50 cursor-pointer hover:opacity-100" @click="chipRemove(profile.skills, f.k, v)"></i></span>
+                    </template>
+                    <input @keydown="chipKey($event, profile.skills, f.k)" placeholder="Add skill, Enter" class="text-[12.5px] px-2.5 h-7 border border-dashed border-gray-300 rounded-full outline-none focus:border-brand w-36">
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
           <div class="card p-4">
             <div class="flex items-center justify-between mb-3">
               <span class="flex items-center gap-2 text-sm font-semibold"><i class="ti ti-briefcase text-brand"></i> Experience</span>
-              <button @click="addExp()" class="btn btn-ghost" style="height:32px; font-size:13px; padding:0 12px"><i class="ti ti-plus"></i> Add</button>
+              <button x-show="profileEdit" @click="addExp()" class="btn btn-ghost" style="height:32px; font-size:13px; padding:0 12px"><i class="ti ti-plus"></i> Add</button>
             </div>
-            <template x-for="(e, i) in profile.experience" :key="'e'+i">
-              <div class="border border-gray-100 rounded-lg p-3 mb-3 last:mb-0">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                  <div><label class="lbl">Role</label><input x-model="e.role" @input="profileDirty=true" class="fld"></div>
-                  <div><label class="lbl">Company</label><input x-model="e.company" @input="profileDirty=true" class="fld"></div>
-                  <div><label class="lbl">Start</label><input x-model="e.start" @input="profileDirty=true" class="fld"></div>
-                  <div><label class="lbl">End</label><input x-model="e.end" @input="profileDirty=true" class="fld"></div>
+            <!-- VIEW -->
+            <div x-show="!profileEdit">
+              <template x-for="(e, i) in profile.experience" :key="'ev'+i">
+                <div class="py-2 border-b border-gray-50 last:border-0">
+                  <div class="text-sm font-medium" x-text="(e.role || 'Role') + (e.company ? ' · ' + e.company : '')"></div>
+                  <div class="text-xs text-gray-400 mt-0.5" x-show="e.start || e.end" x-text="[e.start, e.end].filter(Boolean).join(' – ')"></div>
+                  <ul class="mt-1.5 space-y-0.5" x-show="e.highlights?.length">
+                    <template x-for="h in (e.highlights||[])" :key="h"><li class="text-[13px] text-gray-600 flex gap-1.5"><span class="text-gray-300">•</span><span x-text="h"></span></li></template>
+                  </ul>
                 </div>
-                <label class="lbl">Highlights (one per line)</label>
-                <textarea rows="3" :value="lines(e.highlights)" @change="setLines(e,'highlights',$event.target.value)" class="ta"></textarea>
-                <button @click="removeAt(profile.experience, i, 'role')" class="mt-2 text-xs text-gray-400 hover:text-red-500"><i class="ti ti-trash"></i> Remove</button>
-              </div>
-            </template>
-            <div x-show="profile.experience.length===0" class="text-xs text-gray-400 py-2">None yet.</div>
+              </template>
+              <div x-show="profile.experience.length===0" class="text-sm text-gray-400 py-1">None yet.</div>
+            </div>
+            <!-- EDIT -->
+            <div x-show="profileEdit">
+              <template x-for="(e, i) in profile.experience" :key="'e'+i">
+                <div class="border border-gray-100 rounded-lg p-3 mb-3 last:mb-0">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div><label class="lbl">Role</label><input x-model="e.role" @input="profileDirty=true" class="fld"></div>
+                    <div><label class="lbl">Company</label><input x-model="e.company" @input="profileDirty=true" class="fld"></div>
+                    <div><label class="lbl">Start</label><input x-model="e.start" @input="profileDirty=true" class="fld"></div>
+                    <div><label class="lbl">End</label><input x-model="e.end" @input="profileDirty=true" class="fld"></div>
+                  </div>
+                  <label class="lbl">Highlights (one per line)</label>
+                  <textarea rows="3" :value="lines(e.highlights)" @change="setLines(e,'highlights',$event.target.value)" class="ta"></textarea>
+                  <button @click="removeAt(profile.experience, i, 'role')" class="mt-2 text-xs text-gray-400 hover:text-red-500"><i class="ti ti-trash"></i> Remove</button>
+                </div>
+              </template>
+              <div x-show="profile.experience.length===0" class="text-xs text-gray-400 py-2">None yet — use Add above.</div>
+            </div>
           </div>
           <div class="card p-4">
             <div class="flex items-center justify-between mb-3">
-              <span class="text-sm font-medium">Projects</span>
-              <button @click="addProj()" class="text-[13px] h-8 px-3 rounded-md border border-gray-200 hover:bg-gray-50"><i class="ti ti-plus"></i> Add</button>
+              <span class="flex items-center gap-2 text-sm font-semibold"><i class="ti ti-bulb text-brand"></i> Projects</span>
+              <button x-show="profileEdit" @click="addProj()" class="btn btn-ghost" style="height:32px; font-size:13px; padding:0 12px"><i class="ti ti-plus"></i> Add</button>
             </div>
-            <template x-for="(p, i) in profile.projects" :key="'p'+i">
-              <div class="border border-gray-100 rounded-lg p-3 mb-3 last:mb-0">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                  <div><label class="lbl">Name</label><input x-model="p.name" @input="profileDirty=true" class="fld"></div>
-                  <div><label class="lbl">Tech (comma separated)</label>
-                    <input :value="csv(p.tech)" @change="setList(p,'tech',$event.target.value)" class="fld"></div>
+            <!-- VIEW -->
+            <div x-show="!profileEdit">
+              <template x-for="(p, i) in profile.projects" :key="'pv'+i">
+                <div class="py-2 border-b border-gray-50 last:border-0">
+                  <div class="text-sm font-medium" x-text="p.name || 'Project'"></div>
+                  <div class="flex flex-wrap gap-1.5 mt-1" x-show="p.tech?.length">
+                    <template x-for="t in (p.tech||[])" :key="t"><span class="text-[11px] px-2 py-0.5 rounded-md bg-gray-100 text-gray-600" x-text="t"></span></template>
+                  </div>
+                  <div class="text-[13px] text-gray-600 mt-1" x-show="p.description" x-text="p.description"></div>
                 </div>
-                <label class="lbl">Description</label>
-                <textarea rows="2" x-model="p.description" @input="profileDirty=true" class="ta mb-3"></textarea>
-                <label class="lbl">Highlights (one per line)</label>
-                <textarea rows="2" :value="lines(p.highlights)" @change="setLines(p,'highlights',$event.target.value)" class="ta"></textarea>
-                <button @click="removeAt(profile.projects, i, 'project')" class="mt-2 text-xs text-gray-400 hover:text-red-500"><i class="ti ti-trash"></i> Remove</button>
-              </div>
-            </template>
-            <div x-show="profile.projects.length===0" class="text-xs text-gray-400 py-2">None yet.</div>
+              </template>
+              <div x-show="profile.projects.length===0" class="text-sm text-gray-400 py-1">None yet.</div>
+            </div>
+            <!-- EDIT -->
+            <div x-show="profileEdit">
+              <template x-for="(p, i) in profile.projects" :key="'p'+i">
+                <div class="border border-gray-100 rounded-lg p-3 mb-3 last:mb-0">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div><label class="lbl">Name</label><input x-model="p.name" @input="profileDirty=true" class="fld"></div>
+                    <div><label class="lbl">Tech (comma separated)</label>
+                      <input :value="csv(p.tech)" @change="setList(p,'tech',$event.target.value)" class="fld"></div>
+                  </div>
+                  <label class="lbl">Description</label>
+                  <textarea rows="2" x-model="p.description" @input="profileDirty=true" class="ta mb-3"></textarea>
+                  <label class="lbl">Highlights (one per line)</label>
+                  <textarea rows="2" :value="lines(p.highlights)" @change="setLines(p,'highlights',$event.target.value)" class="ta"></textarea>
+                  <button @click="removeAt(profile.projects, i, 'project')" class="mt-2 text-xs text-gray-400 hover:text-red-500"><i class="ti ti-trash"></i> Remove</button>
+                </div>
+              </template>
+              <div x-show="profile.projects.length===0" class="text-xs text-gray-400 py-2">None yet — use Add above.</div>
+            </div>
           </div>
           <div class="card p-4">
             <div class="flex items-center justify-between mb-3">
               <span class="flex items-center gap-2 text-sm font-semibold"><i class="ti ti-school text-brand"></i> Education</span>
-              <button @click="addEdu()" class="btn btn-ghost" style="height:32px; font-size:13px; padding:0 12px"><i class="ti ti-plus"></i> Add</button>
+              <button x-show="profileEdit" @click="addEdu()" class="btn btn-ghost" style="height:32px; font-size:13px; padding:0 12px"><i class="ti ti-plus"></i> Add</button>
             </div>
-            <template x-for="(e, i) in profile.education" :key="'d'+i">
-              <div class="border border-gray-100 rounded-lg p-3 mb-3 last:mb-0">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div><label class="lbl">Degree</label><input x-model="e.degree" @input="profileDirty=true" class="fld"></div>
-                  <div><label class="lbl">Field</label><input x-model="e.field" @input="profileDirty=true" class="fld"></div>
-                  <div><label class="lbl">Institution</label><input x-model="e.institution" @input="profileDirty=true" class="fld"></div>
-                  <div class="grid grid-cols-2 gap-3">
-                    <div><label class="lbl">End</label><input x-model="e.end" @input="profileDirty=true" class="fld"></div>
-                    <div><label class="lbl">GPA</label><input x-model="e.gpa" @input="profileDirty=true" class="fld"></div>
-                  </div>
+            <!-- VIEW -->
+            <div x-show="!profileEdit">
+              <template x-for="(e, i) in profile.education" :key="'dv'+i">
+                <div class="py-2 border-b border-gray-50 last:border-0">
+                  <div class="text-sm font-medium" x-text="[e.degree, e.field].filter(Boolean).join(', ') || 'Degree'"></div>
+                  <div class="text-xs text-gray-400 mt-0.5" x-text="[e.institution, e.end].filter(Boolean).join(' · ')"></div>
                 </div>
-                <button @click="removeAt(profile.education, i, 'entry')" class="mt-2 text-xs text-gray-400 hover:text-red-500"><i class="ti ti-trash"></i> Remove</button>
-              </div>
-            </template>
-            <div x-show="profile.education.length===0" class="text-xs text-gray-400 py-2">None yet.</div>
+              </template>
+              <div x-show="profile.education.length===0" class="text-sm text-gray-400 py-1">None yet.</div>
+            </div>
+            <!-- EDIT -->
+            <div x-show="profileEdit">
+              <template x-for="(e, i) in profile.education" :key="'d'+i">
+                <div class="border border-gray-100 rounded-lg p-3 mb-3 last:mb-0">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><label class="lbl">Degree</label><input x-model="e.degree" @input="profileDirty=true" class="fld"></div>
+                    <div><label class="lbl">Field</label><input x-model="e.field" @input="profileDirty=true" class="fld"></div>
+                    <div><label class="lbl">Institution</label><input x-model="e.institution" @input="profileDirty=true" class="fld"></div>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div><label class="lbl">End</label><input x-model="e.end" @input="profileDirty=true" class="fld"></div>
+                      <div><label class="lbl">GPA</label><input x-model="e.gpa" @input="profileDirty=true" class="fld"></div>
+                    </div>
+                  </div>
+                  <button @click="removeAt(profile.education, i, 'entry')" class="mt-2 text-xs text-gray-400 hover:text-red-500"><i class="ti ti-trash"></i> Remove</button>
+                </div>
+              </template>
+              <div x-show="profile.education.length===0" class="text-xs text-gray-400 py-2">None yet — use Add above.</div>
+            </div>
           </div>
         </div>
       </template>
-      <div class="sticky bottom-0 -mx-4 md:mx-0 mt-4 px-4 py-3 bg-white/95 backdrop-blur border-t border-gray-200 md:static md:bg-transparent md:border-0 md:px-0 md:py-0 md:pt-2 flex items-center gap-3">
+      <div x-show="profileEdit || rawMode" class="sticky bottom-0 -mx-4 md:mx-0 mt-4 px-4 py-3 bg-white/95 backdrop-blur border-t border-gray-200 md:static md:bg-transparent md:border-0 md:px-0 md:py-0 md:pt-2 flex items-center gap-3">
         <button @click="saveProfile()" :disabled="!profileDirty" class="btn btn-primary disabled:opacity-40" style="height:38px; font-size:13px">
           <i class="ti ti-device-floppy"></i> Save profile
         </button>

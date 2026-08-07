@@ -65,6 +65,7 @@ function jobpilot() {
     detectUrl: '', detecting: false,
 
     profile: null, profileRaw: '', rawMode: false, profileDirty: false,
+    profileEdit: false,   // false = read-only view, true = editable form
     seniorityOpts: ['intern','junior','entry','mid','senior'],
 
     statuses: ['surfaced','saved','applied','interview','offer','rejected','dismissed'],
@@ -215,6 +216,61 @@ function jobpilot() {
     setList(obj, key, val) { obj[key] = this.toList(val); this.profileDirty = true; },
     setLines(obj, key, val) { obj[key] = this.toLines(val); this.profileDirty = true; },
 
+    // ───────── chip editing (arrays of strings) ─────────
+    // Ensure the field is an array, then add/remove one entry. Used by the chip UI so
+    // the user never types comma-separated text.
+    chipAdd(obj, key, val) {
+      const v = String(val || '').trim();
+      if (!v) return;
+      if (!Array.isArray(obj[key])) obj[key] = [];
+      if (!obj[key].includes(v)) { obj[key].push(v); this.profileDirty = true; }
+    },
+    chipRemove(obj, key, val) {
+      if (!Array.isArray(obj[key])) return;
+      obj[key] = obj[key].filter(x => x !== val);
+      this.profileDirty = true;
+    },
+    // Handle Enter/comma in a chip input: commit the value and clear the box.
+    chipKey(ev, obj, key) {
+      if (ev.key === 'Enter' || ev.key === ',') {
+        ev.preventDefault();
+        this.chipAdd(obj, key, ev.target.value);
+        ev.target.value = '';
+      }
+    },
+
+    // ───────── view / edit mode ─────────
+    startEdit() { this.profileEdit = true; },
+    async cancelEdit() { this.profileEdit = false; await this.loadProfile(); },  // discard, reload
+    // Initials for the hero avatar.
+    profileInitials() {
+      const n = (this.profile?.identity?.name || '').trim();
+      if (!n) return '?';
+      return n.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    },
+    // A one-line role summary for the hero.
+    profileRole() {
+      const s = this.profile?.identity?.seniority;
+      const t = this.profile?.identity?.titles?.[0];
+      return [s ? this.cap(s) : '', t].filter(Boolean).join(' · ') || 'Set your target role';
+    },
+    // Completion: how many of the key sections have content. Drives the progress bar.
+    profileSections() {
+      const p = this.profile || {};
+      return [
+        { key: 'identity', label: 'Identity', done: !!(p.identity?.titles?.length) },
+        { key: 'constraints', label: 'Constraints', done: !!(p.constraints?.locations?.length) },
+        { key: 'skills', label: 'Skills', done: !!(p.skills?.length) },
+        { key: 'search', label: 'Search filters', done: !!(p.search?.role_levels?.length) },
+        { key: 'experience', label: 'Experience', done: !!(p.experience?.length) },
+      ];
+    },
+    profileComplete() {
+      const s = this.profileSections();
+      return { done: s.filter(x => x.done).length, total: s.length,
+               pct: Math.round(100 * s.filter(x => x.done).length / s.length) };
+    },
+
     // ───────── profile ─────────
     async loadProfile() {
       const d = await fetch('/api/profile').then(r=>r.json()).catch(()=>({data:{}}));
@@ -255,6 +311,7 @@ function jobpilot() {
       const d = await r.json().catch(()=>({}));
       if (!r.ok) { this.showSnack(d.detail || 'Not saved', 'error'); return; }
       this.profileDirty = false;
+      this.profileEdit = false;
       this.showSnack('Profile saved. Re-score to apply.');
     },
 

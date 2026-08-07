@@ -1,6 +1,8 @@
 function jobpilot() {
   return {
-    tab: 'feed', jobs: [], counts: {}, health: [], runs: [], errors: [], stats: null, loading: true, q: '', detail: null, sent: null, sentOpen: null,
+    // Remember the last page across refreshes, so a reload doesn't yank you back to
+    // Feed. Falls back to feed on first visit.
+    tab: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_tab')) || 'feed', jobs: [], counts: {}, health: [], runs: [], errors: [], stats: null, loading: true, q: '', detail: null, sent: null, sentOpen: null,
     // Admin mode reveals the Manage pages (Sources, Stats, Import, Settings, Admin).
     // Off by default so the everyday view stays clean; remembered across reloads.
     adminMode: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_admin_mode') === '1'),
@@ -147,6 +149,7 @@ function jobpilot() {
 
     async go(tab) {
       this.tab = tab;
+      try { localStorage.setItem('jp_tab', tab); } catch (e) {}
       this.pickedJobs = [];
       this.selectMode = false;
       this.mobileNav = false;
@@ -316,7 +319,7 @@ function jobpilot() {
     },
 
     addExp()  { this.profile.experience.push({ role:'', company:'', start:'', end:'', highlights:[] }); this.profileDirty = true; },
-    addProj() { this.profile.projects.push({ name:'', tech:[], description:'', highlights:[] }); this.profileDirty = true; },
+    addProj() { this.profile.projects.push({ name:'', tech:[], description:'', highlights:[], include_in_resume:true }); this.profileDirty = true; },
     addEdu()  { this.profile.education.push({ degree:'', field:'', institution:'', end:'', gpa:'' }); this.profileDirty = true; },
     async removeAt(list, i, what) {
       if (!(await this.ask(`Remove this ${what}?`))) return;

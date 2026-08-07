@@ -115,7 +115,11 @@ def choices(profile: dict, preferred_projects: list[int] | None = None) -> str:
 
         blocks.append("\n".join(lines))
 
-    projects = profile.get("projects") or []
+    # Only projects the user opted into (include_in_resume) reach the model. A project
+    # left off is display-only in the profile UI and must not appear in generated
+    # resumes or cover letters. Missing flag = included, for backward compatibility.
+    projects = [p for p in (profile.get("projects") or [])
+                if p.get("include_in_resume", True) is not False]
     preferred = set(preferred_projects or [])
     if preferred:
         lines = [f"MY PROJECTS — feature these {len(preferred)}, marked ★ below. They "

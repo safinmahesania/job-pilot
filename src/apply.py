@@ -306,7 +306,11 @@ def select_relevant_projects(job: dict,
     rather than two different LLM guesses for one application.
     """
     profile = load_profile()
-    projects = profile.get("projects", []) or []
+    # Mirror the filter in resume_select.choices: only projects the user opted into are
+    # ever considered, so the indices this returns line up with the filtered list the
+    # prompt builder sees. Missing flag = included.
+    projects = [p for p in (profile.get("projects", []) or [])
+                if p.get("include_in_resume", True) is not False]
     if not projects:
         return []
 

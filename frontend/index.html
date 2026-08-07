@@ -762,7 +762,7 @@
             <!-- VIEW: bordered blocks with gold left accent -->
             <div x-show="!profileEdit">
               <template x-for="(p, i) in profile.projects" :key="'pv'+i">
-                <div class="proj-block">
+                <div class="proj-block transition-opacity" :class="(p.include_in_resume === false) && 'opacity-50'">
                   <div class="flex items-baseline justify-between gap-3">
                     <span class="text-sm font-semibold" x-text="p.name || 'Project'"></span>
                     <div class="flex gap-1.5 flex-wrap shrink-0" x-show="p.tech?.length">
@@ -772,6 +772,13 @@
                   <div class="text-[12.5px] text-gray-600 mt-1.5 leading-relaxed" x-show="p.description" x-text="p.description"></div>
                   <div class="mt-1.5 space-y-0.5" x-show="p.highlights?.length">
                     <template x-for="h in (p.highlights||[])" :key="h"><div class="text-[12.5px] text-gray-600 flex gap-1.5"><span style="color:var(--brand)">•</span><span x-text="h"></span></div></template>
+                  </div>
+                  <!-- Resume/cover-letter inclusion toggle -->
+                  <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+                    <button @click="p.include_in_resume = !(p.include_in_resume !== false); profileDirty=true"
+                      class="sw shrink-0" :class="(p.include_in_resume !== false) ? 'on' : 'off'" style="transform:scale(.8)"><span></span></button>
+                    <span class="text-[12px]" :class="(p.include_in_resume !== false) ? 'text-gray-600' : 'text-gray-400'"
+                      x-text="(p.include_in_resume !== false) ? 'Used in resume & cover letter' : 'Display only'"></span>
                   </div>
                 </div>
               </template>
@@ -790,6 +797,11 @@
                   <textarea rows="2" x-model="p.description" @input="profileDirty=true" class="ta mb-3"></textarea>
                   <label class="lbl">Highlights (one per line)</label>
                   <textarea rows="2" :value="lines(p.highlights)" @change="setLines(p,'highlights',$event.target.value)" class="ta"></textarea>
+                  <div class="flex items-center gap-2 mt-3">
+                    <button @click="p.include_in_resume = !(p.include_in_resume !== false); profileDirty=true"
+                      class="sw shrink-0" :class="(p.include_in_resume !== false) ? 'on' : 'off'" style="transform:scale(.8)"><span></span></button>
+                    <span class="text-[12.5px] text-gray-600">Include in resume &amp; cover letter</span>
+                  </div>
                   <button @click="removeAt(profile.projects, i, 'project')" class="mt-2 text-xs text-gray-400 hover:text-red-500"><i class="ti ti-trash"></i> Remove</button>
                 </div>
               </template>

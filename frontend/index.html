@@ -1449,7 +1449,6 @@
         <div class="thr-hero">
           <div class="row">
             <div><div class="lbl">Score threshold</div><div class="big" x-text="threshold"></div></div>
-            <i class="ti ti-target deco"></i>
           </div>
           <input type="range" min="0" max="100" step="1" x-model.number="threshold"
                  @input="$el.style.setProperty('--thr-pct', threshold + '%')" @change="saveThreshold()"

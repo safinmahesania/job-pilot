@@ -183,3 +183,44 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .proj-block { border:1px solid var(--line); border-left:3px solid var(--brand); border-radius:11px; padding:14px 16px; margin-bottom:10px; }
 .proj-block:last-child { margin-bottom:0; }
 .proj-tag { font-size:10.5px; padding:3px 9px; border-radius:6px; background:var(--brand-tint); color:var(--brand-strong); font-weight:600; }
+
+/* ============================================================================
+   Sources page — health-coloured letter tiles, status badges, expandable cards.
+   ============================================================================ */
+
+/* Letter identity tile, coloured by health. */
+.src-tile { width:36px; height:36px; border-radius:10px; display:flex; align-items:center;
+            justify-content:center; font-weight:700; font-size:15px; flex-shrink:0; }
+.src-tile.ok  { background:var(--green-bg); color:var(--green); }
+.src-tile.wob { background:var(--amber-bg); color:var(--amber); }
+.src-tile.bad { background:var(--red-bg);   color:var(--red); }
+.src-tile.off { background:var(--hover);    color:var(--ink-3); }
+
+/* Status badge. */
+.src-badge { font-size:9.5px; font-weight:700; padding:2px 8px; border-radius:20px;
+             letter-spacing:.02em; flex-shrink:0; }
+.src-badge.ok  { background:var(--green-bg); color:var(--green); }
+.src-badge.wob { background:var(--amber-bg); color:var(--amber); }
+.src-badge.bad { background:var(--red-bg);   color:var(--red); }
+.src-badge.off { background:var(--hover);    color:var(--ink-3); }
+
+/* Expandable source card. */
+.src-card { border:1px solid var(--line); border-radius:12px; background:var(--surface);
+            margin-bottom:10px; transition:box-shadow .15s, border-color .15s; }
+.src-card:hover { box-shadow:0 2px 10px rgba(24,24,22,.05); }
+.src-card.broken { border-color:rgba(220,91,75,.35); }
+.src-card.off { opacity:.72; }
+.src-head { display:flex; align-items:center; gap:11px; padding:13px 15px; cursor:pointer; }
+.src-chev { color:var(--ink-3); font-size:16px; transition:transform .2s; }
+.src-card.open .src-chev { transform:rotate(180deg); }
+.src-body { max-height:0; overflow:hidden; transition:max-height .25s ease; }
+.src-card.open .src-body { max-height:260px; }
+.src-body-inner { padding:0 15px 15px; border-top:1px solid var(--line-2); margin-top:2px; padding-top:13px; }
+
+/* Summary chips. */
+.src-chip { font-size:11.5px; font-weight:600; padding:5px 11px; border-radius:20px;
+            display:inline-flex; align-items:center; gap:5px; }
+.src-chip.ok  { background:var(--green-bg); color:var(--green); }
+.src-chip.wob { background:var(--amber-bg); color:var(--amber); }
+.src-chip.bad { background:var(--red-bg);   color:var(--red); }
+.src-chip.off { background:var(--hover);    color:var(--ink-3); }

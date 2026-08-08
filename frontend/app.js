@@ -61,6 +61,8 @@ function jobpilot() {
     sched: { enabled: true, interval_hours: 8 },
 
     sourceCfg: [], newSource: { name: '', ats: 'greenhouse', identifier: '', query: '', active: true },
+    expandedSource: null,   // which source card is expanded (by index)
+    addFormOpen: false,     // "Add source" form visibility
     atsTypes: ['greenhouse','lever','ashby','workday','oracle','phenom',
                'themuse','smartrecruiters','workable','jsearch','adzuna','remotive','remoteok',
                'weworkremotely','jobspresso','custom','aggregator','successfactors'],
@@ -392,6 +394,34 @@ function jobpilot() {
       await this.loadHealth?.();
       this.showSnack(r.count ? `Cleared ${r.count} removed source(s)` : 'Nothing to clean up');
     },
+    // ───────── Sources UI helpers ─────────
+    // Health verdict → { label, tone } for the badge and letter-tile colour. An inactive
+    // source reads "OFF"; one with no run yet reads "NEW".
+    sourceHealth(s) {
+      if (!s.active) return { label: 'OFF', tone: 'off' };
+      if (!s.health) return { label: 'NEW', tone: 'off' };
+      const v = s.health.verdict;
+      if (v === 'ok') return { label: 'HEALTHY', tone: 'ok' };
+      if (v === 'wobbling') return { label: 'WOBBLING', tone: 'wob' };
+      return { label: 'BROKEN', tone: 'bad' };
+    },
+    // First letter for the identity tile.
+    sourceInitial(s) { return (s.name || '?').trim().charAt(0).toUpperCase(); },
+    // Expand/collapse a source card (one open at a time).
+    toggleSourceExpand(idx) { this.expandedSource = this.expandedSource === idx ? null : idx; },
+    // Aggregate counts for the summary chips.
+    sourceCounts() {
+      const c = { healthy: 0, wobbling: 0, broken: 0, off: 0 };
+      for (const s of this.sourceCfg) {
+        const t = this.sourceHealth(s).tone;
+        if (!s.active) c.off++;
+        else if (t === 'ok') c.healthy++;
+        else if (t === 'wob') c.wobbling++;
+        else if (t === 'bad') c.broken++;
+      }
+      return c;
+    },
+
     async toggleSource(s) {
       await fetch(`/api/sources/${s.index}/toggle`, { method:'POST' });
       await this.loadSources();
@@ -427,6 +457,7 @@ function jobpilot() {
       });
       if (!r.ok) { this.showSnack('Failed to add', 'error'); return; }
       this.newSource = { name:'', ats:'greenhouse', identifier:'', query:'', active:true };
+      this.addFormOpen = false;
       await this.loadSources();
       this.showSnack('Source added');
     },

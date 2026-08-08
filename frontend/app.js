@@ -16,6 +16,7 @@ function jobpilot() {
     // jobs that scrolled out of view is never what was meant.
     pickedJobs: [],
     selectMode: false,    // when on, clicking a card selects it for bulk rescore
+    rescoringId: null,    // id of the job currently being re-scored via its card button
     // What the running pipeline is doing, polled from /api/run/status.
     runProgress: null,
     // The run panel starts collapsed. The phase and a percentage are what you check
@@ -1408,6 +1409,42 @@ function jobpilot() {
       const picked = [...this.selectedSources];
       await this.runNow(picked);
       this.selectedSources = [];
+    },
+
+    // Re-score a single job on demand. The user taps the refresh on a card when they've
+    // edited their profile, or just want a fresh read on that one job. Updates the score
+    // in place so the change is visible without a full reload.
+    async rescoreOne(job) {
+      if (this.rescoringId) return;              // one at a time
+      this.rescoringId = job.id;
+      this.task = { title: 'Re-scoring', label: 'Reading the job…', done: false, ok: true };
+      try {
+        const r = await fetch('/api/jobs/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job_ids: [job.id] }),
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          this.endTask(err.detail || 'Scoring failed — is a model available?', false);
+          return;
+        }
+        const data = await r.json();
+        const newScore = data.results ? data.results[job.id] : null;
+        if (newScore != null) {
+          const prev = job.score;
+          job.score = newScore;                  // update in place
+          const delta = prev == null ? '' : (newScore > prev ? ` (▲ from ${Math.round(prev)})`
+            : newScore < prev ? ` (▼ from ${Math.round(prev)})` : ' (no change)');
+          this.endTask(`Re-scored to ${Math.round(newScore)}${delta}`, true);
+        } else {
+          this.endTask('Re-scored', true);
+        }
+      } catch (e) {
+        this.endTask('Scoring failed — check the server', false);
+      } finally {
+        this.rescoringId = null;
+      }
     },
 
     // ── Scoring a list, with progress ───────────────────────────────────────

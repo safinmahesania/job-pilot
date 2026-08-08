@@ -345,6 +345,12 @@
                   <template x-if="tab!=='dismissed'">
                     <button @click="setStatus(job,'dismissed')" class="btn" style="height:34px; font-size:13px; padding:0 13px; background:transparent; color:var(--ink-3)">Dismiss</button>
                   </template>
+                  <button @click="rescoreOne(job)" :disabled="rescoringId===job.id"
+                    class="btn" style="height:34px; font-size:13px; padding:0 11px; background:transparent; color:var(--ink-3)"
+                    :title="'Re-score this job with your current profile'">
+                    <i class="ti ti-refresh" :class="rescoringId===job.id && 'animate-spin'"></i>
+                    <span x-text="rescoringId===job.id ? 'Scoring…' : 'Re-score'"></span>
+                  </button>
                   <template x-if="tab==='dismissed'">
                     <button @click="setStatus(job,'surfaced')" class="btn btn-ghost" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-arrow-back-up"></i> Restore</button>
                   </template>

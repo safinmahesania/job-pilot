@@ -29,7 +29,11 @@ limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT_DEFAUL
 COLS = ("id, title, company, location, remote, job_type, source, source_url, "
         "apply_url, description, posted_date, deadline, salary_min, salary_max, "
         "score, skills_score, seniority_score, domain_score, rationale, status, "
-        "applied_on, notes, language, fetched_at, last_viewed_at")
+        "applied_on, notes, language, fetched_at, last_viewed_at, "
+        # Structured fields lifted from the description by src/extract.py.
+        "work_mode, seniority_level, location_detail, salary_text, benefits, "
+        "responsibilities, requirements, nice_to_have, tech_stack, "
+        "about_company, instructions, extracted_at")
 
 # feed = new/undecided | saved | applied ; dismissed shows nowhere by default.
 TAB_WHERE = {

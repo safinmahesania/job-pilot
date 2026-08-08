@@ -61,19 +61,60 @@ def save_job(conn, job: dict):
     if not (job.get("apply_url") or "").strip():
         job["apply_url"] = job.get("source_url") or ""
 
+    # Extraction fields (src/extract.py) may or may not be on the dict — a job
+    # that hasn't been extracted yet simply carries none of them. Default every
+    # one so the named-parameter INSERT never trips on a missing key.
+    for _f in ("work_mode", "seniority_level", "location_detail", "salary_text",
+               "benefits", "responsibilities", "requirements", "nice_to_have",
+               "tech_stack", "about_company", "instructions", "extracted_at"):
+        job.setdefault(_f, None)
+
     conn.execute(
         """INSERT OR IGNORE INTO jobs
            (dedupe_hash, source, source_url, apply_url, title, company,
             location, remote, description, posted_date, score, skills_score,
             seniority_score, domain_score, rationale, flags,
-            job_type, deadline, language, salary_min, salary_max)
+            job_type, deadline, language, salary_min, salary_max,
+            work_mode, seniority_level, location_detail, salary_text, benefits,
+            responsibilities, requirements, nice_to_have, tech_stack,
+            about_company, instructions, extracted_at)
            VALUES (:dedupe_hash, :source, :source_url, :apply_url, :title,
                    :company, :location, :remote, :description, :posted_date,
                    :score, :skills_score, :seniority_score, :domain_score,
                    :rationale, :flags,
-                   :job_type, :deadline, :language, :salary_min, :salary_max)""",
+                   :job_type, :deadline, :language, :salary_min, :salary_max,
+                   :work_mode, :seniority_level, :location_detail, :salary_text,
+                   :benefits, :responsibilities, :requirements, :nice_to_have,
+                   :tech_stack, :about_company, :instructions, :extracted_at)""",
         job,
     )
+
+
+def update_extraction(conn, job_id: int, fields: dict):
+    """Write the extracted fields onto an EXISTING job.
+
+    save_job() is INSERT OR IGNORE — it never touches a row that's already there,
+    which is correct for fetches but useless for a backfill. This is the other
+    half: given a job that already exists, set its extraction columns and stamp
+    extracted_at so we know it's been done.
+
+    `fields` is an Extraction.model_dump() — only the extraction columns, nothing
+    else, so this can never overwrite a title or a score by accident.
+    """
+    from src.extract import FIELDS
+    allowed = set(FIELDS)
+    cols = [k for k in fields if k in allowed]
+    if not cols:
+        return
+    assignments = ", ".join(f"{c} = :{c}" for c in cols)
+    params = {c: fields[c] for c in cols}
+    params["job_id"] = job_id
+    with conn:
+        conn.execute(
+            f"UPDATE jobs SET {assignments}, extracted_at = datetime('now') "
+            "WHERE id = :job_id",
+            params,
+        )
 
 
 def save_source_health(conn, name, ats, stat, when):

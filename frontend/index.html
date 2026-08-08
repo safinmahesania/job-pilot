@@ -1679,6 +1679,24 @@
         </div>
       </div>
 
+      <!-- Extract structured fields: runs the LLM extractor over jobs that predate
+           the feature (extracted_at IS NULL). Capped at 100 per click, so the count
+           tells you to run again for the rest. -->
+      <div class="w-card">
+        <div class="w-num" :class="maintPreview && maintPreview.unextracted===0 && 'zero'">
+          <div class="v" x-text="maintPreview ? fmtCount(maintPreview.unextracted) : '–'"></div>
+          <div class="u">to parse</div>
+        </div>
+        <div class="w-body">
+          <div class="w-t">Extract structured fields</div>
+          <div class="w-d">Reads each job's description with AI and fills in work mode, requirements, responsibilities, benefits, tech stack and the rest. Runs 100 at a time — click again for more. Safe to re-run.</div>
+        </div>
+        <div class="w-act">
+          <button @click="maint('extract',{url:'/api/jobs/extract-existing',label:'Extracted',busyLabel:'Reading descriptions…'}); loadMaintPreview()"
+            class="btn" style="height:34px; font-size:13px; padding:0 13px" :disabled="maintPreview && maintPreview.unextracted===0"><i class="ti ti-list-details"></i> Extract</button>
+        </div>
+      </div>
+
       <div class="w-card">
         <div class="w-num" :class="maintPreview && maintPreview.expired===0 && 'zero'">
           <div class="v" x-text="maintPreview ? fmtCount(maintPreview.expired) : '–'"></div>

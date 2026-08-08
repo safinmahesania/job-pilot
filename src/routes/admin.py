@@ -244,6 +244,67 @@ def enrich_existing(conn=Depends(_db_dep)):
     }
 
 
+@router.post("/api/jobs/extract-existing")
+def extract_existing(conn=Depends(_db_dep)):
+    """Backfill the structured fields for jobs that predate extraction.
+
+    Extraction runs during a fetch, so every job saved before this feature existed
+    carries a NULL for work_mode, requirements, benefits and the rest. This walks
+    the jobs that have a real description but were never extracted, runs one LLM
+    pass over each, and writes the fields in place — the score and everything else
+    is left untouched.
+
+    Capped per request so one click can't run for an hour on a huge database; the
+    counts come back so the UI can tell you to run it again for the rest.
+    """
+    from src import extract, notify
+
+    # A description too short to extract from would just come back empty — skip it,
+    # the same bar the live pipeline uses.
+    rows = conn.execute(
+        "SELECT id, title, company, location, description "
+        "FROM jobs "
+        "WHERE extracted_at IS NULL "
+        "AND description IS NOT NULL "
+        "AND length(trim(description)) >= ?",
+        (extract.MIN_DESCRIPTION_CHARS,),
+    ).fetchall()
+
+    remaining = len(rows)
+    extracted = 0
+    skipped = 0        # had a description but the model found nothing to read
+    failed = 0         # the call errored — logged, job left NULL to retry later
+    for row in rows[:100]:                 # cap one request; run again for the rest
+        job = {"title": row[1], "company": row[2], "location": row[3],
+               "description": row[4]}
+        try:
+            ex = extract.extract(job)
+        except Exception as e:
+            failed += 1
+            store.record_error(conn, "extract:backfill", e)
+            continue
+        if ex is None:
+            skipped += 1
+            continue
+        store.update_extraction(conn, row[0], ex.model_dump())
+        extracted += 1
+
+    notify.send(
+        "<b>Description extraction — backfill</b>\n"
+        f"Extracted: {extracted}\n"
+        f"Nothing to read: {skipped}   Failed: {failed}\n"
+        f"({remaining} were pending; run again for the rest)"
+    )
+
+    return {
+        "checked": min(remaining, 100),
+        "extracted": extracted,
+        "skipped": skipped,
+        "failed": failed,
+        "remaining": max(0, remaining - 100),
+    }
+
+
 @router.post("/api/jobs/score")
 def score_jobs(body: ScoreRequest, conn=Depends(_db_dep)):
     """Score specific jobs on demand — for unscored imports, or to re-run a few.
@@ -369,6 +430,15 @@ def maint_preview(conn=Depends(_db_dep)):
         threshold,
     )
 
+    # Jobs with a real description that were never run through extraction — the
+    # backfill target. Uses the same minimum length the extractor itself skips at.
+    from src.extract import MIN_DESCRIPTION_CHARS as _MIN_EXTRACT
+    unextracted = q(
+        "SELECT COUNT(*) FROM jobs WHERE extracted_at IS NULL "
+        "AND description IS NOT NULL AND length(trim(description)) >= ?",
+        _MIN_EXTRACT,
+    )
+
     # Rough cache size on disk, in MB.
     cache_bytes = 0
     for name in ("__pycache__", "logs", "data/cache"):
@@ -382,6 +452,7 @@ def maint_preview(conn=Depends(_db_dep)):
         "snippets": snippets,
         "expired": expired,
         "low": low,
+        "unextracted": unextracted,
         "cache_mb": cache_mb,
     }
 

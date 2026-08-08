@@ -36,7 +36,25 @@ CREATE TABLE IF NOT EXISTS jobs (
     last_viewed_at  TEXT,                 -- stamped each time the job's detail is opened
     notes           TEXT,                 -- free-text notes from the Applied tab
     followed_up_on  TEXT,                 -- date of the last follow-up you sent
-    followup_snooze TEXT                  -- don't nag about this until after this date
+    followup_snooze TEXT,                 -- don't nag about this until after this date
+
+    -- Structured fields pulled OUT of the free-text description by an LLM pass
+    -- (see src/extract.py). NULL means "not extracted yet" — a backfill can fill
+    -- them in later, and a job whose description had nothing to say for a field
+    -- stores an empty string, so we can tell "we looked, found nothing" apart from
+    -- "we never looked". `extracted_at` is that marker.
+    work_mode       TEXT,                 -- 'remote' | 'hybrid' | 'onsite' | ''
+    seniority_level TEXT,                 -- 'intern' | 'junior' | 'mid' | 'senior' | 'lead' | ''
+    location_detail TEXT,                 -- city/region if the body names one
+    salary_text     TEXT,                 -- pay as written ("$80k–100k + equity"), for display
+    benefits        TEXT,                 -- perks: health, PTO, stipend…
+    responsibilities TEXT,                -- what you'll do / duties
+    requirements    TEXT,                 -- must-haves + years of experience + education
+    nice_to_have    TEXT,                 -- preferred / bonus, kept apart from requirements
+    tech_stack      TEXT,                 -- comma-separated technologies named in the body
+    about_company   TEXT,                 -- "about us" blurb
+    instructions    TEXT,                 -- how to apply, if the posting spells it out
+    extracted_at    TEXT                  -- when the LLM extraction last ran; NULL = never
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_score ON jobs(score DESC);

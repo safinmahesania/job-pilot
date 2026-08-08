@@ -22,7 +22,7 @@ from src.scoring.rerank import (
     score_job, reset_model_state, set_preferred, get_model_state,
     build_calibration,
 )
-from src import store, notify, enrich, language
+from src import store, notify, enrich, language, extract
 from src.paths import (DEFAULT_SCORE_THRESHOLD, NOTIFY_MIN_SCORE,
                        FETCH_CONCURRENCY, MIN_DESCRIPTION_CHARS)
 from src.logs import log
@@ -240,6 +240,21 @@ def run(only: list[str] | None = None):
                 job["language"] = language.detect(job.get("description"))
                 if job["language"] == "fr":
                     stats["french_only"] += 1
+
+                # Pull the structured fields out of the description (work mode,
+                # requirements, benefits…). Independent of scoring: a failure here
+                # must not lose the job, so it's caught and the fields stay NULL —
+                # a backfill can fill them in later.
+                if scoring_on:
+                    try:
+                        ex = extract.extract(job)
+                        if ex is not None:
+                            job.update(ex.model_dump())
+                            job["extracted_at"] = datetime.now().strftime(
+                                "%Y-%m-%d %H:%M:%S")
+                            stats["extracted"] = stats.get("extracted", 0) + 1
+                    except Exception as e:
+                        store.record_error(conn, f"extract:{company['name']}", e)
 
                 result = score_job(job, profile, calibration)
                 if result is None:

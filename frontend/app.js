@@ -172,10 +172,16 @@ function jobpilot() {
       this.pickedJobs = [];
       this.selectMode = false;
       this.mobileNav = false;
-      if (tab === 'sourcesTab') await this.loadSources();
-      if (tab === 'profile') await this.loadProfile();
-      if (tab === 'settings') { await this.loadLLM(); await this.loadAI(); await this.loadPrivacy(); await this.loadFeedback(); }
       await this.load();
+    },
+
+    // Fetch the data a given page needs. Called from both go() (in-app nav) and load()
+    // (direct URL / reload / back-forward), so every entry path populates the page.
+    async loadTabData() {
+      const t = this.tab;
+      if (t === 'sourcesTab') await this.loadSources();
+      else if (t === 'profile') await this.loadProfile();
+      else if (t === 'settings') { await this.loadLLM(); await this.loadAI(); await this.loadPrivacy(); await this.loadFeedback(); }
     },
 
     // Flip admin mode. When turning it off while on a Manage page, fall back to Feed so
@@ -190,6 +196,9 @@ function jobpilot() {
     },
 
     async load() {
+      // Whatever page we're on (including on a direct URL load or back/forward, where
+      // go() never ran), make sure that page's own data is fetched.
+      await this.loadTabData();
       this.loading = true;
       const jobsP = this.isJobView()
         ? fetch(`/api/jobs?tab=${this.tab}&sort=${this.sort}&source=${this.source}`).then(r=>r.json()).catch(()=>[])

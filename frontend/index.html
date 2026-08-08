@@ -375,56 +375,197 @@
 
     <!-- ─── Stats ─── -->
     <div x-show="tab==='stats'">
-      <h2 class="text-lg font-semibold mb-4 hidden md:block">Statistics</h2>
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold">Statistics</h2>
+        <p class="text-[13px] text-gray-400 mt-0.5">How your pipeline is doing — from surfaced to offer.</p>
+      </div>
       <template x-if="stats">
-        <div class="flex flex-col gap-4 sm:gap-5">
-          <div class="grid grid-cols-3 gap-2 sm:gap-3">
-            <div class="card p-3 sm:p-4 text-center"><div class="text-xl sm:text-2xl font-semibold" x-text="stats.total"></div><div class="text-[11px] sm:text-xs text-gray-400 mt-1">Total</div></div>
-            <div class="card p-3 sm:p-4 text-center"><div class="text-xl sm:text-2xl font-semibold" x-text="stats.feed_size"></div><div class="text-[11px] sm:text-xs text-gray-400 mt-1">In feed</div></div>
-            <div class="card p-3 sm:p-4 text-center"><div class="text-xl sm:text-2xl font-semibold" x-text="stats.avg_score"></div><div class="text-[11px] sm:text-xs text-gray-400 mt-1">Avg score</div></div>
+        <div class="flex flex-col gap-4">
+
+          <!-- Hero stats -->
+          <div class="grid grid-cols-3 gap-2.5">
+            <div class="st-hero a"><i class="ic ti ti-database"></i><div class="v" x-text="stats.total"></div><div class="k">Total jobs</div></div>
+            <div class="st-hero b"><i class="ic ti ti-inbox"></i><div class="v" x-text="stats.feed_size"></div><div class="k">In feed</div></div>
+            <div class="st-hero c"><i class="ic ti ti-target"></i><div class="v" x-text="stats.avg_score"></div><div class="k">Avg score</div></div>
           </div>
+
+          <!-- Conversion rate strip -->
+          <div class="card p-4" x-show="stats.rates">
+            <div class="grid grid-cols-3 gap-3 text-center">
+              <div><div class="text-lg font-bold text-brand" x-text="(stats.rates.applied_of_total||0)+'%'"></div><div class="text-[11px] text-gray-400 mt-0.5">Applied of total</div></div>
+              <div class="border-x border-gray-100"><div class="text-lg font-bold" style="color:var(--blue)" x-text="(stats.rates.interview_of_applied||0)+'%'"></div><div class="text-[11px] text-gray-400 mt-0.5">Interview of applied</div></div>
+              <div><div class="text-lg font-bold" style="color:var(--green)" x-text="(stats.rates.offer_of_interview||0)+'%'"></div><div class="text-[11px] text-gray-400 mt-0.5">Offer of interview</div></div>
+            </div>
+          </div>
+
+          <!-- Activity chart (last 14 days) -->
+          <div class="card p-4" x-show="stats.activity && stats.activity.length">
+            <div class="st-title"><i class="ti ti-activity"></i> Activity <span class="r">last 14 days</span></div>
+            <svg viewBox="0 0 300 70" preserveAspectRatio="none" class="w-full" style="height:70px">
+              <defs>
+                <linearGradient id="actGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--brand)" stop-opacity="0.18"/>
+                  <stop offset="100%" stop-color="var(--brand)" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <path :d="activityArea('fetched')" fill="url(#actGrad)"/>
+              <path :d="activityPath('fetched')" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+              <path :d="activityPath('applied')" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="3 2"/>
+            </svg>
+            <div class="flex gap-4 mt-2 text-[11px]">
+              <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 rounded" style="background:var(--brand)"></span> Jobs fetched</span>
+              <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 rounded" style="background:var(--blue)"></span> Applications sent</span>
+              <span class="ml-auto text-gray-400">peak <span x-text="activityMax()"></span>/day</span>
+            </div>
+          </div>
+
+          <!-- Application funnel -->
           <div class="card p-4">
-            <div class="text-sm font-medium mb-3">Application funnel</div>
-            <template x-for="[label,key] in [['Surfaced','surfaced'],['Saved','saved'],['Applied','applied'],['Interview','interview'],['Offer','offer'],['Rejected','rejected'],['Dismissed','dismissed']]" :key="key">
-              <div class="flex items-center gap-2 sm:gap-3 mb-2">
-                <span class="text-xs text-gray-500 w-16 sm:w-20 shrink-0" x-text="label"></span>
-                <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-                  <div class="h-full bg-brand rounded-full" :style="`width:${stats.total ? Math.max(4,100*stats.funnel[key]/stats.total) : 0}%`" x-show="stats.funnel[key]>0"></div>
+            <div class="st-title"><i class="ti ti-filter"></i> Application funnel</div>
+            <template x-for="stage in [
+              {k:'surfaced',l:'Surfaced',ic:'ti-eye',c:'var(--brand)',bg:'var(--brand-tint)',fg:'var(--brand-strong)'},
+              {k:'saved',l:'Saved',ic:'ti-bookmark',c:'#B07A1E',bg:'var(--brand-tint)',fg:'var(--brand-strong)'},
+              {k:'applied',l:'Applied',ic:'ti-send',c:'var(--blue)',bg:'var(--blue-bg)',fg:'var(--blue)'},
+              {k:'interview',l:'Interview',ic:'ti-messages',c:'var(--amber)',bg:'var(--amber-bg)',fg:'var(--amber)'},
+              {k:'offer',l:'Offer',ic:'ti-trophy',c:'var(--green)',bg:'var(--green-bg)',fg:'var(--green)'},
+              {k:'rejected',l:'Rejected',ic:'ti-x',c:'var(--red)',bg:'var(--red-bg)',fg:'var(--red)'},
+              {k:'dismissed',l:'Dismissed',ic:'ti-archive',c:'#9A988F',bg:'var(--hover)',fg:'var(--ink-3)'}
+            ]" :key="stage.k">
+              <div class="st-fn">
+                <div class="top">
+                  <span class="lb"><span class="fi" :style="`background:${stage.bg}; color:${stage.fg}`"><i class="ti" :class="stage.ic"></i></span> <span x-text="stage.l"></span></span>
+                  <span class="rt"><b x-text="stats.funnel[stage.k]"></b><span x-show="stats.total && stage.k!=='surfaced'" x-text="' · ' + Math.round(100*stats.funnel[stage.k]/stats.total) + '%'"></span></span>
                 </div>
-                <span class="text-xs font-medium text-gray-700 w-6 text-right" x-text="stats.funnel[key]"></span>
+                <div class="track"><div class="fill" :style="`width:${stats.total ? Math.max(2,100*stats.funnel[stage.k]/stats.total) : 0}%; background:${stage.c}`"></div></div>
               </div>
             </template>
           </div>
-          <div class="card p-4">
-            <div class="text-sm font-medium mb-3">Score distribution</div>
-            <template x-for="[label,color] in [['80+','#1D9E75'],['70-79','#A96D14'],['60-69','#C0C0C0'],['<60','#E5A0A0']]" :key="label">
-              <div class="flex items-center gap-2 sm:gap-3 mb-2">
-                <span class="text-xs text-gray-500 w-12 shrink-0" x-text="label"></span>
-                <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-                  <div class="h-full rounded-full" :style="`width:${stats.total ? Math.max(4,100*stats.distribution[label]/stats.total) : 0}%; background:${color}`" x-show="stats.distribution[label]>0"></div>
+
+          <!-- Two-up: score distribution + work mix donut -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="card p-4">
+              <div class="st-title"><i class="ti ti-chart-bar"></i> Score distribution</div>
+              <template x-for="d in [
+                {k:'80+',c:'var(--green)'},{k:'70-79',c:'var(--brand)'},{k:'60-69',c:'#C9A55E'},{k:'<60',c:'var(--red)'}
+              ]" :key="d.k">
+                <div class="st-bar">
+                  <span class="bl" x-text="d.k"></span>
+                  <div class="bt"><div class="bf" :style="`width:${stats.total ? Math.max(2,100*(stats.distribution[d.k]||0)/stats.total) : 0}%; background:${d.c}`"></div></div>
+                  <span class="bv" x-text="stats.distribution[d.k]||0"></span>
                 </div>
-                <span class="text-xs font-medium text-gray-700 w-6 text-right" x-text="stats.distribution[label]"></span>
+              </template>
+            </div>
+            <div class="card p-4" x-show="stats.work_mix">
+              <div class="st-title"><i class="ti ti-map-pin"></i> Remote vs onsite</div>
+              <div class="st-donut-wrap">
+                <svg viewBox="0 0 40 40" style="width:88px; height:88px; transform:rotate(-90deg)">
+                  <circle cx="20" cy="20" r="15.915" fill="none" stroke="var(--line-2)" stroke-width="6"/>
+                  <template x-for="(seg,i) in donutSegments([{value:stats.work_mix.remote,color:'var(--green)'},{value:stats.work_mix.onsite,color:'var(--blue)'}])" :key="i">
+                    <circle cx="20" cy="20" r="15.915" fill="none" :stroke="seg.color" stroke-width="6" :stroke-dasharray="seg.dash" :stroke-dashoffset="seg.offset"/>
+                  </template>
+                </svg>
+                <div class="st-legend">
+                  <div class="li"><span class="sw" style="background:var(--green)"></span><span class="nm">Remote</span><span class="ct" x-text="stats.work_mix.remote"></span></div>
+                  <div class="li"><span class="sw" style="background:var(--blue)"></span><span class="nm">Onsite</span><span class="ct" x-text="stats.work_mix.onsite"></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Two-up: job types + languages -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="card p-4" x-show="stats.job_types && stats.job_types.length">
+              <div class="st-title"><i class="ti ti-briefcase"></i> Job types</div>
+              <template x-for="jt in stats.job_types.slice(0,6)" :key="jt.t">
+                <div class="st-bar">
+                  <span class="bl truncate" style="width:80px" x-text="jt.t"></span>
+                  <div class="bt"><div class="bf" :style="`width:${stats.total ? Math.max(2,100*jt.c/stats.total) : 0}%; background:var(--brand)`"></div></div>
+                  <span class="bv" x-text="jt.c"></span>
+                </div>
+              </template>
+            </div>
+            <div class="card p-4" x-show="stats.languages && stats.languages.length">
+              <div class="st-title"><i class="ti ti-language"></i> Language</div>
+              <template x-for="lg in stats.languages" :key="lg.l">
+                <div class="st-bar">
+                  <span class="bl" x-text="lg.l"></span>
+                  <div class="bt"><div class="bf" :style="`width:${stats.total ? Math.max(2,100*lg.c/stats.total) : 0}%; background:var(--blue)`"></div></div>
+                  <span class="bv" x-text="lg.c"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Salary insight -->
+          <div class="card p-4" x-show="stats.salary && stats.salary.disclosed>0">
+            <div class="st-title"><i class="ti ti-coin"></i> Salary <span class="r"><span x-text="stats.salary.disclosed_pct"></span>% disclose it</span></div>
+            <div class="flex items-center gap-4">
+              <div class="flex-1">
+                <div class="text-[11px] text-gray-400 mb-1">Average disclosed range</div>
+                <div class="text-lg font-bold">
+                  $<span x-text="Number(stats.salary.avg_min).toLocaleString()"></span>
+                  <span class="text-gray-300 font-normal">–</span>
+                  $<span x-text="Number(stats.salary.avg_max).toLocaleString()"></span>
+                </div>
+              </div>
+              <div class="text-center">
+                <div class="text-lg font-bold text-brand" x-text="stats.salary.disclosed"></div>
+                <div class="text-[11px] text-gray-400">postings</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Score components -->
+          <div class="card p-4" x-show="stats.score_parts">
+            <div class="st-title"><i class="ti ti-adjustments"></i> What's driving the match</div>
+            <div class="grid grid-cols-3 gap-3">
+              <template x-for="sp in [{k:'skills',l:'Skills'},{k:'seniority',l:'Seniority'},{k:'domain',l:'Domain'}]" :key="sp.k">
+                <div class="st-gauge">
+                  <div class="g-v" x-text="stats.score_parts[sp.k]"></div>
+                  <div class="g-k" x-text="sp.l"></div>
+                  <div class="g-track"><div class="g-fill" :style="`width:${Math.min(100,stats.score_parts[sp.k])}%`"></div></div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Two-up: top sources + top companies -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="card p-4" x-show="stats.sources && stats.sources.length">
+              <div class="st-title"><i class="ti ti-plug"></i> Top sources</div>
+              <template x-for="(s,i) in stats.sources.slice(0,6)" :key="s.source">
+                <div class="st-rank-row">
+                  <span class="st-rank" :class="i===0 && 'top'" x-text="i+1"></span>
+                  <span class="nm truncate" x-text="s.source"></span>
+                  <div class="mini"><div class="f" :style="`width:${stats.sources[0].c ? 100*s.c/stats.sources[0].c : 0}%`"></div></div>
+                  <span class="val"><b x-text="s.c"></b> · avg <span x-text="s.avg"></span></span>
+                </div>
+              </template>
+            </div>
+            <div class="card p-4" x-show="stats.companies && stats.companies.length">
+              <div class="st-title"><i class="ti ti-building"></i> Top companies</div>
+              <template x-for="(c,i) in stats.companies.slice(0,6)" :key="c.company">
+                <div class="st-rank-row">
+                  <span class="st-rank" :class="i===0 && 'top'" x-text="i+1"></span>
+                  <span class="nm truncate" x-text="c.company"></span>
+                  <div class="mini"><div class="f" :style="`width:${stats.companies[0].c ? 100*c.c/stats.companies[0].c : 0}%`"></div></div>
+                  <span class="val"><b x-text="c.c"></b> · avg <span x-text="c.avg"></span></span>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Deadlines -->
+          <div class="card p-4" x-show="stats.deadlines && stats.deadlines.length">
+            <div class="st-title"><i class="ti ti-calendar-event"></i> Upcoming deadlines</div>
+            <template x-for="d in stats.deadlines" :key="d.title + d.company">
+              <div class="st-dl">
+                <span class="t truncate"><span class="font-medium" x-text="d.title"></span> <span class="text-gray-400" x-text="'· ' + d.company"></span></span>
+                <span class="chip" :class="deadlineInfo(d.deadline).soon && 'soon'" x-text="deadlineInfo(d.deadline).label"></span>
               </div>
             </template>
           </div>
-          <div class="card p-4">
-            <div class="text-sm font-medium mb-3">By source</div>
-            <template x-for="s in stats.sources" :key="s.source">
-              <div class="flex items-center justify-between gap-3 text-sm py-1 border-b border-gray-50 last:border-0">
-                <span class="text-gray-700 truncate" x-text="s.source"></span>
-                <span class="text-gray-500 text-xs whitespace-nowrap"><span x-text="s.c"></span> jobs · avg <span class="font-medium text-gray-700" x-text="s.avg"></span></span>
-              </div>
-            </template>
-          </div>
-          <div class="card p-4" x-show="stats.deadlines.length">
-            <div class="text-sm font-medium mb-3">Upcoming deadlines</div>
-            <template x-for="d in stats.deadlines" :key="d.title">
-              <div class="flex items-center justify-between gap-3 text-sm py-1">
-                <span class="text-gray-700 truncate" x-text="d.title + ' — ' + d.company"></span>
-                <span class="text-amber-700 text-xs whitespace-nowrap" x-text="d.deadline"></span>
-              </div>
-            </template>
-          </div>
+
         </div>
       </template>
       <div x-show="!stats" class="text-center text-gray-400 py-16 text-sm">Loading stats…</div>

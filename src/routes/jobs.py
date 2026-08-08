@@ -79,10 +79,70 @@ def stats(conn=Depends(_db_dep)):
         "offer_of_interview": pct(funnel["offer"], funnel["interview"] + funnel["offer"]),
     }
 
+    # ── Activity over the last 14 days: jobs fetched vs applications sent per day.
+    # A quick pulse of "am I actually working the pipeline".
+    activity_rows = conn.execute(
+        "SELECT date(fetched_at) d, COUNT(*) c FROM jobs "
+        "WHERE fetched_at >= date('now','-13 days') GROUP BY d ORDER BY d"
+    ).fetchall()
+    fetched_by_day = {r["d"]: r["c"] for r in activity_rows}
+    applied_rows = conn.execute(
+        "SELECT date(applied_on) d, COUNT(*) c FROM jobs "
+        "WHERE applied_on IS NOT NULL AND applied_on >= date('now','-13 days') GROUP BY d ORDER BY d"
+    ).fetchall()
+    applied_by_day = {r["d"]: r["c"] for r in applied_rows}
+    activity = []
+    for i in range(13, -1, -1):
+        day = conn.execute("SELECT date('now', ?)", (f"-{i} days",)).fetchone()[0]
+        activity.append({"date": day, "fetched": fetched_by_day.get(day, 0),
+                         "applied": applied_by_day.get(day, 0)})
+
+    # ── Work arrangement + job type + language mix (Canada roles are often bilingual,
+    # so language is genuinely useful signal here).
+    remote_ct = q("SELECT COUNT(*) FROM jobs WHERE remote=1")
+    onsite_ct = total - remote_ct
+    work_mix = {"remote": remote_ct, "onsite": onsite_ct}
+    type_rows = conn.execute(
+        "SELECT COALESCE(NULLIF(job_type,''),'unknown') t, COUNT(*) c FROM jobs "
+        "GROUP BY t ORDER BY c DESC"
+    ).fetchall()
+    job_types = [dict(r) for r in type_rows]
+    lang_rows = conn.execute(
+        "SELECT COALESCE(NULLIF(language,''),'unknown') l, COUNT(*) c FROM jobs "
+        "GROUP BY l ORDER BY c DESC"
+    ).fetchall()
+    languages = [dict(r) for r in lang_rows]
+
+    # ── Salary: how many postings even disclose one, and the median-ish range.
+    sal_count = q("SELECT COUNT(*) FROM jobs WHERE salary_min IS NOT NULL AND salary_min>0")
+    salary = {
+        "disclosed": sal_count,
+        "disclosed_pct": pct(sal_count, total),
+        "avg_min": q("SELECT ROUND(AVG(salary_min)) FROM jobs WHERE salary_min>0") or 0,
+        "avg_max": q("SELECT ROUND(AVG(salary_max)) FROM jobs WHERE salary_max>0") or 0,
+    }
+
+    # ── Top companies by how many roles they've surfaced.
+    comp_rows = conn.execute(
+        "SELECT company, COUNT(*) c, ROUND(AVG(score),1) avg FROM jobs "
+        "WHERE company IS NOT NULL AND company != '' GROUP BY company ORDER BY c DESC LIMIT 8"
+    ).fetchall()
+    companies = [dict(r) for r in comp_rows]
+
+    # ── Average of each score component, to see what's driving (or dragging) the match.
+    score_parts = {
+        "skills": q("SELECT ROUND(AVG(skills_score),1) FROM jobs WHERE skills_score IS NOT NULL") or 0,
+        "seniority": q("SELECT ROUND(AVG(seniority_score),1) FROM jobs WHERE seniority_score IS NOT NULL") or 0,
+        "domain": q("SELECT ROUND(AVG(domain_score),1) FROM jobs WHERE domain_score IS NOT NULL") or 0,
+    }
+
     return {
         "funnel": funnel, "total": total, "avg_score": avg_score,
         "feed_size": feed_size, "distribution": dist, "sources": sources,
         "deadlines": deadlines, "rates": rates,
+        "activity": activity, "work_mix": work_mix, "job_types": job_types,
+        "languages": languages, "salary": salary, "companies": companies,
+        "score_parts": score_parts,
     }
 
 

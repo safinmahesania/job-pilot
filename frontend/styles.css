@@ -262,3 +262,79 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .src-stat.tok { background:#E4F4F7; } .src-stat.tok .k, .src-stat.tok .v { color:#1B7A8A; }
 .src-stat.fet { background:#FDECEF; } .src-stat.fet .k, .src-stat.fet .v { color:#C43D5B; }
 .src-stat.kep { background:#E3F3EC; } .src-stat.kep .k, .src-stat.kep .v { color:#1F9D6B; }
+
+/* ============================================================================
+   Stats dashboard — hero stats, funnel, charts, tables.
+   ============================================================================ */
+
+/* Hero stat cards. */
+.st-hero { border-radius:14px; padding:15px 16px 14px; position:relative; overflow:hidden; }
+.st-hero .ic { position:absolute; top:13px; right:13px; font-size:17px; opacity:.4; }
+.st-hero .v { font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1; }
+.st-hero .k { font-size:11px; color:var(--ink-2); margin-top:5px; font-weight:500; }
+.st-hero .sub { font-size:10.5px; color:var(--ink-3); margin-top:2px; }
+.st-hero.a { background:linear-gradient(135deg, var(--brand-tint), #FBF6EC); border:1px solid rgba(169,109,20,.15); }
+.st-hero.a .ic, .st-hero.a .v { color:var(--brand-strong); }
+.st-hero.b { background:var(--blue-bg); border:1px solid rgba(59,124,184,.15); }
+.st-hero.b .ic, .st-hero.b .v { color:var(--blue); }
+.st-hero.c { background:var(--green-bg); border:1px solid rgba(31,157,107,.15); }
+.st-hero.c .ic, .st-hero.c .v { color:var(--green); }
+
+/* Card title. */
+.st-title { font-size:13px; font-weight:650; margin-bottom:14px; display:flex; align-items:center; gap:7px; }
+.st-title i { color:var(--brand); font-size:16px; }
+.st-title .r { margin-left:auto; font-size:11px; font-weight:500; color:var(--ink-3); }
+
+/* Funnel rows. */
+.st-fn { margin-bottom:11px; }
+.st-fn:last-child { margin-bottom:0; }
+.st-fn .top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
+.st-fn .lb { font-size:12.5px; font-weight:550; display:flex; align-items:center; gap:7px; }
+.st-fn .lb .fi { width:20px; height:20px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:11px; }
+.st-fn .rt { font-size:12px; color:var(--ink-3); }
+.st-fn .rt b { color:var(--ink); font-variant-numeric:tabular-nums; }
+.st-fn .track { height:8px; background:var(--line-2); border-radius:20px; overflow:hidden; }
+.st-fn .fill { height:100%; border-radius:20px; transition:width .4s ease; }
+
+/* Distribution / generic bar rows. */
+.st-bar { display:flex; align-items:center; gap:10px; margin-bottom:9px; }
+.st-bar:last-child { margin-bottom:0; }
+.st-bar .bl { font-size:12px; width:58px; font-weight:550; flex-shrink:0; }
+.st-bar .bt { flex:1; height:9px; background:var(--line-2); border-radius:20px; overflow:hidden; }
+.st-bar .bf { height:100%; border-radius:20px; transition:width .4s ease; }
+.st-bar .bv { font-size:12px; font-weight:600; width:34px; text-align:right; font-variant-numeric:tabular-nums; flex-shrink:0; }
+
+/* Ranked source/company rows. */
+.st-rank-row { display:flex; align-items:center; gap:11px; padding:9px 0; border-bottom:1px solid var(--line-2); }
+.st-rank-row:last-child { border-bottom:none; }
+.st-rank { width:22px; height:22px; border-radius:7px; background:var(--brand-tint); color:var(--brand-strong);
+           display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; }
+.st-rank.top { background:var(--brand); color:#fff; }
+.st-rank-row .nm { flex:1; font-size:13px; font-weight:550; min-width:0; }
+.st-rank-row .mini { width:64px; height:6px; background:var(--line-2); border-radius:20px; overflow:hidden; flex-shrink:0; }
+.st-rank-row .mini .f { height:100%; background:var(--brand); border-radius:20px; }
+.st-rank-row .val { font-size:11.5px; color:var(--ink-3); white-space:nowrap; flex-shrink:0; }
+.st-rank-row .val b { color:var(--ink-2); font-variant-numeric:tabular-nums; }
+
+/* Donut legend. */
+.st-donut-wrap { display:flex; align-items:center; gap:18px; }
+.st-legend { display:flex; flex-direction:column; gap:7px; flex:1; }
+.st-legend .li { display:flex; align-items:center; gap:8px; font-size:12.5px; }
+.st-legend .sw { width:10px; height:10px; border-radius:3px; flex-shrink:0; }
+.st-legend .nm { flex:1; color:var(--ink-2); }
+.st-legend .ct { font-weight:600; font-variant-numeric:tabular-nums; }
+
+/* Deadline chip rows. */
+.st-dl { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line-2); }
+.st-dl:last-child { border-bottom:none; }
+.st-dl .t { font-size:12.5px; min-width:0; }
+.st-dl .chip { font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; white-space:nowrap; flex-shrink:0;
+               background:var(--amber-bg); color:var(--amber); }
+.st-dl .chip.soon { background:var(--red-bg); color:var(--red); }
+
+/* Score-component mini gauges. */
+.st-gauge { text-align:center; }
+.st-gauge .g-v { font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
+.st-gauge .g-k { font-size:11px; color:var(--ink-3); margin-top:2px; }
+.st-gauge .g-track { height:5px; background:var(--line-2); border-radius:20px; overflow:hidden; margin-top:7px; }
+.st-gauge .g-fill { height:100%; border-radius:20px; background:var(--brand); }

@@ -1603,6 +1603,58 @@ function jobpilot() {
       });
     },
     modelShort(m) { return (m || '').replace('qwen2.5:',''); },
+
+    // ───────── Stats dashboard helpers ─────────
+    // Build an SVG polyline path for the activity chart. `key` is 'fetched' or 'applied'.
+    // Coordinates are mapped into a 300×70 viewBox with a little top/bottom padding.
+    activityPath(key) {
+      const a = this.stats?.activity || [];
+      if (!a.length) return '';
+      const max = Math.max(1, ...a.map(d => Math.max(d.fetched, d.applied)));
+      const W = 300, H = 70, pad = 6;
+      const step = a.length > 1 ? W / (a.length - 1) : 0;
+      return a.map((d, i) => {
+        const x = Math.round(i * step);
+        const y = Math.round(H - pad - (d[key] / max) * (H - pad * 2));
+        return `${i === 0 ? 'M' : 'L'}${x},${y}`;
+      }).join(' ');
+    },
+    // Area fill path (same line, closed to the baseline) for a soft gradient under it.
+    activityArea(key) {
+      const line = this.activityPath(key);
+      if (!line) return '';
+      const a = this.stats?.activity || [];
+      const W = 300, step = a.length > 1 ? W / (a.length - 1) : 0;
+      const lastX = Math.round((a.length - 1) * step);
+      return `${line} L${lastX},70 L0,70 Z`;
+    },
+    activityMax() {
+      const a = this.stats?.activity || [];
+      return Math.max(1, ...a.map(d => Math.max(d.fetched, d.applied)));
+    },
+    // Turn a list of {value,color} into SVG donut segments (array of stroke-dasharray
+    // stops around a circle of circumference C).
+    donutSegments(items) {
+      const total = items.reduce((s, it) => s + it.value, 0) || 1;
+      const C = 100; let offset = 0; const segs = [];
+      for (const it of items) {
+        const len = (it.value / total) * C;
+        segs.push({ color: it.color, dash: `${len} ${C - len}`, offset: -offset });
+        offset += len;
+      }
+      return segs;
+    },
+    // A short "in N days" style label, and whether it's urgent (<=3 days).
+    deadlineInfo(raw) {
+      if (!raw) return { label: '', soon: false };
+      const d = new Date(String(raw).replace(' ', 'T'));
+      if (isNaN(d)) return { label: raw, soon: false };
+      const days = Math.ceil((d - new Date()) / 8.64e7);
+      if (days < 0) return { label: 'passed', soon: true };
+      if (days === 0) return { label: 'today', soon: true };
+      if (days === 1) return { label: 'tomorrow', soon: true };
+      return { label: `in ${days} days`, soon: days <= 3 };
+    },
     timeAgo(d) { try { const days = Math.floor((Date.now() - new Date(d)) / 8.64e7); return days <= 0 ? 'today' : days + 'd ago'; } catch { return ''; } },
 
     // The day a job was fetched, as "Mon, 28 Jul" — the weekday included because "which

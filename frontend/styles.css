@@ -738,3 +738,82 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .ac-g-bar:hover .ac-g-tip { opacity:1; }
 .ac-g-tip::after { content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%);
                    border:5px solid transparent; border-top-color:var(--ink); }
+
+/* ============================================================================
+   RESPONSIVE — five breakpoints. The app shell (sidebar ↔ bottom-nav) is handled
+   by Tailwind md: utilities; this block adapts the custom components so nothing
+   overflows on small phones and everything breathes on large screens.
+
+   Small mobile   360–479   single column, tighter padding, wrapped stats
+   Large mobile   480–767   2-col where it fits
+   Tablet         768–1023  sidebar appears (Tailwind md:), content comfortable
+   Laptop         1024–1279 default
+   Large desktop  1280+     slightly wider content column
+   ============================================================================ */
+
+/* ── Small mobile & up: keep multi-col grids from overflowing narrow phones ── */
+@media (max-width: 479px) {
+  /* Dashboards / admin cockpit: stack the two-column panels. */
+  .uh-two { grid-template-columns: 1fr; }
+  /* Quick actions: 2×2 instead of a cramped 4-across. */
+  .ac-actions { grid-template-columns: 1fr 1fr; }
+  /* System focus tiles: single column so each is tappable. */
+  .focusgrid { grid-template-columns: 1fr; }
+  .focus.wide { grid-column: span 1; }
+
+  /* Dark heroes: less padding, so the gradient card doesn't eat the screen. */
+  .uh-hero, .ac-hero, .op-hero, .mt-hero { padding: 18px; }
+  .uh-hi, .ac-title { font-size: 17px; }
+  .uh-hero-num, .mt-hero-num { font-size: 30px; }
+
+  /* Chip/stat rows: let them wrap instead of shrinking past legibility. */
+  .uh-chips, .ac-pulse { flex-wrap: wrap; }
+  .uh-chip, .ac-pt { min-width: calc(50% - 5px); }
+  .mt-hero { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .mt-hero-stats { margin-left: 0; width: 100%; justify-content: space-between; gap: 12px; }
+
+  /* Maintenance action cards: stack the number, body and button. */
+  .w-card { flex-wrap: wrap; }
+  .w-card .w-act { width: 100%; }
+  .w-act .btn { flex: 1; }
+
+  /* Operations run rows + spark: tighten so the date block + kept fit. */
+  .op-hero .big { font-size: 26px; }
+  .op-run { gap: 10px; padding: 12px 2px; }
+
+  /* Settings learn/stat boxes wrap. */
+  .set-learn { flex-wrap: wrap; }
+
+  /* Section headers with a right-side link: keep them on one row but allow wrap. */
+  .uh-sec, .op-h { flex-wrap: wrap; gap: 4px; }
+
+  /* Comparison/quota mini rows: never let a long provider label push the number off. */
+  .ac-mini { gap: 8px; }
+  .ac-mini b { text-align: right; }
+}
+
+/* ── Large mobile / small tablet: 2-col dashboards fit, keep actions 4-across ── */
+@media (min-width: 480px) and (max-width: 767px) {
+  .uh-two { grid-template-columns: 1fr 1fr; }
+  .ac-actions { grid-template-columns: repeat(4, 1fr); }
+  .focusgrid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Tablet: the Tailwind md: sidebar kicks in at 768; give content room ── */
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Content columns already cap at 42rem; nothing extra needed, but ensure the
+     4-up quick actions and focus grid stay comfortable. */
+  .ac-actions { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* ── Large desktop: let the primary content column breathe a little wider ── */
+@media (min-width: 1280px) {
+  .uh-hero, .ac-hero, .op-hero, .mt-hero, .uh-two, .uh-sec, .uh-pick, .uh-fu,
+  .uh-panel, .uh-empty, .uh-loading, .ac-ribbon, .ac-actions, .ac-graph,
+  .w-card, .w-danger, .w-cfg, .op-h, .op-alert, .op-allgood, .focusgrid,
+  .thr-hero, .set-sec, .src-attn { max-width: 48rem; }
+}
+
+/* ── Guard rail for every screen: media inside cards never forces overflow ── */
+img, svg, video { max-width: 100%; height: auto; }
+.op-spark, .ac-g-bars, .g-bars, .sbars { max-width: 100%; }

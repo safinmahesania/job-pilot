@@ -21,6 +21,7 @@ function jobpilot() {
     srcAttnOpen: false,   // Sources page: is the "needs attention" panel expanded
     userDash: null,       // user home dashboard data
     adminDash: null,      // admin home dashboard data
+    filtersOpen: false,   // feed: is the filter panel expanded
     // What the running pipeline is doing, polled from /api/run/status.
     runProgress: null,
     // The run panel starts collapsed. The phase and a percentage are what you check
@@ -1430,6 +1431,33 @@ function jobpilot() {
       if (n == null) return '–';
       if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
       return String(n);
+    },
+
+    // ── Feed filters ────────────────────────────────────────────────────────
+    // Whether any filter is set away from its default — drives the "Clear filters"
+    // button and a dot on the Filter trigger.
+    hasActiveFilters() {
+      return this.sort !== 'score' || this.source !== 'all' ||
+             this.dateFilter !== 'all' || this.seenFilter !== 'all';
+    },
+    // How many are active, for the little count badge.
+    activeFilterCount() {
+      let n = 0;
+      if (this.sort !== 'score') n++;
+      if (this.source !== 'all') n++;
+      if (this.dateFilter !== 'all') n++;
+      if (this.seenFilter !== 'all') n++;
+      return n;
+    },
+    clearFilters() {
+      const wasSourceSet = this.source !== 'all';
+      const wasSortSet = this.sort !== 'score';
+      this.sort = 'score';
+      this.source = 'all';
+      this.dateFilter = 'all';
+      this.seenFilter = 'all';
+      // sort and source are server-side; reload only if one of them changed.
+      if (wasSourceSet || wasSortSet) this.load();
     },
 
     // ── Home dashboard ──────────────────────────────────────────────────────

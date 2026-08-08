@@ -1,4 +1,4 @@
-    """FastAPI backend for JobPilot — serves jobs, status updates, and the frontend."""
+"""FastAPI backend for JobPilot — serves jobs, status updates, and the frontend."""
 from pathlib import Path
 import os
 import secrets

@@ -11,6 +11,7 @@ function jobpilot() {
     opsRunsAll: false,       // Operations: show all runs vs latest 5
     opsErrAll: false,        // Operations: show all errors vs latest 5
     opsErrExpanded: null,    // Operations: which error id is expanded (full detail)
+    sparkHover: null,        // Operations: which sparkline bar is hovered (index)
     // Job ids ticked for a selective score. Cleared on tab change: acting on
     // jobs that scrolled out of view is never what was meant.
     pickedJobs: [],
@@ -419,16 +420,76 @@ function jobpilot() {
     // "2026-08-08 14:12:03". Turn it into a friendly "Fri, Aug 8 · 2:12 PM" (local time).
     fmtRunTime(s) {
       if (!s) return '';
-      // Treat the stored value as UTC; append Z so the browser converts to local.
-      const iso = s.includes('T') ? s : s.replace(' ', 'T');
-      const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
-      if (isNaN(d)) return s;
+      const d = this._parseAt(s);
+      if (!d || isNaN(d)) return s;
       const day = d.toLocaleDateString(undefined, { weekday: 'short' });
       const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
       return `${day}, ${date} · ${time}`;
     },
-    // Latest 5 runs, or all when expanded.
+    // Parse a stored UTC datetime string into a local Date.
+    _parseAt(s) {
+      if (!s) return null;
+      const iso = s.includes('T') ? s : s.replace(' ', 'T');
+      return new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+    },
+    // The left-hand date block: { day:'Sat', dnum:'8', mon:'Aug', time:'2:12 PM' }.
+    dateParts(s) {
+      const d = this._parseAt(s);
+      if (!d || isNaN(d)) return { day: '', dnum: '', mon: '', time: s || '' };
+      return {
+        day: d.toLocaleDateString(undefined, { weekday: 'short' }),
+        dnum: d.getDate(),
+        mon: d.toLocaleDateString(undefined, { month: 'short' }),
+        time: d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
+      };
+    },
+    // "2 hours ago" / "yesterday" / "3 days ago".
+    relTime(s) {
+      const d = this._parseAt(s);
+      if (!d || isNaN(d)) return '';
+      const secs = Math.floor((Date.now() - d.getTime()) / 1000);
+      if (secs < 60) return 'just now';
+      const mins = Math.floor(secs / 60);
+      if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
+      const days = Math.floor(hrs / 24);
+      if (days === 1) return 'yesterday';
+      if (days < 7) return `${days} days ago`;
+      const wks = Math.floor(days / 7);
+      return `${wks} week${wks === 1 ? '' : 's'} ago`;
+    },
+    // A run's "mood" from how much it kept and whether anything broke.
+    runMood(r) {
+      if (r.errors > 0) return { label: 'Rough run', icon: 'ti-alert-triangle', tone: 'rough' };
+      const k = r.kept || 0;
+      if (k === 0) return { label: 'Nothing new', icon: 'ti-moon', tone: 'quiet' };
+      if (k >= 15) return { label: 'Good haul', icon: 'ti-flame', tone: 'good' };
+      if (k >= 6) return { label: 'Solid', icon: 'ti-check', tone: 'good' };
+      return { label: 'Quiet run', icon: 'ti-moon', tone: 'quiet' };
+    },
+    // Turn a raw error into a plain-language title, sub-line and typed icon.
+    errorView(e) {
+      const kind = (e.kind || '').toLowerCase();
+      const where = e.where ? (e.where.charAt(0).toUpperCase() + e.where.slice(1)) : 'A source';
+      // Silent-empty is the important one: a 200 that returned nothing.
+      if (kind.includes('empty') || /0 results|no results|returned nothing/i.test(e.message || '')) {
+        return { title: `${where} came back empty`, sub: 'Reported success but returned no jobs — likely a silent block.', icon: 'ti-plug-connected-x', tone: 'red' };
+      }
+      if (kind.includes('timeout') || /timed out|timeout/i.test(e.message || '')) {
+        return { title: `${where} timed out`, sub: e.message || 'No response in time.', icon: 'ti-clock-exclamation', tone: 'amber' };
+      }
+      if (kind.includes('parse') || /parse|selector|not found|format/i.test(e.message || '')) {
+        return { title: `Couldn't read a ${where} listing`, sub: 'Page format may have changed — the parser needs a look.', icon: 'ti-file-alert', tone: 'blue' };
+      }
+      if (kind.includes('fetch') || kind.includes('http') || /\b(4\d\d|5\d\d)\b/.test(e.message || '')) {
+        return { title: `${where} wouldn't respond`, sub: e.message || 'The request failed.', icon: 'ti-plug-connected-x', tone: 'red' };
+      }
+      // Fallback: use the raw kind but keep it readable.
+      return { title: `${where}: ${e.kind || 'error'}`, sub: e.message || '', icon: 'ti-alert-triangle', tone: 'red' };
+    },
+    // Latest 5 runs; when expanded, all runs (the list scrolls, ~8 rows tall).
     visibleRuns() {
       return this.opsRunsAll ? this.runs : this.runs.slice(0, 5);
     },
@@ -438,6 +499,27 @@ function jobpilot() {
     toggleErr(id) {
       this.opsErrExpanded = this.opsErrExpanded === id ? null : id;
     },
+    // Sparkline data: kept per run, oldest→newest, last 12 runs. Returns objects so
+    // the tooltip can show the run's details on hover.
+    keptSpark() {
+      const last = this.runs.slice(0, 12).reverse();
+      const max = Math.max(1, ...last.map(r => r.kept || 0));
+      return last.map(r => ({
+        kept: r.kept || 0,
+        pct: Math.round(((r.kept || 0) / max) * 100),
+        at: r.at,
+        fetched: r.fetched || 0,
+        errors: r.errors || 0,
+      }));
+    },
+    // Aggregate stats for the hero band.
+    keptTotal() { return this.runs.slice(0, 12).reduce((s, r) => s + (r.kept || 0), 0); },
+    keptAvg() {
+      const last = this.runs.slice(0, 12);
+      if (!last.length) return 0;
+      return Math.round(last.reduce((s, r) => s + (r.kept || 0), 0) / last.length);
+    },
+    keptBest() { return Math.max(0, ...this.runs.slice(0, 12).map(r => r.kept || 0)); },
 
     // ───────── Sources UI helpers ─────────
     // Health verdict → { label, tone } for the badge and letter-tile colour. An inactive

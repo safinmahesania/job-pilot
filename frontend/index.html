@@ -1320,30 +1320,89 @@
       <!-- ═══ TAB: Operations ═══ -->
       <div x-show="adminSubtab==='operations'">
 
-      <!-- Activity summary -->
-      <div class="op-stats">
-        <div class="op-stat bl"><div class="v" x-text="runs.length"></div><div class="k">Runs logged</div></div>
-        <div class="op-stat gd"><div class="v" x-text="runs.reduce((s,r)=>s+(r.kept||0),0)"></div><div class="k">Kept</div></div>
-        <div class="op-stat"><div class="v" x-text="fmtNum(runs.reduce((s,r)=>s+(r.fetched||0),0))"></div><div class="k">Fetched</div></div>
-        <div class="op-stat rd"><div class="v" x-text="errors.length"></div><div class="k">Errors</div></div>
+      <!-- Kept-per-run sparkline hero -->
+      <div class="op-hero" x-show="runs.length" x-cloak>
+        <div class="top">
+          <div>
+            <div class="lbl">Kept · last <span x-text="Math.min(runs.length,12)"></span> runs</div>
+            <div class="big" x-text="keptTotal()"></div>
+          </div>
+          <i class="ti ti-trending-up" style="color:#E7C77E; font-size:22px"></i>
+        </div>
+        <div class="op-spark">
+          <template x-for="(b, idx) in keptSpark()" :key="idx">
+            <div class="op-sbar" :class="[b.errors>0 && 'hi', sparkHover===idx && 'on']"
+                 :style="`height:${Math.max(b.pct,6)}%`"
+                 @mouseenter="sparkHover=idx" @mouseleave="sparkHover=null">
+              <div class="op-tip" x-show="sparkHover===idx" x-cloak>
+                <div class="tk"><span x-text="b.kept"></span> <span>kept</span></div>
+                <div class="tw" x-text="fmtRunTime(b.at)"></div>
+                <div class="tm"><span x-text="b.fetched"></span> fetched<span x-show="b.errors>0"> · <span class="er"><span x-text="b.errors"></span> err</span></span></div>
+              </div>
+            </div>
+          </template>
+        </div>
+        <div class="legend">
+          <span>Avg <b x-text="keptAvg()"></b>/run</span>
+          <span>Best <b x-text="keptBest()"></b></span>
+          <span><span x-text="runs.length"></span> runs logged</span>
+        </div>
       </div>
 
-      <!-- Run history: latest 5, expandable to a scrollable full list -->
-      <div class="op-h"><i class="ti ti-history"></i> Run history</div>
+      <!-- Errors as "needs attention" alert cards -->
+      <div class="op-h" style="justify-content:space-between">
+        <span style="display:flex; align-items:center; gap:7px"><i class="ti ti-alert-triangle"></i> Needs attention</span>
+        <button x-show="errors.length" @click="clearErrors()" class="text-xs h-7 px-3 rounded-md border border-gray-200 hover:bg-gray-50 font-medium normal-case tracking-normal">Clear</button>
+      </div>
+      <template x-for="e in visibleErrors()" :key="e.id">
+        <div class="op-alert" :class="[errorView(e).tone, opsErrExpanded===e.id && 'open']">
+          <div class="op-alert-t" @click="toggleErr(e.id)">
+            <i class="ti" :class="errorView(e).icon"></i>
+            <span x-text="errorView(e).title"></span>
+            <span x-show="e.notified" class="text-[9.5px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-semibold" title="sent to Telegram">notified</span>
+            <i class="ti ti-plus plus"></i>
+          </div>
+          <div class="op-alert-s" x-text="errorView(e).sub + ' · ' + relTime(e.at)"></div>
+          <div class="op-alert-detail" x-show="opsErrExpanded===e.id" x-cloak>
+            <div class="drow"><span class="dk">When</span><span class="dv" x-text="fmtRunTime(e.at)"></span></div>
+            <div class="drow" x-show="e.where"><span class="dk">Source</span><span class="dv" x-text="e.where"></span></div>
+            <div class="drow"><span class="dk">Type</span><span class="dv" x-text="e.kind"></span></div>
+            <div class="drow" x-show="e.notified"><span class="dk">Sent to</span><span class="dv">Telegram ✓</span></div>
+            <pre x-show="e.traceback" x-text="e.traceback"></pre>
+            <div x-show="!e.traceback" class="text-xs text-gray-400 italic mt-2">No traceback — the source reported this without raising.</div>
+          </div>
+        </div>
+      </template>
+      <button class="op-more" style="border:1px solid var(--line); border-radius:11px; max-width:42rem" x-show="errors.length>5" @click="opsErrAll=!opsErrAll">
+        <span x-text="opsErrAll ? 'Show latest 5' : 'Show all ' + errors.length + ' errors'"></span>
+        <i class="ti" :class="opsErrAll ? 'ti-chevron-up' : 'ti-chevron-down'"></i>
+      </button>
+      <div x-show="errors.length===0" class="op-allgood"><i class="ti ti-circle-check"></i> Nothing has gone wrong. Good.</div>
+
+      <!-- Recent runs — prominent date block -->
+      <div class="op-h"><i class="ti ti-history"></i> Recent runs</div>
       <div class="card overflow-hidden" style="max-width:42rem">
-        <div class="op-tl" :style="opsRunsAll && 'max-height:22rem; overflow-y:auto'">
-          <div class="spine"></div>
+        <div :class="opsRunsAll && 'op-scroll'">
           <template x-for="r in visibleRuns()" :key="r.id">
-            <div class="op-run" :class="r.errors>0 && 'err'">
-              <div class="top">
-                <span class="when" x-text="fmtRunTime(r.at)"></span>
-                <span class="kept"><span x-text="r.kept"></span> kept</span>
+            <div class="op-run" :class="runMood(r).tone">
+              <div class="op-date">
+                <div class="day" x-text="dateParts(r.at).day"></div>
+                <div class="dnum" x-text="dateParts(r.at).dnum"></div>
+                <div class="mon" x-text="dateParts(r.at).mon"></div>
+                <div class="time" x-text="dateParts(r.at).time"></div>
               </div>
-              <div class="meta">
-                <span x-text="r.fetched"></span> fetched ·
-                <span x-text="r.seen"></span> seen ·
-                <span x-text="r.dropped"></span> dropped
-                <span class="text-red-500" x-show="r.errors>0"> · <span x-text="r.errors"></span> err</span>
+              <div class="op-mid">
+                <div class="op-kept"><div class="n" x-text="r.kept"></div><div class="l">kept</div></div>
+                <div class="op-info">
+                  <span class="op-tag" :class="runMood(r).tone"><i class="ti" :class="runMood(r).icon"></i> <span x-text="runMood(r).label"></span></span>
+                  <div class="op-flow">
+                    <span class="a" x-text="r.fetched"></span> fetched
+                    <i class="ti ti-arrow-narrow-right"></i> <span x-text="r.seen"></span> seen
+                    <i class="ti ti-arrow-narrow-right"></i> <span class="a" style="color:var(--green)"><span x-text="r.kept"></span> kept</span>
+                    <template x-if="r.errors>0"><span style="color:var(--red)"> · <span x-text="r.errors"></span> failed</span></template>
+                  </div>
+                  <div class="op-ago" x-text="relTime(r.at)"></div>
+                </div>
               </div>
             </div>
           </template>
@@ -1352,45 +1411,6 @@
         <button class="op-more" x-show="runs.length>5" @click="opsRunsAll=!opsRunsAll">
           <span x-text="opsRunsAll ? 'Show latest 5' : 'Show all ' + runs.length + ' runs'"></span>
           <i class="ti" :class="opsRunsAll ? 'ti-chevron-up' : 'ti-chevron-down'"></i>
-        </button>
-      </div>
-
-      <!-- Errors: latest 5, each expandable to full detail; expandable to scrollable full list -->
-      <div class="op-h" style="justify-content:space-between">
-        <span style="display:flex; align-items:center; gap:7px"><i class="ti ti-alert-triangle"></i> Errors</span>
-        <button x-show="errors.length" @click="clearErrors()" class="text-xs h-7 px-3 rounded-md border border-gray-200 hover:bg-gray-50 font-medium normal-case tracking-normal">Clear</button>
-      </div>
-      <div class="card overflow-hidden" style="max-width:42rem">
-        <div :style="opsErrAll && 'max-height:26rem; overflow-y:auto'">
-          <template x-for="e in visibleErrors()" :key="e.id">
-            <div class="op-err" :class="opsErrExpanded===e.id && 'open'">
-              <div class="op-err-head" @click="toggleErr(e.id)">
-                <span class="edot"></span>
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="ek" x-text="e.kind"></span>
-                    <span class="ewhere" x-text="e.where"></span>
-                    <span x-show="e.notified" class="text-[9.5px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-semibold" title="sent to Telegram">notified</span>
-                  </div>
-                  <div class="em" x-text="e.message"></div>
-                </div>
-                <i class="ti ti-plus eplus"></i>
-              </div>
-              <div class="op-err-detail" x-show="opsErrExpanded===e.id" x-cloak>
-                <div class="op-err-meta">
-                  <span x-text="e.at"></span>
-                  <span x-show="e.where">source: <span x-text="e.where"></span></span>
-                </div>
-                <pre x-show="e.traceback" x-text="e.traceback"></pre>
-                <div x-show="!e.traceback" class="text-xs text-gray-400 italic">No traceback — the source reported this message without raising.</div>
-              </div>
-            </div>
-          </template>
-          <div x-show="errors.length===0" class="px-4 py-8 text-center text-gray-400 text-sm">Nothing has gone wrong. Good.</div>
-        </div>
-        <button class="op-more" x-show="errors.length>5" @click="opsErrAll=!opsErrAll">
-          <span x-text="opsErrAll ? 'Show latest 5' : 'Show all ' + errors.length + ' errors'"></span>
-          <i class="ti" :class="opsErrAll ? 'ti-chevron-up' : 'ti-chevron-down'"></i>
         </button>
       </div>
 

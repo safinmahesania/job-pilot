@@ -150,6 +150,184 @@
   <!-- ══ Main ══ -->
   <main class="flex-1 min-w-0 px-4 py-4 pb-24 md:px-6 md:py-6 md:pb-6">
 
+    <!-- ═══════════════════ HOME — USER DASHBOARD ═══════════════════ -->
+    <div x-show="tab==='home' && !adminMode" x-cloak>
+      <template x-if="userDash">
+        <div>
+          <!-- Greeting hero -->
+          <div class="uh-hero">
+            <div class="uh-hi"><span x-text="greeting()"></span>, ready to hunt? 👋</div>
+            <div class="uh-sub"><b x-text="userDash.new_today"></b> new job<span x-show="userDash.new_today!==1">s</span> surfaced today · <b x-text="userDash.top_matches.length"></b> strong match<span x-show="userDash.top_matches.length!==1">es</span> waiting</div>
+            <div class="uh-chips">
+              <div class="uh-chip"><div class="v" x-text="userDash.new_today"></div><div class="k">New today</div></div>
+              <div class="uh-chip"><div class="v" x-text="userDash.saved"></div><div class="k">Saved</div></div>
+              <div class="uh-chip"><div class="v" x-text="userDash.followups_total"></div><div class="k">Follow up</div></div>
+              <div class="uh-chip"><div class="v" x-text="userDash.avg_score"></div><div class="k">Avg score</div></div>
+            </div>
+          </div>
+
+          <!-- Top matches -->
+          <div class="uh-sec"><span>Top matches today</span><a @click="go('feed')">View all feed →</a></div>
+          <template x-for="j in userDash.top_matches" :key="j.id">
+            <div class="uh-pick" @click="go('feed')">
+              <div class="uh-score" :class="j.score>=80 ? 'hi' : 'mid'" x-text="j.score"></div>
+              <div class="uh-pick-body">
+                <div class="uh-pick-t" x-text="j.title"></div>
+                <div class="uh-pick-m"><span x-text="j.company"></span><span x-show="j.location"> · <span x-text="j.location"></span></span></div>
+              </div>
+              <i class="ti ti-chevron-right text-gray-300"></i>
+            </div>
+          </template>
+          <div x-show="userDash.top_matches.length===0" class="uh-empty">No matches in your feed yet — fetch some jobs to get started.</div>
+
+          <!-- Progress -->
+          <div class="uh-sec"><span>Your progress</span></div>
+          <div class="uh-two">
+            <div class="uh-panel" style="text-align:center">
+              <div class="uh-ring" :style="`background:conic-gradient(var(--brand) 0% ${userDash.reviewed_pct}%, var(--line-2) ${userDash.reviewed_pct}% 100%)`">
+                <div class="n" x-text="userDash.reviewed_pct + '%'"></div>
+              </div>
+              <div style="font-size:11.5px; color:var(--ink-3)">of this week's <b x-text="userDash.surfaced_wk"></b> surfaced jobs reviewed</div>
+            </div>
+            <div class="uh-panel">
+              <div class="uh-panel-h"><i class="ti ti-filter"></i> Pipeline</div>
+              <div class="uh-frow"><div class="fl">Surfaced</div><div class="fb" :style="`width:${funnelPct(userDash.funnel.surfaced)}%; background:var(--brand)`" x-text="userDash.funnel.surfaced"></div></div>
+              <div class="uh-frow"><div class="fl">Saved</div><div class="fb" :style="`width:${funnelPct(userDash.funnel.saved)}%; background:var(--green)`" x-text="userDash.funnel.saved"></div></div>
+              <div class="uh-frow"><div class="fl">Applied</div><div class="fb" :style="`width:${funnelPct(userDash.funnel.applied)}%; background:var(--blue)`" x-text="userDash.funnel.applied"></div></div>
+              <div class="uh-frow"><div class="fl">Interview</div><div class="fb" :style="`width:${funnelPct(userDash.funnel.interview)}%; background:var(--amber)`" x-text="userDash.funnel.interview"></div></div>
+            </div>
+          </div>
+
+          <!-- Follow-ups -->
+          <template x-if="userDash.followups.length">
+            <div>
+              <div class="uh-sec"><span>Needs follow-up</span><a @click="go('applied')">See all →</a></div>
+              <template x-for="f in userDash.followups" :key="f.id || f.title">
+                <div class="uh-fu">
+                  <i class="ti ti-clock"></i>
+                  <div class="min-w-0"><div class="t" x-text="f.title + (f.company ? ' · ' + f.company : '')"></div><div class="m" x-text="f.reason || 'Applied — check for a reply'"></div></div>
+                  <span class="due" x-text="f.days_since_applied ? f.days_since_applied + 'd' : 'Nudge'"></span>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <!-- Recent activity -->
+          <template x-if="userDash.activity.length">
+            <div>
+              <div class="uh-sec"><span>Recent activity</span></div>
+              <div class="uh-panel">
+                <template x-for="(a, i) in userDash.activity" :key="i">
+                  <div class="uh-act">
+                    <div class="uh-act-ic" :class="activityView(a).tone"><i class="ti" :class="activityView(a).icon"></i></div>
+                    <span><span x-text="activityView(a).verb"></span> <b x-text="a.title"></b><span x-show="a.company"> at <span x-text="a.company"></span></span></span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+      <div x-show="!userDash" class="uh-loading"><i class="ti ti-loader-2 animate-spin"></i> Loading your dashboard…</div>
+    </div>
+
+    <!-- ═══════════════════ HOME — ADMIN COCKPIT ═══════════════════ -->
+    <div x-show="tab==='home' && adminMode" x-cloak>
+      <template x-if="adminDash">
+        <div>
+          <!-- Status + pulse hero -->
+          <div class="ac-hero">
+            <div class="ac-top">
+              <span class="ac-status" :class="adminDash.broken.length ? 'warn' : ''">
+                <span class="ac-live" :class="adminDash.broken.length ? 'warn' : ''"></span>
+                <span x-text="adminDash.broken.length ? 'Needs attention' : 'System running'"></span>
+              </span>
+              <div class="ac-time" x-show="adminDash.last_fetch">Last fetch <span x-text="relTime(adminDash.last_fetch)"></span></div>
+            </div>
+            <div class="ac-title" x-text="adminDash.broken.length ? (adminDash.broken.length + ' source' + (adminDash.broken.length!==1?'s':'') + ' need a look') : 'Everything\'s humming along'"></div>
+            <div class="ac-sub"><b x-text="adminDash.new_today"></b> new today · <b x-text="adminDash.provider_count"></b> AI provider<span x-show="adminDash.provider_count!==1">s</span> online</div>
+            <div class="ac-pulse">
+              <div class="ac-pt"><div class="v" x-text="adminDash.feed"></div><div class="k">In feed</div></div>
+              <div class="ac-pt"><div class="v" x-text="adminDash.new_today"></div><div class="k">New today</div></div>
+              <div class="ac-pt"><div class="v" x-text="fmtCount(adminDash.total)"></div><div class="k">Total jobs</div></div>
+              <div class="ac-pt"><div class="v" x-text="adminDash.avg_score"></div><div class="k">Avg score</div></div>
+            </div>
+          </div>
+
+          <!-- Attention ribbon -->
+          <template x-if="adminDash.broken.length">
+            <div class="ac-ribbon">
+              <i class="ti ti-alert-triangle"></i>
+              <div class="min-w-0"><div class="t" x-text="adminDash.broken.length + ' source' + (adminDash.broken.length!==1?'s':'') + ' need attention'"></div><div class="s" x-text="adminDash.broken.map(b=>b.name).join(' · ')"></div></div>
+              <a @click="go('sourcesTab')">Review →</a>
+            </div>
+          </template>
+
+          <!-- Quick actions -->
+          <div class="uh-sec"><span>Quick actions</span></div>
+          <div class="ac-actions">
+            <div class="ac-act" @click="go('sourcesTab')"><i class="ti ti-download"></i><div class="l">Fetch</div></div>
+            <div class="ac-act" @click="go('feed')"><i class="ti ti-star"></i><div class="l">Feed</div></div>
+            <div class="ac-act" @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})"><i class="ti ti-reload"></i><div class="l">Reload</div></div>
+            <div class="ac-act" @click="go('admin')"><i class="ti ti-settings"></i><div class="l">Admin</div></div>
+          </div>
+
+          <!-- Live status: latest run + quota -->
+          <div class="uh-sec"><span>Live status</span></div>
+          <div class="uh-two">
+            <div class="uh-panel">
+              <div class="uh-panel-h"><i class="ti ti-history"></i> Latest run</div>
+              <template x-if="adminDash.latest_run">
+                <div>
+                  <div class="ac-mini"><span>Fetched</span><b x-text="adminDash.latest_run.fetched"></b></div>
+                  <div class="ac-mini"><span>Kept</span><b x-text="adminDash.latest_run.kept"></b></div>
+                  <div class="ac-mini"><span>Errors</span><b :style="adminDash.latest_run.errors>0 && 'color:var(--red)'" x-text="adminDash.latest_run.errors"></b></div>
+                  <div class="ac-mini"><span>When</span><b x-text="relTime(adminDash.latest_run.at)"></b></div>
+                </div>
+              </template>
+              <div x-show="!adminDash.latest_run" class="text-xs text-gray-400 py-2">No runs yet.</div>
+            </div>
+            <div class="uh-panel">
+              <div class="uh-panel-h"><i class="ti ti-brain"></i> AI quota</div>
+              <template x-for="p in adminDash.providers.slice(0,3)" :key="p.name">
+                <div class="ac-mini"><span x-text="p.label"></span><b :style="!p.configured && !p.enabled && 'color:var(--ink-3)'" x-text="p.daily_tokens ? (fmtCount(p.tokens_used)+' / '+fmtCount(p.daily_tokens)) : (p.configured ? 'local' : 'off')"></b></div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Sources -->
+          <div class="uh-sec"><span>Sources</span><a @click="go('sourcesTab')">Manage →</a></div>
+          <div class="uh-panel">
+            <template x-for="b in adminDash.boards.slice(0,6)" :key="b.name">
+              <div class="ac-mini">
+                <span><span class="ac-dot" :class="['silent','erroring','never_worked'].includes(b.verdict) ? 'r' : (b.verdict==='wobbling' ? 'a' : 'g')"></span> <span x-text="b.name"></span></span>
+                <b :style="['silent','erroring','never_worked'].includes(b.verdict) && 'color:var(--red)'" x-text="['silent','erroring','never_worked'].includes(b.verdict) ? (b.verdict==='silent'?'returns nothing':(b.verdict==='erroring'?'erroring':'never worked')) : (b.kept + ' kept')"></b>
+              </div>
+            </template>
+            <div x-show="adminDash.boards.length===0" class="text-xs text-gray-400 py-2">No source health data yet.</div>
+          </div>
+
+          <!-- Kept trend (light Q graph) -->
+          <div class="uh-sec"><span>Kept trend</span></div>
+          <div class="ac-graph" x-show="adminDash.kept_spark.length">
+            <div class="ac-g-h">
+              <div><div class="ac-g-lbl">Kept per run · last <span x-text="adminDash.kept_spark.length"></span></div><div class="ac-g-big" x-text="adminDash.kept_total"></div></div>
+              <div class="ac-g-leg"><span>Avg <b x-text="adminDash.kept_avg"></b></span><span>Best <b x-text="adminDash.kept_best"></b></span></div>
+            </div>
+            <div class="ac-g-bars">
+              <template x-for="(s, i) in adminDash.kept_spark" :key="i">
+                <div class="ac-g-bar" :class="s.errors>0 && 'hi'" :style="`height:${sparkPct(s.kept)}%`">
+                  <div class="ac-g-tip"><span x-text="s.kept"></span> kept · <span x-text="fmtRunTime(s.at)"></span></div>
+                </div>
+              </template>
+            </div>
+          </div>
+          <div x-show="adminDash.kept_spark.length===0" class="uh-empty">No runs logged yet.</div>
+        </div>
+      </template>
+      <div x-show="!adminDash" class="uh-loading"><i class="ti ti-loader-2 animate-spin"></i> Loading cockpit…</div>
+    </div>
+
     <!-- ─── Job views ─── -->
     <div x-show="isJobView()">
       <div class="hidden md:flex items-baseline justify-between mb-4">

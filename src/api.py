@@ -1,4 +1,4 @@
-"""FastAPI backend for JobPilot — serves jobs, status updates, and the frontend."""
+    """FastAPI backend for JobPilot — serves jobs, status updates, and the frontend."""
 from pathlib import Path
 import os
 import secrets
@@ -231,6 +231,7 @@ from src.routes import jobs as jobs_routes
 from src.routes import generation as generation_routes
 from src.routes import imports as imports_routes
 from src.routes import insights as insights_routes
+from src.routes import dashboard as dashboard_routes
 app.include_router(profile_routes.router)
 app.include_router(sources_routes.router)
 app.include_router(settings_routes.router)
@@ -240,6 +241,7 @@ app.include_router(jobs_routes.router)
 app.include_router(generation_routes.router)
 app.include_router(imports_routes.router)
 app.include_router(insights_routes.router)
+app.include_router(dashboard_routes.router)
 
 
 # ── Client-side routes ──────────────────────────────────────────────────────
@@ -249,7 +251,7 @@ app.include_router(insights_routes.router)
 # Registered before the "/" mount below so they take priority over static serving.
 _FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 _SPA_PATHS = [
-    "unscored", "saved", "applied", "dismissed", "profile",
+    "feed", "unscored", "saved", "applied", "dismissed", "profile",
     "sources", "stats", "import", "settings", "admin",
 ]
 

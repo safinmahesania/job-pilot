@@ -19,6 +19,8 @@ function jobpilot() {
     selectMode: false,    // when on, clicking a card selects it for bulk rescore
     rescoringId: null,    // id of the job currently being re-scored via its card button
     srcAttnOpen: false,   // Sources page: is the "needs attention" panel expanded
+    userDash: null,       // user home dashboard data
+    adminDash: null,      // admin home dashboard data
     // What the running pipeline is doing, polled from /api/run/status.
     runProgress: null,
     // The run panel starts collapsed. The phase and a percentage are what you check
@@ -87,6 +89,7 @@ function jobpilot() {
     statuses: ['surfaced','saved','applied','interview','offer','rejected','dismissed'],
     // Everyday: the pages you use to actually job-hunt — always visible.
     everydayNav: [
+      { k:'home', label:'Home', icon:'ti-home' },
       { k:'feed', label:'Feed', icon:'ti-inbox' },
       { k:'unscored', label:'Unscored', icon:'ti-help-circle' },
       { k:'saved', label:'Saved', icon:'ti-bookmark' },
@@ -110,15 +113,15 @@ function jobpilot() {
     // Map internal tab keys to clean URL paths. Feed is the home page ("/"). Two keys
     // carry a "Tab" suffix internally but get clean slugs in the URL.
     tabToPath: {
-      feed: '/', unscored: '/unscored', saved: '/saved', applied: '/applied',
+      home: '/', feed: '/feed', unscored: '/unscored', saved: '/saved', applied: '/applied',
       dismissed: '/dismissed', profile: '/profile', sourcesTab: '/sources',
       stats: '/stats', importTab: '/import', settings: '/settings', admin: '/admin',
     },
-    // Resolve the current URL path back to a tab key (defaults to feed).
+    // Resolve the current URL path back to a tab key (defaults to home).
     tabFromPath() {
       const path = window.location.pathname.replace(/\/+$/, '') || '/';
       const entry = Object.entries(this.tabToPath).find(([, p]) => p === path);
-      return entry ? entry[0] : 'feed';
+      return entry ? entry[0] : 'home';
     },
     tabLabel() {
       const all = [...this.everydayNav, ...this.manageNav].find(n => n.k === this.tab);
@@ -191,7 +194,8 @@ function jobpilot() {
     // (direct URL / reload / back-forward), so every entry path populates the page.
     async loadTabData() {
       const t = this.tab;
-      if (t === 'sourcesTab') await this.loadSources();
+      if (t === 'home') await this.loadHome();
+      else if (t === 'sourcesTab') await this.loadSources();
       else if (t === 'profile') await this.loadProfile();
       else if (t === 'settings') { await this.loadPrivacy(); await this.loadFeedback(); }
       else if (t === 'admin') {
@@ -1426,6 +1430,52 @@ function jobpilot() {
       if (n == null) return '–';
       if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
       return String(n);
+    },
+
+    // ── Home dashboard ──────────────────────────────────────────────────────
+    // The home page shows the user dashboard, or the admin cockpit when admin mode is
+    // on. Both come from one endpoint each.
+    async loadHome() {
+      if (this.adminMode) {
+        try {
+          const r = await fetch('/api/dashboard/admin');
+          if (r.ok) this.adminDash = await r.json();
+        } catch (e) { /* leave null; the page shows a gentle empty state */ }
+      } else {
+        try {
+          const r = await fetch('/api/dashboard/user');
+          if (r.ok) this.userDash = await r.json();
+        } catch (e) { /* leave null */ }
+      }
+    },
+    // Greeting that follows the clock.
+    greeting() {
+      const h = new Date().getHours();
+      if (h < 12) return 'Good morning';
+      if (h < 17) return 'Good afternoon';
+      return 'Good evening';
+    },
+    // Funnel bar width as a % of the widest stage (surfaced), for the pipeline.
+    funnelPct(v) {
+      const f = this.userDash && this.userDash.funnel;
+      if (!f) return 0;
+      const max = Math.max(1, f.surfaced || 0);
+      return Math.max(3, Math.round((v / max) * 100));
+    },
+    // Sparkline bar height as a % of the best run, for the admin kept graph.
+    sparkPct(kept) {
+      const best = (this.adminDash && this.adminDash.kept_best) || 1;
+      return Math.max(6, Math.round((kept / Math.max(1, best)) * 100));
+    },
+    // Plain-language label + tone for an activity item's status.
+    activityView(a) {
+      const map = {
+        saved: { verb: 'Saved', icon: 'ti-bookmark', tone: 'green' },
+        applied: { verb: 'Applied to', icon: 'ti-send', tone: 'blue' },
+        interview: { verb: 'Interview for', icon: 'ti-calendar', tone: 'amber' },
+        offer: { verb: 'Offer for', icon: 'ti-trophy', tone: 'green' },
+      };
+      return map[a.status] || { verb: 'Updated', icon: 'ti-dots', tone: 'grey' };
     },
 
     // Re-score a single job on demand. The user taps the refresh on a card when they've

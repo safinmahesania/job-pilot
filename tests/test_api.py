@@ -79,7 +79,7 @@ class TestReads:
         "/api/runs", "/api/schedule", "/api/model", "/api/notify",
         "/api/llm/providers", "/api/ai-features", "/api/privacy",
         "/api/feedback", "/api/followups", "/api/import/template",
-        "/api/maint/preview",
+        "/api/maint/preview", "/api/dashboard/user", "/api/dashboard/admin",
     ])
     def test_it_answers(self, client, path):
         assert client.get(path).status_code == 200

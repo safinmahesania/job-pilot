@@ -1,8 +1,8 @@
 function jobpilot() {
   return {
-    // Remember the last page across refreshes, so a reload doesn't yank you back to
-    // Feed. Falls back to feed on first visit.
-    tab: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_tab')) || 'feed', jobs: [], counts: {}, health: [], runs: [], errors: [], stats: null, loading: true, q: '', detail: null, sent: null, sentOpen: null,
+    // The active page is derived from the URL so reloads, direct links, and back/forward
+    // all work. Set properly in init() once tabToPath is available; feed is the default.
+    tab: 'feed', jobs: [], counts: {}, health: [], runs: [], errors: [], stats: null, loading: true, q: '', detail: null, sent: null, sentOpen: null,
     // Admin mode reveals the Manage pages (Sources, Stats, Import, Settings, Admin).
     // Off by default so the everyday view stays clean; remembered across reloads.
     adminMode: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_admin_mode') === '1'),
@@ -91,6 +91,21 @@ function jobpilot() {
     ],
 
     isJobView() { return ['feed','unscored','saved','applied','dismissed'].includes(this.tab); },
+
+    // ───────── URL routing ─────────
+    // Map internal tab keys to clean URL paths. Feed is the home page ("/"). Two keys
+    // carry a "Tab" suffix internally but get clean slugs in the URL.
+    tabToPath: {
+      feed: '/', unscored: '/unscored', saved: '/saved', applied: '/applied',
+      dismissed: '/dismissed', profile: '/profile', sourcesTab: '/sources',
+      stats: '/stats', importTab: '/import', settings: '/settings', admin: '/admin',
+    },
+    // Resolve the current URL path back to a tab key (defaults to feed).
+    tabFromPath() {
+      const path = window.location.pathname.replace(/\/+$/, '') || '/';
+      const entry = Object.entries(this.tabToPath).find(([, p]) => p === path);
+      return entry ? entry[0] : 'feed';
+    },
     tabLabel() {
       const all = [...this.everydayNav, ...this.manageNav].find(n => n.k === this.tab);
       return all ? all.label : this.tab;
@@ -149,7 +164,9 @@ function jobpilot() {
 
     async go(tab) {
       this.tab = tab;
-      try { localStorage.setItem('jp_tab', tab); } catch (e) {}
+      // Reflect the page in the URL so it can be reloaded, linked, and bookmarked.
+      const path = this.tabToPath[tab] || '/';
+      if (window.location.pathname !== path) history.pushState({ tab }, '', path);
       this.pickedJobs = [];
       this.selectMode = false;
       this.mobileNav = false;

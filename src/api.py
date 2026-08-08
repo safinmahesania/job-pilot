@@ -5,7 +5,7 @@ import secrets
 from fastapi import FastAPI, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
 from src import scheduler
 from src.deps import (_db_dep)
 from src.logs import log
@@ -240,6 +240,31 @@ app.include_router(jobs_routes.router)
 app.include_router(generation_routes.router)
 app.include_router(imports_routes.router)
 app.include_router(insights_routes.router)
+
+
+# ── Client-side routes ──────────────────────────────────────────────────────
+# The frontend is a single-page app: these paths all serve the same index.html and
+# the app reads the URL to decide which page to show. This is what makes /profile,
+# /sources, etc. work on a direct visit or a reload (not just via in-app navigation).
+# Registered before the "/" mount below so they take priority over static serving.
+_FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+_SPA_PATHS = [
+    "unscored", "saved", "applied", "dismissed", "profile",
+    "sources", "stats", "import", "settings", "admin",
+]
+
+
+@app.get("/{page}")
+def spa_page(page: str):
+    """Serve the SPA shell for a known client-side route; 404 otherwise so real
+    missing files still error normally."""
+    if page in _SPA_PATHS:
+        return FileResponse(_FRONTEND_DIR / "index.html")
+    # Not a known page — let it fall through to static files (or 404).
+    target = _FRONTEND_DIR / page
+    if target.is_file():
+        return FileResponse(target)
+    return Response(status_code=404)
 
 
 app.mount("/", StaticFiles(

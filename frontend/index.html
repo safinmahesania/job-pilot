@@ -22,7 +22,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="text-gray-800">
-<div x-data="jobpilot()" x-init="if (!adminMode && manageNav.map(n=>n.k).includes(tab)) tab='feed'; load()" x-cloak class="md:flex md:min-h-screen md:max-w-6xl md:mx-auto">
+<div x-data="jobpilot()" x-init="tab = tabFromPath(); if (manageNav.map(n=>n.k).includes(tab)) adminMode = true; window.addEventListener('popstate', () => { tab = tabFromPath(); if (manageNav.map(n=>n.k).includes(tab)) adminMode = true; load(); }); load()" x-cloak class="md:flex md:min-h-screen md:max-w-6xl md:mx-auto">
 
   <!-- ══ Mobile top bar ══ -->
   <header class="md:hidden sticky top-0 z-40 flex items-center gap-3 px-4 h-14 bg-white border-b border-gray-200">

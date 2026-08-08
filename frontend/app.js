@@ -186,7 +186,10 @@ function jobpilot() {
       const t = this.tab;
       if (t === 'sourcesTab') await this.loadSources();
       else if (t === 'profile') await this.loadProfile();
-      else if (t === 'settings') { await this.loadLLM(); await this.loadAI(); await this.loadPrivacy(); await this.loadFeedback(); }
+      else if (t === 'settings') { await this.loadPrivacy(); await this.loadFeedback(); }
+      else if (t === 'admin') {
+        await this.loadLLM(); await this.loadAI(); await this.loadPrivacy(); await this.loadFeedback();
+      }
     },
 
     // Flip admin mode. When turning it off while on a Manage page, fall back to Feed so

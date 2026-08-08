@@ -224,3 +224,41 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .src-chip.wob { background:var(--amber-bg); color:var(--amber); }
 .src-chip.bad { background:var(--red-bg);   color:var(--red); }
 .src-chip.off { background:var(--hover);    color:var(--ink-3); }
+
+/* ============================================================================
+   Sources filters + expanded detail chips (cool-modern palette).
+   ============================================================================ */
+
+/* Search + ATS dropdown row. */
+.src-search { flex:1; position:relative; }
+.src-search i { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--ink-3); font-size:15px; }
+.src-search input { width:100%; height:38px; padding:0 12px 0 34px; border:1px solid var(--line);
+                    border-radius:10px; font-size:13px; outline:none; background:#fff; }
+.src-search input:focus { border-color:var(--brand); box-shadow:0 0 0 3px var(--brand-ring); }
+.src-atssel { height:38px; padding:0 32px 0 12px; border:1px solid var(--line); border-radius:10px;
+              font-size:12.5px; background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238A8985' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center;
+              appearance:none; cursor:pointer; font-weight:500; flex-shrink:0; min-width:130px; }
+
+/* Health filter pills. */
+.src-pill { height:30px; padding:0 12px; border-radius:20px; border:1px solid var(--line); background:#fff;
+            font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px;
+            color:var(--ink-2); }
+.src-pill:hover { background:var(--hover); }
+.src-pill.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+.src-pill .c { font-size:10px; opacity:.65; }
+.src-pill.ok.on  { background:var(--green); border-color:var(--green); }
+.src-pill.wob.on { background:var(--amber); border-color:var(--amber); }
+.src-pill.bad.on { background:var(--red);   border-color:var(--red); }
+.src-pdot { width:7px; height:7px; border-radius:50%; }
+.src-pdot.ok { background:var(--green); } .src-pdot.wob { background:var(--amber); }
+.src-pdot.bad { background:var(--red); }  .src-pdot.off { background:#ccc; }
+
+/* Expanded detail stat chips — cool-modern: indigo / cyan / rose / emerald. */
+.src-stat { border-radius:9px; padding:7px 12px; min-width:62px; }
+.src-stat .k { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; }
+.src-stat .v { font-size:14px; font-weight:700; margin-top:1px; font-variant-numeric:tabular-nums; }
+.src-stat .v.sm { font-size:12px; font-weight:600; }
+.src-stat.ats { background:#ECEBFB; } .src-stat.ats .k, .src-stat.ats .v { color:#5B4FC4; }
+.src-stat.tok { background:#E4F4F7; } .src-stat.tok .k, .src-stat.tok .v { color:#1B7A8A; }
+.src-stat.fet { background:#FDECEF; } .src-stat.fet .k, .src-stat.fet .v { color:#C43D5B; }
+.src-stat.kep { background:#E3F3EC; } .src-stat.kep .k, .src-stat.kep .v { color:#1F9D6B; }

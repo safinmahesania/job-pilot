@@ -443,13 +443,9 @@
         </button>
       </div>
 
-      <!-- Summary chips -->
-      <div class="flex flex-wrap gap-2 mb-4" x-show="sourceCfg.length">
-        <span class="src-chip ok"><i class="ti ti-circle-check"></i> <span x-text="sourceCounts().healthy"></span> healthy</span>
-        <span class="src-chip wob" x-show="sourceCounts().wobbling"><i class="ti ti-alert-triangle"></i> <span x-text="sourceCounts().wobbling"></span> wobbling</span>
-        <span class="src-chip bad" x-show="sourceCounts().broken"><i class="ti ti-circle-x"></i> <span x-text="sourceCounts().broken"></span> broken</span>
-        <span class="src-chip off"><i class="ti ti-power"></i> <span x-text="sourceCounts().off"></span> off</span>
-        <button @click="pruneHealth()" class="ml-auto text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1" title="Clear leftover errors from sources you've deleted">
+      <!-- Clean-up action (counts now live in the health pills below) -->
+      <div class="flex justify-end mb-3" x-show="sourceCfg.length">
+        <button @click="pruneHealth()" class="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1" title="Clear leftover errors from sources you've deleted">
           <i class="ti ti-eraser"></i> Clean up removed
         </button>
       </div>
@@ -489,9 +485,25 @@
         <button @click="clearSelected()" class="btn btn-ghost" style="height:32px; font-size:12px">Clear</button>
       </div>
 
+      <!-- Filter bar: search + ATS dropdown, then health pills -->
+      <div class="flex gap-2 items-center mb-3" x-show="sourceCfg.length">
+        <div class="src-search"><i class="ti ti-search"></i><input x-model="srcSearch" placeholder="Search sources..."></div>
+        <select x-model="srcAts" class="src-atssel">
+          <option value="all">All ATS</option>
+          <template x-for="a in sourceAtsList()" :key="a.ats"><option :value="a.ats" x-text="a.ats + ' (' + a.n + ')'"></option></template>
+        </select>
+      </div>
+      <div class="flex flex-wrap gap-1.5 mb-4" x-show="sourceCfg.length">
+        <span @click="srcHealth='all'" class="src-pill" :class="srcHealth==='all' && 'on'">All <span class="c" x-text="sourceCfg.length"></span></span>
+        <span @click="srcHealth='ok'" class="src-pill ok" :class="srcHealth==='ok' && 'on'"><span class="src-pdot ok"></span> Healthy <span class="c" x-text="sourceCounts().healthy"></span></span>
+        <span @click="srcHealth='wob'" class="src-pill wob" :class="srcHealth==='wob' && 'on'" x-show="sourceCounts().wobbling"><span class="src-pdot wob"></span> Wobbling <span class="c" x-text="sourceCounts().wobbling"></span></span>
+        <span @click="srcHealth='bad'" class="src-pill bad" :class="srcHealth==='bad' && 'on'" x-show="sourceCounts().broken"><span class="src-pdot bad"></span> Broken <span class="c" x-text="sourceCounts().broken"></span></span>
+        <span @click="srcHealth='off'" class="src-pill" :class="srcHealth==='off' && 'on'"><span class="src-pdot off"></span> Off <span class="c" x-text="sourceCounts().off"></span></span>
+      </div>
+
       <!-- Source cards -->
       <div>
-        <template x-for="s in sortedSourceCfg()" :key="s.index">
+        <template x-for="s in filteredSourceCfg()" :key="s.index">
           <div class="src-card" :class="{ 'open': expandedSource===s.index, 'broken': sourceHealth(s).tone==='bad', 'off': !s.active }">
             <!-- collapsed head: letter tile · name/meta · badge · toggle · chevron -->
             <div class="src-head" @click="toggleSourceExpand(s.index)">
@@ -512,13 +524,13 @@
                      class="text-[12px] text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-3 flex gap-2">
                   <i class="ti ti-alert-triangle mt-0.5 shrink-0"></i><span x-text="s.health?.detail"></span>
                 </div>
-                <!-- key facts -->
-                <div class="flex flex-wrap gap-x-6 gap-y-2 mb-3">
-                  <div><div class="lbl">ATS</div><div class="text-[13px] font-medium" x-text="s.ats"></div></div>
-                  <div x-show="s.identifier"><div class="lbl">Identifier</div><div class="text-[13px] font-medium" x-text="s.identifier"></div></div>
-                  <div x-show="s.query"><div class="lbl">Query</div><div class="text-[13px] font-medium" x-text="s.query"></div></div>
-                  <div x-show="s.health"><div class="lbl">Fetched</div><div class="text-[13px] font-medium tnum" x-text="s.health?.fetched ?? 0"></div></div>
-                  <div x-show="s.health"><div class="lbl">Kept</div><div class="text-[13px] font-medium tnum" x-text="s.health?.kept ?? 0"></div></div>
+                <!-- key facts as colored stat chips -->
+                <div class="flex flex-wrap gap-2 mb-3">
+                  <div class="src-stat ats"><div class="k">ATS</div><div class="v sm" x-text="s.ats"></div></div>
+                  <div class="src-stat tok" x-show="s.identifier"><div class="k">Token</div><div class="v sm" x-text="s.identifier"></div></div>
+                  <div class="src-stat tok" x-show="s.query"><div class="k">Query</div><div class="v sm" x-text="s.query"></div></div>
+                  <div class="src-stat fet" x-show="s.health"><div class="k">Fetched</div><div class="v" x-text="s.health?.fetched ?? 0"></div></div>
+                  <div class="src-stat kep" x-show="s.health"><div class="k">Kept</div><div class="v" x-text="s.health?.kept ?? 0"></div></div>
                 </div>
                 <!-- actions -->
                 <div class="flex flex-wrap items-center gap-2">
@@ -535,6 +547,7 @@
           </div>
         </template>
         <div x-show="sourceCfg.length===0" class="card px-4 py-8 text-center text-gray-400 text-sm">No sources configured. Use "Add source" above.</div>
+        <div x-show="sourceCfg.length>0 && filteredSourceCfg().length===0" class="card px-4 py-8 text-center text-gray-400 text-sm">No sources match these filters.</div>
       </div>
     </div>
 

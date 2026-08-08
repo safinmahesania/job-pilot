@@ -63,6 +63,9 @@ function jobpilot() {
     sourceCfg: [], newSource: { name: '', ats: 'greenhouse', identifier: '', query: '', active: true },
     expandedSource: null,   // which source card is expanded (by index)
     addFormOpen: false,     // "Add source" form visibility
+    srcSearch: '',          // source name/identifier search
+    srcAts: 'all',          // ATS filter ('all' or a specific ats)
+    srcHealth: 'all',       // health filter ('all'|'ok'|'wob'|'bad'|'off')
     atsTypes: ['greenhouse','lever','ashby','workday','oracle','phenom',
                'themuse','smartrecruiters','workable','jsearch','adzuna','remotive','remoteok',
                'weworkremotely','jobspresso','custom','aggregator','successfactors'],
@@ -418,7 +421,7 @@ function jobpilot() {
     sourceInitial(s) { return (s.name || '?').trim().charAt(0).toUpperCase(); },
     // Expand/collapse a source card (one open at a time).
     toggleSourceExpand(idx) { this.expandedSource = this.expandedSource === idx ? null : idx; },
-    // Aggregate counts for the summary chips.
+    // Aggregate counts for the summary/health-filter chips.
     sourceCounts() {
       const c = { healthy: 0, wobbling: 0, broken: 0, off: 0 };
       for (const s of this.sourceCfg) {
@@ -429,6 +432,26 @@ function jobpilot() {
         else if (t === 'bad') c.broken++;
       }
       return c;
+    },
+    // Unique ATS types present, each with how many sources use it, for the dropdown.
+    sourceAtsList() {
+      const m = {};
+      for (const s of this.sourceCfg) { const a = s.ats || '?'; m[a] = (m[a] || 0) + 1; }
+      return Object.entries(m).map(([ats, n]) => ({ ats, n })).sort((a, b) => b.n - a.n);
+    },
+    // Sources after search + ATS + health filters, then the usual active-first sort.
+    filteredSourceCfg() {
+      const q = this.srcSearch.trim().toLowerCase();
+      return this.sortedSourceCfg().filter(s => {
+        if (q && !(`${s.name} ${s.identifier || ''} ${s.ats || ''}`.toLowerCase().includes(q))) return false;
+        if (this.srcAts !== 'all' && s.ats !== this.srcAts) return false;
+        if (this.srcHealth !== 'all') {
+          const h = this.sourceHealth(s);
+          if (this.srcHealth === 'off' && s.active) return false;
+          if (this.srcHealth !== 'off' && (!s.active || h.tone !== this.srcHealth)) return false;
+        }
+        return true;
+      });
     },
 
     async toggleSource(s) {

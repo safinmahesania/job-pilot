@@ -344,7 +344,7 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
    and slider fill, learning stats, privacy radios.
    ============================================================================ */
 
-.set-sec { margin-bottom:18px; max-width:42rem; }
+.set-sec { margin-bottom:18px; max-width:54rem; }
 .set-sec-h { display:flex; align-items:center; gap:8px; margin-bottom:9px; font-size:11px;
              font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); }
 .set-sec-h i { color:var(--brand); font-size:14px; }
@@ -405,7 +405,7 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
    Admin · System & AI — focus tiles. Overview tiles; tap opens an inline panel
    with that area's controls right under the tile's row.
    ============================================================================ */
-.focusgrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; max-width:42rem; }
+.focusgrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; max-width:54rem; }
 .focus { border:1px solid var(--line); border-radius:16px; padding:17px; background:#fff;
          cursor:pointer; position:relative; transition:border-color .15s, box-shadow .15s;
          min-height:118px; display:flex; flex-direction:column; }
@@ -454,7 +454,7 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
    prominent date block on the left.
    ============================================================================ */
 .op-h { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
-        color:var(--ink-3); margin:22px 0 10px; display:flex; align-items:center; gap:7px; max-width:42rem; }
+        color:var(--ink-3); margin:22px 0 10px; display:flex; align-items:center; gap:7px; max-width:54rem; }
 .op-h i { color:var(--brand); font-size:13px; }
 .op-more { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; padding:11px;
            border-top:1px solid var(--line-2); font-size:12px; font-weight:600; color:var(--brand);
@@ -462,7 +462,7 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .op-more:hover { background:var(--hover); }
 
 /* Dark kept-sparkline hero. */
-.op-hero { max-width:42rem; background:linear-gradient(135deg, #1C1B19, #2A2724); border-radius:16px;
+.op-hero { max-width:54rem; background:linear-gradient(135deg, #1C1B19, #2A2724); border-radius:16px;
            padding:18px; color:#fff; }
 .op-hero .top { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; }
 .op-hero .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#8A8580; }
@@ -487,7 +487,7 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .op-hero .legend b { color:#E7C77E; font-weight:600; }
 
 /* Error alert cards. */
-.op-alert { max-width:42rem; border:1px solid rgba(220,91,75,.3); border-left:3px solid var(--red);
+.op-alert { max-width:54rem; border:1px solid rgba(220,91,75,.3); border-left:3px solid var(--red);
             border-radius:11px; padding:13px 15px; margin-bottom:8px; background:#fff; }
 .op-alert.amber { border-color:rgba(183,121,31,.3); border-left-color:var(--amber); }
 .op-alert.blue { border-color:rgba(59,124,184,.3); border-left-color:var(--blue); }
@@ -506,7 +506,7 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .op-alert-detail pre { font-size:10.5px; background:#1C1B19; color:#D8D4CE; border-radius:8px;
                        padding:11px; overflow-x:auto; white-space:pre-wrap; word-break:break-word;
                        margin-top:8px; font-family:'JetBrains Mono', ui-monospace, monospace; }
-.op-allgood { max-width:42rem; padding:16px; text-align:center; font-size:13px; color:var(--green);
+.op-allgood { max-width:54rem; padding:16px; text-align:center; font-size:13px; color:var(--green);
               font-weight:550; background:var(--green-bg); border-radius:12px; display:flex;
               align-items:center; justify-content:center; gap:8px; }
 
@@ -537,7 +537,7 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
    it will touch, so a run has a visible target and it's clear when there's
    nothing to do. Destructive resets sit in a separate red danger zone.
    ============================================================================ */
-.w-card { max-width:42rem; background:var(--surface); border:1px solid var(--line); border-radius:14px;
+.w-card { max-width:54rem; background:var(--surface); border:1px solid var(--line); border-radius:14px;
           padding:15px 16px; margin-bottom:10px; display:flex; align-items:center; gap:15px; }
 .w-num { text-align:center; min-width:56px; flex-shrink:0; }
 .w-num .v { font-size:25px; font-weight:800; line-height:1; color:var(--brand-strong); font-variant-numeric:tabular-nums; }
@@ -550,7 +550,7 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .w-act { flex-shrink:0; display:flex; gap:7px; }
 
 /* Danger zone — kept visually distinct from the everyday actions above. */
-.w-danger { max-width:42rem; border:1px solid rgba(220,91,75,.32); border-radius:14px; overflow:hidden; margin-top:18px; }
+.w-danger { max-width:54rem; border:1px solid rgba(220,91,75,.32); border-radius:14px; overflow:hidden; margin-top:18px; }
 .w-danger-h { background:var(--red-bg); padding:11px 16px; font-size:11px; font-weight:700; text-transform:uppercase;
               letter-spacing:.05em; color:var(--red); display:flex; align-items:center; gap:7px; }
 .w-danger-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px;
@@ -559,14 +559,14 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .w-danger-row .dd { font-size:11px; color:var(--ink-3); margin-top:2px; }
 
 /* Config-file rows at the bottom of the tab. */
-.w-cfg { max-width:42rem; }
+.w-cfg { max-width:54rem; }
 .w-cfg-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 16px;
              border-bottom:1px solid var(--line-2); }
 .w-cfg-row:last-child { border-bottom:none; }
 
 /* Maintenance summary hero — the state of the pile at a glance, so the tab opens
    with a sense of what's there rather than a cold wall of action rows. */
-.mt-hero { max-width:42rem; background:linear-gradient(135deg, #1C1B19, #2A2724); border-radius:16px;
+.mt-hero { max-width:54rem; background:linear-gradient(135deg, #1C1B19, #2A2724); border-radius:16px;
            padding:20px 22px; color:#fff; display:flex; align-items:center; gap:24px; margin-bottom:20px; }
 .mt-hero-main { flex-shrink:0; }
 .mt-hero-num { font-size:38px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
@@ -629,10 +629,10 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .uh-chip .k { font-size:10px; color:#B8B4AE; text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
 
 .uh-sec { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3);
-          margin:22px 0 11px; display:flex; align-items:center; justify-content:space-between; max-width:42rem; }
+          margin:22px 0 11px; display:flex; align-items:center; justify-content:space-between; max-width:54rem; }
 .uh-sec a { font-size:12px; color:var(--brand); text-transform:none; letter-spacing:0; font-weight:600; cursor:pointer; }
 
-.uh-pick { max-width:42rem; background:#fff; border:1px solid var(--line); border-radius:13px; padding:14px;
+.uh-pick { max-width:54rem; background:#fff; border:1px solid var(--line); border-radius:13px; padding:14px;
            margin-bottom:9px; display:flex; gap:13px; align-items:center; cursor:pointer; transition:border-color .12s, box-shadow .12s; }
 .uh-pick:hover { border-color:var(--brand-ring); box-shadow:0 3px 12px rgba(169,109,20,.07); }
 .uh-score { width:44px; height:44px; border-radius:11px; display:flex; align-items:center; justify-content:center;
@@ -641,12 +641,12 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .uh-pick-body { flex:1; min-width:0; }
 .uh-pick-t { font-size:14px; font-weight:650; }
 .uh-pick-m { font-size:11.5px; color:var(--ink-3); margin-top:2px; }
-.uh-empty { max-width:42rem; padding:20px; text-align:center; font-size:13px; color:var(--ink-3);
+.uh-empty { max-width:54rem; padding:20px; text-align:center; font-size:13px; color:var(--ink-3);
             background:#fff; border:1px solid var(--line); border-radius:13px; }
-.uh-loading { max-width:42rem; padding:40px; text-align:center; font-size:13px; color:var(--ink-3);
+.uh-loading { max-width:54rem; padding:40px; text-align:center; font-size:13px; color:var(--ink-3);
               display:flex; align-items:center; justify-content:center; gap:8px; }
 
-.uh-two { max-width:42rem; display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.uh-two { max-width:54rem; display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .uh-panel { background:#fff; border:1px solid var(--line); border-radius:16px; padding:18px; }
 .uh-panel-h { font-size:12.5px; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
 .uh-panel-h i { color:var(--brand); }
@@ -660,7 +660,7 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .uh-frow .fb { height:22px; border-radius:6px; display:flex; align-items:center; padding:0 9px; color:#fff;
                font-size:11px; font-weight:700; min-width:26px; }
 
-.uh-fu { max-width:42rem; background:#fff; border:1px solid var(--line); border-left:3px solid var(--amber);
+.uh-fu { max-width:54rem; background:#fff; border:1px solid var(--line); border-left:3px solid var(--amber);
          border-radius:11px; padding:13px 15px; margin-bottom:8px; display:flex; align-items:center; gap:12px; }
 .uh-fu > i { color:var(--amber); font-size:18px; flex-shrink:0; }
 .uh-fu .t { font-size:13px; font-weight:600; }
@@ -680,7 +680,7 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 
 /* ── Admin cockpit ── */
 .ac-hero { background:radial-gradient(120% 140% at 0% 0%, #2E2A25 0%, #1C1B19 55%); border-radius:20px;
-           padding:22px; color:#fff; position:relative; overflow:hidden; max-width:42rem; }
+           padding:22px; color:#fff; position:relative; overflow:hidden; max-width:54rem; }
 .ac-hero::after { content:''; position:absolute; top:-40px; right:-40px; width:180px; height:180px; border-radius:50%;
                   background:radial-gradient(circle, rgba(231,199,126,.14), transparent 70%); }
 .ac-top { display:flex; justify-content:space-between; align-items:flex-start; position:relative; }
@@ -700,14 +700,14 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .ac-pt .v { font-size:23px; font-weight:800; color:#E7C77E; line-height:1; font-variant-numeric:tabular-nums; }
 .ac-pt .k { font-size:10px; color:#B8B4AE; text-transform:uppercase; letter-spacing:.04em; margin-top:5px; }
 
-.ac-ribbon { max-width:42rem; display:flex; align-items:center; gap:11px; background:var(--amber-bg);
+.ac-ribbon { max-width:54rem; display:flex; align-items:center; gap:11px; background:var(--amber-bg);
              border:1px solid rgba(183,121,31,.25); border-radius:14px; padding:12px 15px; margin-top:12px; }
 .ac-ribbon > i { color:var(--amber); font-size:18px; flex-shrink:0; }
 .ac-ribbon .t { font-size:13px; font-weight:650; color:var(--ink); }
 .ac-ribbon .s { font-size:11.5px; color:var(--ink-2); }
 .ac-ribbon a { margin-left:auto; font-size:12px; font-weight:600; color:var(--amber); cursor:pointer; flex-shrink:0; }
 
-.ac-actions { max-width:42rem; display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.ac-actions { max-width:54rem; display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
 .ac-act { background:#fff; border:1px solid var(--line); border-radius:13px; padding:14px 10px; text-align:center;
           cursor:pointer; transition:.15s; }
 .ac-act:hover { border-color:var(--brand-ring); box-shadow:0 3px 12px rgba(169,109,20,.08); transform:translateY(-1px); }
@@ -721,7 +721,7 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .ac-dot.g { background:var(--green); } .ac-dot.r { background:var(--red); } .ac-dot.a { background:var(--amber); }
 
 /* Kept trend — light Q graph */
-.ac-graph { max-width:42rem; background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px; }
+.ac-graph { max-width:54rem; background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px; }
 .ac-g-h { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:4px; }
 .ac-g-lbl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); }
 .ac-g-big { font-size:26px; font-weight:800; font-variant-numeric:tabular-nums; margin-top:2px; }
@@ -740,80 +740,107 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
                    border:5px solid transparent; border-top-color:var(--ink); }
 
 /* ============================================================================
-   RESPONSIVE — five breakpoints. The app shell (sidebar ↔ bottom-nav) is handled
-   by Tailwind md: utilities; this block adapts the custom components so nothing
-   overflows on small phones and everything breathes on large screens.
+   RESPONSIVE — five breakpoints, mobile-first.
 
-   Small mobile   360–479   single column, tighter padding, wrapped stats
-   Large mobile   480–767   2-col where it fits
-   Tablet         768–1023  sidebar appears (Tailwind md:), content comfortable
-   Laptop         1024–1279 default
-   Large desktop  1280+     slightly wider content column
+   Content lives in a column that caps at 54rem by default. On large screens the
+   dashboards spread into two columns to use the width; on phones the padding and
+   type tighten so nothing feels cramped or overflows.
+
+   Small mobile   ≤479    single column, snug padding, wrapped stats
+   Large mobile   480–767  2-up where it fits
+   Tablet         768–1023 sidebar appears (Tailwind md:)
+   Laptop         1024–1279 dashboards go two-column
+   Large desktop  ≥1280    wider content column, roomier gaps
    ============================================================================ */
 
-/* ── Small mobile & up: keep multi-col grids from overflowing narrow phones ── */
+/* ── SMALL MOBILE (≤479): make everything fit a 360px phone comfortably ── */
 @media (max-width: 479px) {
-  /* Dashboards / admin cockpit: stack the two-column panels. */
-  .uh-two { grid-template-columns: 1fr; }
-  /* Quick actions: 2×2 instead of a cramped 4-across. */
-  .ac-actions { grid-template-columns: 1fr 1fr; }
-  /* System focus tiles: single column so each is tappable. */
-  .focusgrid { grid-template-columns: 1fr; }
+  /* Tighter page padding so cards get more of the screen width. */
+  main.flex-1 { padding-left: 12px !important; padding-right: 12px !important; }
+
+  /* Stack every two-column area. */
+  .uh-two, .focusgrid { grid-template-columns: 1fr; }
   .focus.wide { grid-column: span 1; }
+  /* Quick actions: 2×2, not a cramped 4-across. */
+  .ac-actions { grid-template-columns: 1fr 1fr; }
 
-  /* Dark heroes: less padding, so the gradient card doesn't eat the screen. */
-  .uh-hero, .ac-hero, .op-hero, .mt-hero { padding: 18px; }
-  .uh-hi, .ac-title { font-size: 17px; }
-  .uh-hero-num, .mt-hero-num { font-size: 30px; }
+  /* Dark heroes: less padding + smaller type so the card doesn't dominate. */
+  .uh-hero, .ac-hero, .op-hero, .mt-hero { padding: 16px !important; border-radius: 14px; }
+  .uh-hi { font-size: 16px; }
+  .uh-sub, .ac-sub { font-size: 12px; }
+  .ac-title { font-size: 16px; }
+  .op-hero .big { font-size: 26px; }
+  .mt-hero-num { font-size: 28px; }
 
-  /* Chip/stat rows: let them wrap instead of shrinking past legibility. */
-  .uh-chips, .ac-pulse { flex-wrap: wrap; }
-  .uh-chip, .ac-pt { min-width: calc(50% - 5px); }
-  .mt-hero { flex-direction: column; align-items: flex-start; gap: 16px; }
-  .mt-hero-stats { margin-left: 0; width: 100%; justify-content: space-between; gap: 12px; }
+  /* Pulse/chip tiles: 2 per row, readable. */
+  .uh-chips, .ac-pulse { flex-wrap: wrap; gap: 8px; }
+  .uh-chip, .ac-pt { min-width: calc(50% - 4px); flex: 1 1 calc(50% - 4px); }
+  .uh-chip .v, .ac-pt .v { font-size: 19px; }
 
-  /* Maintenance action cards: stack the number, body and button. */
-  .w-card { flex-wrap: wrap; }
+  /* Maintenance hero + stat cards stack cleanly. */
+  .mt-hero { flex-direction: column; align-items: stretch; gap: 14px; }
+  .mt-hero-stats { margin-left: 0; width: 100%; justify-content: space-between; gap: 10px; }
+  .w-card { flex-wrap: wrap; gap: 10px; }
+  .w-card .w-body { flex: 1 1 60%; min-width: 0; }
   .w-card .w-act { width: 100%; }
   .w-act .btn { flex: 1; }
+  .w-danger-row { flex-direction: column; align-items: stretch; gap: 10px; }
+  .w-danger-row .btn { width: 100%; }
+  .w-cfg-row { flex-direction: column; align-items: flex-start; gap: 6px; }
 
-  /* Operations run rows + spark: tighten so the date block + kept fit. */
-  .op-hero .big { font-size: 26px; }
+  /* Operations run rows: keep the date + kept number from colliding. */
   .op-run { gap: 10px; padding: 12px 2px; }
+  .op-date { width: 34px; }
+  .op-flow { font-size: 11px; }
 
-  /* Settings learn/stat boxes wrap. */
-  .set-learn { flex-wrap: wrap; }
-
-  /* Section headers with a right-side link: keep them on one row but allow wrap. */
+  /* Section headers: wrap the "see all" link under the title if needed. */
   .uh-sec, .op-h { flex-wrap: wrap; gap: 4px; }
 
-  /* Comparison/quota mini rows: never let a long provider label push the number off. */
+  /* Provider/source rows: label left, value right, no overflow. */
   .ac-mini { gap: 8px; }
   .ac-mini b { text-align: right; }
+
+  /* Admin sub-tabs scroll horizontally instead of squeezing. */
+  .adm-subtabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .adm-subtab { white-space: nowrap; flex-shrink: 0; }
+
+  /* Settings hero + stat trio fit. */
+  .set-learn { gap: 8px; }
+  .thr-hero { padding: 16px; }
 }
 
-/* ── Large mobile / small tablet: 2-col dashboards fit, keep actions 4-across ── */
+/* ── LARGE MOBILE (480–767): 2-up where it helps ── */
 @media (min-width: 480px) and (max-width: 767px) {
-  .uh-two { grid-template-columns: 1fr 1fr; }
+  .uh-two, .focusgrid { grid-template-columns: 1fr 1fr; }
+  .ac-actions { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* ── TABLET (768–1023): sidebar is in; keep 4-up actions, comfortable grids ── */
+@media (min-width: 768px) and (max-width: 1023px) {
   .ac-actions { grid-template-columns: repeat(4, 1fr); }
   .focusgrid { grid-template-columns: 1fr 1fr; }
 }
 
-/* ── Tablet: the Tailwind md: sidebar kicks in at 768; give content room ── */
-@media (min-width: 768px) and (max-width: 1023px) {
-  /* Content columns already cap at 42rem; nothing extra needed, but ensure the
-     4-up quick actions and focus grid stay comfortable. */
-  .ac-actions { grid-template-columns: repeat(4, 1fr); }
+/* ── LAPTOP+ (≥1024): use the width. Content column widens and the user
+      dashboard's top-matches / progress can breathe. Homepages stay single-column
+      but wider; the admin two-up panels already fill nicely. ── */
+@media (min-width: 1024px) {
+  /* Give the content column more room now there's a sidebar + wide viewport. */
+  .uh-hero, .ac-hero, .op-hero, .mt-hero, .uh-two, .uh-sec, .uh-pick, .uh-fu,
+  .uh-panel, .uh-empty, .uh-loading, .ac-ribbon, .ac-actions, .ac-graph,
+  .w-card, .w-danger, .w-cfg, .op-h, .op-alert, .op-allgood, .focusgrid,
+  .thr-hero, .set-sec, .src-attn { max-width: 64rem; }
 }
 
-/* ── Large desktop: let the primary content column breathe a little wider ── */
+/* ── LARGE DESKTOP (≥1280): roomiest. Two-up the user dashboard body so the big
+      screen isn't a narrow ribbon of content with empty sides. ── */
 @media (min-width: 1280px) {
   .uh-hero, .ac-hero, .op-hero, .mt-hero, .uh-two, .uh-sec, .uh-pick, .uh-fu,
   .uh-panel, .uh-empty, .uh-loading, .ac-ribbon, .ac-actions, .ac-graph,
   .w-card, .w-danger, .w-cfg, .op-h, .op-alert, .op-allgood, .focusgrid,
-  .thr-hero, .set-sec, .src-attn { max-width: 48rem; }
+  .thr-hero, .set-sec, .src-attn { max-width: 72rem; }
 }
 
-/* ── Guard rail for every screen: media inside cards never forces overflow ── */
+/* ── Guard rail: media never forces horizontal overflow, any screen ── */
 img, svg, video { max-width: 100%; height: auto; }
 .op-spark, .ac-g-bars, .g-bars, .sbars { max-width: 100%; }

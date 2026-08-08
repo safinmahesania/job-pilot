@@ -1567,7 +1567,7 @@
 
       <!-- Recent runs — prominent date, softened row style -->
       <div class="op-h"><i class="ti ti-history"></i> Recent runs</div>
-      <div style="max-width:42rem">
+      <div style="max-width:54rem">
         <div :class="opsRunsAll && 'op-scroll'">
           <template x-for="r in visibleRuns()" :key="r.id">
             <div class="op-run" :class="runMood(r).tone">
@@ -1604,7 +1604,7 @@
         <span style="display:flex; align-items:center; gap:7px"><i class="ti ti-alert-triangle"></i> Needs attention</span>
         <button x-show="errors.length" @click="clearErrors()" class="text-xs h-7 px-3 rounded-md border border-gray-200 hover:bg-gray-50 font-medium normal-case tracking-normal">Clear</button>
       </div>
-      <div style="max-width:42rem">
+      <div style="max-width:54rem">
         <div :class="opsErrAll && 'op-scroll'">
           <template x-for="e in visibleErrors()" :key="e.id">
             <div class="op-alert" :class="[errorView(e).tone, opsErrExpanded===e.id && 'open']">

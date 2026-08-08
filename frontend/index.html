@@ -1464,11 +1464,7 @@
         <div class="set-sec-h"><i class="ti ti-brain"></i> Learning</div>
         <div class="card p-4">
           <div class="text-sm font-medium">Learning from your decisions</div>
-          <div class="text-xs text-gray-400 mt-1 leading-relaxed">
-            Every job you save or dismiss teaches the scoring what you actually want. The
-            ones it scored highly and you dismissed anyway are the most useful of all — those
-            are its mistakes, and it is shown them.
-          </div>
+          <div class="text-xs text-gray-400 mt-1">Every save or dismiss teaches the scoring what you want.</div>
           <template x-if="fb.active">
             <div>
               <div class="set-learn">
@@ -1478,16 +1474,13 @@
               </div>
               <div x-show="fb.high_scored_but_dismissed" class="text-xs rounded-md px-3 py-2 mt-3 flex gap-1.5" style="background:#F7EDD8; color:#7A4E0C;">
                 <i class="ti ti-bulb mt-0.5 shrink-0"></i>
-                <span><b x-text="fb.high_scored_but_dismissed"></b> jobs were scored 70+ and you dismissed them.
-                  The scoring is being corrected against those. An admin can run <b>Rescore all</b> to apply it
-                  to everything already in the database.</span>
+                <span><b x-text="fb.high_scored_but_dismissed"></b> high-scored jobs you dismissed are being corrected for.</span>
               </div>
             </div>
           </template>
           <template x-if="!fb.active">
             <div class="text-xs text-gray-400 mt-3 rounded-md bg-gray-50 px-3 py-2">
-              Not enough history yet — save or dismiss <b x-text="fb.needed"></b> more job(s) and
-              the scoring will start calibrating against your choices.
+              Save or dismiss <b x-text="fb.needed"></b> more job(s) and calibration starts.
             </div>
           </template>
         </div>
@@ -1496,7 +1489,7 @@
       <!-- Privacy (user's personal data choice) -->
       <div class="set-sec">
         <div class="set-sec-h"><i class="ti ti-shield-lock"></i> Privacy</div>
-        <p class="text-xs text-gray-400 mb-2 -mt-1">Writing a cover letter needs your background — that's the point. It does not need your phone number.</p>
+        <p class="text-xs text-gray-400 mb-2 -mt-1">How much of your profile cover letters can use.</p>
         <div class="card" style="padding:0">
           <template x-for="m in privacyModes" :key="m.key">
             <label class="set-radio" :class="privacy.mode===m.key && 'on'">

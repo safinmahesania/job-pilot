@@ -1029,8 +1029,8 @@
     <!-- ─── Admin ─── -->
     <div x-show="tab==='admin'">
       <h2 class="text-lg font-semibold mb-4 hidden md:block">Admin</h2>
-      <div class="text-sm text-gray-500 mb-4 max-w-2xl">How the app itself is doing, and the
-        buttons that act on the whole database. The destructive ones are at the bottom.</div>
+      <div class="text-sm text-gray-500 mb-4 max-w-2xl">System and AI setup, how the app is doing,
+        and the buttons that act on the whole database. The destructive ones are at the bottom.</div>
       <!-- Boards that stopped working. The silent ones lead: an erroring board
            already shows red, but one returning 200-and-nothing looks perfect. -->
       <template x-if="brokenBoards().length">
@@ -1050,6 +1050,222 @@
         </div>
       </template>
 
+
+      <!-- ══ System & AI settings (admin) ══ -->
+      <div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Automation</h3>
+      <div class="card p-4 max-w-2xl mb-5">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-medium">Auto-fetch</span>
+          <button @click="sched.enabled = !sched.enabled; saveSchedule()" class="sw" :class="sched.enabled ? 'on' : 'off'"><span></span></button>
+        </div>
+        <div class="text-xs text-gray-400 mb-3">Runs the pipeline automatically while JobPilot is open.</div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-gray-600">Every</span>
+          <input type="number" min="0.5" max="168" step="0.5" x-model.number="sched.interval_hours" @change="saveSchedule()" class="w-20 fld text-right">
+          <span class="text-sm text-gray-600">hours</span>
+        </div>
+        <div class="text-xs text-gray-400 mt-3" x-show="sched.enabled && nextRun">Next run: <span x-text="nextRun"></span></div>
+        <div class="text-xs text-gray-400 mt-2">If the app was closed past a due run, it fires shortly after you reopen it.</div>
+      </div>
+
+      </div>
+
+      <div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Scoring model</h3>
+      <div class="card p-4 max-w-2xl mb-5">
+        <div class="text-sm font-medium mb-1">Scoring model</div>
+        <div class="text-xs text-gray-400 mb-3">14b is more accurate; 7b is faster and uses less memory. Falls back to 7b automatically if a job runs out of memory.</div>
+        <div class="flex items-center gap-3">
+          <select x-model="selectedModel" @change="saveModel()" class="fld max-w-xs">
+            <option value="qwen2.5:14b">qwen2.5:14b — best quality</option>
+            <option value="qwen2.5:7b">qwen2.5:7b — faster</option>
+          </select>
+          <span class="text-xs px-2 py-1 rounded-md" x-show="modelState.fallback_active" style="background:#F7EDD8; color:#7A4E0C;">
+            currently on 7b (fallback)
+          </span>
+        </div>
+      </div>
+
+      </div>
+
+<div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">AI features</h3>
+        <div class="card divide-y divide-gray-100">
+          <div class="flex items-start justify-between gap-4 p-4">
+            <div>
+              <div class="text-sm font-medium">Scrape-time AI</div>
+              <div class="text-xs text-gray-400 mt-0.5">
+                Used during a run: scores every new job against your profile.
+                When off, jobs are still fetched and filtered — they're just stored unscored.
+              </div>
+            </div>
+            <button @click="toggleFeature('scoring')" class="sw shrink-0 mt-0.5" :class="ai.scoring ? 'on' : 'off'"><span></span></button>
+          </div>
+          <div class="flex items-start justify-between gap-4 p-4">
+            <div>
+              <div class="text-sm font-medium">On-demand AI</div>
+              <div class="text-xs text-gray-400 mt-0.5">
+                User-triggered: cover letter and resume generation.
+                When off, the Cover letter button returns an error instead of generating.
+              </div>
+            </div>
+            <button @click="toggleFeature('generation')" class="sw shrink-0 mt-0.5" :class="ai.generation ? 'on' : 'off'"><span></span></button>
+          </div>
+        </div>
+      </div>
+
+<div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-1">AI providers</h3>
+        <div class="text-xs text-gray-400 mb-3">Used for cover letters and resumes. Automatic failover — when one hits its rate limit, the next is tried. Keys live in your <code class="text-brand">.env</code>.</div>
+
+        <!-- summary -->
+        <div class="card p-4 mb-3 flex flex-wrap gap-6">
+          <div>
+            <div class="text-[11px] uppercase tracking-wide text-gray-400">Available</div>
+            <div class="text-lg font-semibold"><span class="text-green-600" x-text="llm.available"></span><span class="text-gray-400"> / </span><span x-text="llm.total"></span></div>
+          </div>
+          <div class="min-w-[180px]">
+            <div class="text-[11px] uppercase tracking-wide text-gray-400">Combined daily usage</div>
+            <div class="text-lg font-semibold tabular-nums">
+              <span x-text="fmtNum(llm.combined_tokens)"></span><span class="text-gray-400"> / </span><span x-text="fmtNum(llm.combined_limit)"></span>
+            </div>
+            <div class="text-xs text-gray-400">tokens across hosted keys</div>
+          </div>
+        </div>
+
+        <!-- per provider -->
+        <div class="space-y-3">
+          <template x-for="(p, i) in llm.providers" :key="p.name">
+            <div class="card p-4">
+              <div class="flex items-start gap-2">
+                <span class="w-2 h-2 rounded-full mt-2 shrink-0" :class="p.enabled && p.configured ? 'bg-green-500' : 'bg-gray-300'"></span>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-semibold text-sm" x-text="p.label"></span>
+                    <span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500" x-text="i === 0 ? 'primary' : 'fallback ' + i"></span>
+                  </div>
+                  <div class="text-xs text-gray-400 mt-0.5" x-text="p.note"></div>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button @click="moveProvider(i, -1)" :disabled="i === 0" class="text-gray-400 hover:text-brand disabled:opacity-25" title="Try earlier"><i class="ti ti-arrow-up"></i></button>
+                  <button @click="moveProvider(i, 1)" :disabled="i === llm.providers.length - 1" class="text-gray-400 hover:text-brand disabled:opacity-25" title="Try later"><i class="ti ti-arrow-down"></i></button>
+                  <button @click="toggleProvider(p)" class="sw ml-1" :class="p.enabled ? 'on' : 'off'"><span></span></button>
+                </div>
+              </div>
+
+              <!-- key status -->
+              <div class="flex items-center gap-2 mt-3 text-xs flex-wrap" x-show="p.env">
+                <span class="text-gray-400">Env var</span>
+                <code class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600" x-text="p.env"></code>
+                <span x-show="p.configured" class="px-1.5 py-0.5 rounded bg-green-50 text-green-600 font-medium">✓ set</span>
+                <span x-show="!p.configured" class="px-1.5 py-0.5 rounded bg-red-50 text-red-500 font-medium">missing</span>
+                <template x-if="p.key_preview">
+                  <code class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-400" x-text="p.key_preview"></code>
+                </template>
+              </div>
+
+              <!-- usage bar (hosted providers only) -->
+              <template x-if="p.daily_tokens">
+                <div class="mt-3">
+                  <div class="flex items-center justify-between text-xs mb-1">
+                    <span class="text-gray-400">Daily usage (UTC)</span>
+                    <span class="text-gray-500 tabular-nums">
+                      <span x-text="fmtNum(p.tokens_used)"></span> / <span x-text="fmtNum(p.daily_tokens)"></span>
+                      (<span x-text="p.percent"></span>%)
+                    </span>
+                  </div>
+                  <div class="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                    <div class="h-full rounded-full transition-all"
+                         :class="p.percent >= 90 ? 'bg-red-500' : (p.percent >= 70 ? 'bg-amber-500' : 'bg-brand')"
+                         :style="`width:${Math.min(p.percent || 0, 100)}%`"></div>
+                  </div>
+                  <div class="text-xs text-gray-400 mt-1"><span x-text="p.requests_today"></span> requests today</div>
+                </div>
+              </template>
+              <div x-show="!p.daily_tokens" class="mt-3 text-xs text-gray-400">
+                Local — no quota. <span x-text="p.requests_today"></span> requests today.
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Scoring engine</h3>
+        <div class="card divide-y divide-gray-100">
+          <div class="flex items-start justify-between gap-4 p-4">
+            <div>
+              <div class="text-sm font-medium">Score through the provider chain</div>
+              <div class="text-xs text-gray-400 mt-1 leading-relaxed">
+                Uses Cerebras / Gemini instead of local Ollama — far faster, and a better
+                judgement of fit. Ollama stays at the end of the chain, so an offline machine
+                still works. Turn this off to pin scoring to local only.
+              </div>
+            </div>
+            <button @click="fb.scoring_via_chain = !fb.scoring_via_chain; saveScoring()"
+              class="sw shrink-0 mt-0.5" :class="fb.scoring_via_chain ? 'on' : 'off'"><span></span></button>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Notifications</h3>
+      <div class="card p-4 max-w-2xl mb-5">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-medium">Telegram notifications</span>
+          <button @click="notify.enabled = !notify.enabled; saveNotify()" class="sw"
+            :class="notify.enabled ? 'on' : 'off'" :disabled="!notify.configured"><span></span></button>
+        </div>
+        <div class="text-xs text-gray-400 mb-3" x-show="notify.configured">Sends a run summary to Telegram after each run.</div>
+        <div class="text-xs text-red-500" x-show="!notify.configured">Not configured — add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to .env.</div>
+      </div>
+
+      </div>
+
+<div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Alerts</h3>
+        <div class="card p-4">
+          <div class="text-sm font-medium">Weekly digest &amp; source alerts</div>
+          <div class="text-xs text-gray-400 mt-1 leading-relaxed">
+            Monday mornings: what you owe, what's waiting, what broke. And the moment a
+            working board goes dark — including one that returns nothing while still
+            reporting success, which nothing else would tell you about.
+            <span class="block mt-1">Both need Telegram configured in <code class="text-[11px]">.env</code>.</span>
+          </div>
+          <button @click="testDigest()" :disabled="busy==='digest'"
+            class="mt-3 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5">
+            <i class="ti ti-send"></i>
+            <span x-text="busy==='digest' ? 'Sending…' : 'Preview this week\'s digest'"></span>
+          </button>
+          <pre x-show="digestPreview" class="mt-3 text-[11px] bg-gray-50 border border-gray-100 rounded-md p-3 whitespace-pre-wrap text-gray-600" x-text="digestPreview"></pre>
+        </div>
+      </div>
+
+<div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Connection tests</h3>
+        <div class="card divide-y divide-gray-100">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div>
+              <div class="text-sm font-medium">Test Telegram</div>
+              <div class="text-xs text-gray-400 mt-0.5">Send a test message to verify the bot and chat ID.</div>
+            </div>
+            <button @click="testNotify()" :disabled="!notify.configured" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Send test</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+            <div>
+              <div class="text-sm font-medium">Test AI</div>
+              <div class="text-xs text-gray-400 mt-0.5">Run a tiny prompt through the provider chain and report which one answered.</div>
+            </div>
+            <button @click="testAI()" :disabled="busy" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Test AI</button>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ══ Operations & maintenance ══ -->
+      <div class="border-t border-gray-100 mt-8 pt-2"></div>
       <div class="text-sm text-gray-500 mt-6 mb-3">Run history</div>
       <div class="card overflow-hidden">
         <template x-for="r in runs" :key="r.id">
@@ -1186,53 +1402,35 @@
           </div>
         </div>
       </div>
+
+      <div class="mt-6 max-w-2xl">
+        <h3 class="text-sm font-semibold text-gray-700 mb-1">Configuration files</h3>
+        <div class="text-xs text-gray-400 mb-3">Edit these directly in your editor. Companies and profile can also be edited from the tabs above.</div>
+        <div class="card divide-y divide-gray-100">
+          <template x-for="f in cfgFiles" :key="f.path">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+              <div class="min-w-0">
+                <div class="text-sm font-medium" x-text="f.label"></div>
+                <div class="text-xs text-gray-400 mt-0.5" x-text="f.description"></div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <span x-show="!f.exists" class="text-[11px] px-1.5 py-0.5 rounded bg-red-50 text-red-500">missing</span>
+                <code @click="copyPath(f.path)" class="cursor-pointer text-[12px] px-2 py-1 rounded bg-brand/10 text-brand hover:bg-brand/20" :title="'Click to copy'" x-text="f.path"></code>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
     </div>
 
     <!-- ─── Settings ─── -->
     <div x-show="tab==='settings'">
-      <h2 class="text-lg font-semibold mb-4 hidden md:block">Settings</h2>
-      <div class="text-sm text-gray-500 mb-4 max-w-2xl">How JobPilot behaves. The things you
-        adjust most are first; provider keys and config files are further down.</div>
-
-      <div class="card p-4 max-w-2xl mb-5">
-        <div class="flex items-center justify-between mb-1">
-          <span class="text-sm font-medium">Auto-fetch</span>
-          <button @click="sched.enabled = !sched.enabled; saveSchedule()" class="sw" :class="sched.enabled ? 'on' : 'off'"><span></span></button>
-        </div>
-        <div class="text-xs text-gray-400 mb-3">Runs the pipeline automatically while JobPilot is open.</div>
-        <div class="flex items-center gap-2">
-          <span class="text-sm text-gray-600">Every</span>
-          <input type="number" min="0.5" max="168" step="0.5" x-model.number="sched.interval_hours" @change="saveSchedule()" class="w-20 fld text-right">
-          <span class="text-sm text-gray-600">hours</span>
-        </div>
-        <div class="text-xs text-gray-400 mt-3" x-show="sched.enabled && nextRun">Next run: <span x-text="nextRun"></span></div>
-        <div class="text-xs text-gray-400 mt-2">If the app was closed past a due run, it fires shortly after you reopen it.</div>
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold">Settings</h2>
+        <p class="text-[13px] text-gray-400 mt-0.5">Tune how your feed and cover letters work for you. System and AI setup lives under Admin.</p>
       </div>
 
-      <div class="card p-4 max-w-2xl mb-5">
-        <div class="text-sm font-medium mb-1">Scoring model</div>
-        <div class="text-xs text-gray-400 mb-3">14b is more accurate; 7b is faster and uses less memory. Falls back to 7b automatically if a job runs out of memory.</div>
-        <div class="flex items-center gap-3">
-          <select x-model="selectedModel" @change="saveModel()" class="fld max-w-xs">
-            <option value="qwen2.5:14b">qwen2.5:14b — best quality</option>
-            <option value="qwen2.5:7b">qwen2.5:7b — faster</option>
-          </select>
-          <span class="text-xs px-2 py-1 rounded-md" x-show="modelState.fallback_active" style="background:#F7EDD8; color:#7A4E0C;">
-            currently on 7b (fallback)
-          </span>
-        </div>
-      </div>
-
-      <div class="card p-4 max-w-2xl mb-5">
-        <div class="flex items-center justify-between mb-1">
-          <span class="text-sm font-medium">Telegram notifications</span>
-          <button @click="notify.enabled = !notify.enabled; saveNotify()" class="sw"
-            :class="notify.enabled ? 'on' : 'off'" :disabled="!notify.configured"><span></span></button>
-        </div>
-        <div class="text-xs text-gray-400 mb-3" x-show="notify.configured">Sends a run summary to Telegram after each run.</div>
-        <div class="text-xs text-red-500" x-show="!notify.configured">Not configured — add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to .env.</div>
-      </div>
-
+      <!-- Score threshold (user controls how strict the feed is) -->
       <div class="card p-4 max-w-2xl">
         <div class="flex items-center justify-between mb-1">
           <span class="text-sm font-medium">Score threshold</span>
@@ -1243,201 +1441,41 @@
         <div class="flex justify-between text-[11px] text-gray-400 mt-1"><span>0</span><span>50</span><span>100</span></div>
       </div>
 
-      <!-- ─── Alerts ─── -->
-      
-<div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Scoring</h3>
-        <div class="card divide-y divide-gray-100">
-
-          <div class="flex items-start justify-between gap-4 p-4">
-            <div>
-              <div class="text-sm font-medium">Score through the provider chain</div>
-              <div class="text-xs text-gray-400 mt-1 leading-relaxed">
-                Uses Cerebras / Gemini instead of local Ollama — far faster, and a better
-                judgement of fit. Ollama stays at the end of the chain, so an offline machine
-                still works. Turn this off to pin scoring to local only.
+      <!-- Learning from your decisions (view of how your choices shape scoring) -->
+      <div class="mt-5 max-w-2xl">
+        <div class="card p-4">
+          <div class="text-sm font-medium">Learning from your decisions</div>
+          <div class="text-xs text-gray-400 mt-1 leading-relaxed">
+            Every job you save or dismiss teaches the scoring what you actually want. The
+            ones it scored highly and you dismissed anyway are the most useful of all — those
+            are its mistakes, and it is shown them.
+          </div>
+          <template x-if="fb.active">
+            <div class="mt-3">
+              <div class="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-600">
+                <span><span class="font-semibold text-green-600" x-text="fb.applied"></span> applied</span>
+                <span><span class="font-semibold text-brand" x-text="fb.saved"></span> saved</span>
+                <span><span class="font-semibold text-gray-500" x-text="fb.dismissed"></span> dismissed</span>
+              </div>
+              <div x-show="fb.high_scored_but_dismissed" class="text-xs rounded-md px-3 py-2 mt-2.5 flex gap-1.5" style="background:#F7EDD8; color:#7A4E0C;">
+                <i class="ti ti-bulb mt-0.5 shrink-0"></i>
+                <span><b x-text="fb.high_scored_but_dismissed"></b> jobs were scored 70+ and you dismissed them.
+                  The scoring is being corrected against those. An admin can run <b>Rescore all</b> to apply it
+                  to everything already in the database.</span>
               </div>
             </div>
-            <button @click="fb.scoring_via_chain = !fb.scoring_via_chain; saveScoring()"
-              class="sw shrink-0 mt-0.5" :class="fb.scoring_via_chain ? 'on' : 'off'"><span></span></button>
-          </div>
-
-          <div class="p-4">
-            <div class="text-sm font-medium">Learning from your decisions</div>
-            <div class="text-xs text-gray-400 mt-1 leading-relaxed">
-              Every job you save or dismiss teaches the scoring what you actually want. The
-              ones it scored highly and you dismissed anyway are the most useful of all — those
-              are its mistakes, and it is shown them.
-            </div>
-
-            <template x-if="fb.active">
-              <div class="mt-3">
-                <div class="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-600">
-                  <span><span class="font-semibold text-green-600" x-text="fb.applied"></span> applied</span>
-                  <span><span class="font-semibold text-brand" x-text="fb.saved"></span> saved</span>
-                  <span><span class="font-semibold text-gray-500" x-text="fb.dismissed"></span> dismissed</span>
-                </div>
-                <div x-show="fb.high_scored_but_dismissed" class="text-xs rounded-md px-3 py-2 mt-2.5 flex gap-1.5" style="background:#F7EDD8; color:#7A4E0C;">
-                  <i class="ti ti-bulb mt-0.5 shrink-0"></i>
-                  <span><b x-text="fb.high_scored_but_dismissed"></b> jobs were scored 70+ and you dismissed them.
-                    The scoring is being corrected against those. Run <b>Rescore all</b> below to apply it to
-                    everything already in the database.</span>
-                </div>
-              </div>
-            </template>
-
-            <template x-if="!fb.active">
-              <div class="text-xs text-gray-400 mt-3 rounded-md bg-gray-50 px-3 py-2">
-                Not enough history yet — save or dismiss <b x-text="fb.needed"></b> more job(s) and
-                the scoring will start calibrating against your choices.
-              </div>
-            </template>
-          </div>
-        </div>
-      </div>
-
-<div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">AI features</h3>
-        <div class="card divide-y divide-gray-100">
-          <div class="flex items-start justify-between gap-4 p-4">
-            <div>
-              <div class="text-sm font-medium">Scrape-time AI</div>
-              <div class="text-xs text-gray-400 mt-0.5">
-                Used during a run: scores every new job against your profile.
-                When off, jobs are still fetched and filtered — they're just stored unscored.
-              </div>
-            </div>
-            <button @click="toggleFeature('scoring')" class="sw shrink-0 mt-0.5" :class="ai.scoring ? 'on' : 'off'"><span></span></button>
-          </div>
-          <div class="flex items-start justify-between gap-4 p-4">
-            <div>
-              <div class="text-sm font-medium">On-demand AI</div>
-              <div class="text-xs text-gray-400 mt-0.5">
-                User-triggered: cover letter and resume generation.
-                When off, the Cover letter button returns an error instead of generating.
-              </div>
-            </div>
-            <button @click="toggleFeature('generation')" class="sw shrink-0 mt-0.5" :class="ai.generation ? 'on' : 'off'"><span></span></button>
-          </div>
-        </div>
-      </div>
-
-<div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-1">AI providers</h3>
-        <div class="text-xs text-gray-400 mb-3">Used for cover letters and resumes. Automatic failover — when one hits its rate limit, the next is tried. Keys live in your <code class="text-brand">.env</code>.</div>
-
-        <!-- summary -->
-        <div class="card p-4 mb-3 flex flex-wrap gap-6">
-          <div>
-            <div class="text-[11px] uppercase tracking-wide text-gray-400">Available</div>
-            <div class="text-lg font-semibold"><span class="text-green-600" x-text="llm.available"></span><span class="text-gray-400"> / </span><span x-text="llm.total"></span></div>
-          </div>
-          <div class="min-w-[180px]">
-            <div class="text-[11px] uppercase tracking-wide text-gray-400">Combined daily usage</div>
-            <div class="text-lg font-semibold tabular-nums">
-              <span x-text="fmtNum(llm.combined_tokens)"></span><span class="text-gray-400"> / </span><span x-text="fmtNum(llm.combined_limit)"></span>
-            </div>
-            <div class="text-xs text-gray-400">tokens across hosted keys</div>
-          </div>
-        </div>
-
-        <!-- per provider -->
-        <div class="space-y-3">
-          <template x-for="(p, i) in llm.providers" :key="p.name">
-            <div class="card p-4">
-              <div class="flex items-start gap-2">
-                <span class="w-2 h-2 rounded-full mt-2 shrink-0" :class="p.enabled && p.configured ? 'bg-green-500' : 'bg-gray-300'"></span>
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="font-semibold text-sm" x-text="p.label"></span>
-                    <span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500" x-text="i === 0 ? 'primary' : 'fallback ' + i"></span>
-                  </div>
-                  <div class="text-xs text-gray-400 mt-0.5" x-text="p.note"></div>
-                </div>
-                <div class="flex items-center gap-1 shrink-0">
-                  <button @click="moveProvider(i, -1)" :disabled="i === 0" class="text-gray-400 hover:text-brand disabled:opacity-25" title="Try earlier"><i class="ti ti-arrow-up"></i></button>
-                  <button @click="moveProvider(i, 1)" :disabled="i === llm.providers.length - 1" class="text-gray-400 hover:text-brand disabled:opacity-25" title="Try later"><i class="ti ti-arrow-down"></i></button>
-                  <button @click="toggleProvider(p)" class="sw ml-1" :class="p.enabled ? 'on' : 'off'"><span></span></button>
-                </div>
-              </div>
-
-              <!-- key status -->
-              <div class="flex items-center gap-2 mt-3 text-xs flex-wrap" x-show="p.env">
-                <span class="text-gray-400">Env var</span>
-                <code class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600" x-text="p.env"></code>
-                <span x-show="p.configured" class="px-1.5 py-0.5 rounded bg-green-50 text-green-600 font-medium">✓ set</span>
-                <span x-show="!p.configured" class="px-1.5 py-0.5 rounded bg-red-50 text-red-500 font-medium">missing</span>
-                <template x-if="p.key_preview">
-                  <code class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-400" x-text="p.key_preview"></code>
-                </template>
-              </div>
-
-              <!-- usage bar (hosted providers only) -->
-              <template x-if="p.daily_tokens">
-                <div class="mt-3">
-                  <div class="flex items-center justify-between text-xs mb-1">
-                    <span class="text-gray-400">Daily usage (UTC)</span>
-                    <span class="text-gray-500 tabular-nums">
-                      <span x-text="fmtNum(p.tokens_used)"></span> / <span x-text="fmtNum(p.daily_tokens)"></span>
-                      (<span x-text="p.percent"></span>%)
-                    </span>
-                  </div>
-                  <div class="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                    <div class="h-full rounded-full transition-all"
-                         :class="p.percent >= 90 ? 'bg-red-500' : (p.percent >= 70 ? 'bg-amber-500' : 'bg-brand')"
-                         :style="`width:${Math.min(p.percent || 0, 100)}%`"></div>
-                  </div>
-                  <div class="text-xs text-gray-400 mt-1"><span x-text="p.requests_today"></span> requests today</div>
-                </div>
-              </template>
-              <div x-show="!p.daily_tokens" class="mt-3 text-xs text-gray-400">
-                Local — no quota. <span x-text="p.requests_today"></span> requests today.
-              </div>
+          </template>
+          <template x-if="!fb.active">
+            <div class="text-xs text-gray-400 mt-3 rounded-md bg-gray-50 px-3 py-2">
+              Not enough history yet — save or dismiss <b x-text="fb.needed"></b> more job(s) and
+              the scoring will start calibrating against your choices.
             </div>
           </template>
         </div>
       </div>
 
-<div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Connection tests</h3>
-        <div class="card divide-y divide-gray-100">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div>
-              <div class="text-sm font-medium">Test Telegram</div>
-              <div class="text-xs text-gray-400 mt-0.5">Send a test message to verify the bot and chat ID.</div>
-            </div>
-            <button @click="testNotify()" :disabled="!notify.configured" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Send test</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div>
-              <div class="text-sm font-medium">Test AI</div>
-              <div class="text-xs text-gray-400 mt-0.5">Run a tiny prompt through the provider chain and report which one answered.</div>
-            </div>
-            <button @click="testAI()" :disabled="busy" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Test AI</button>
-          </div>
-        </div>
-      </div>
-
-<div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Alerts</h3>
-        <div class="card p-4">
-          <div class="text-sm font-medium">Weekly digest &amp; source alerts</div>
-          <div class="text-xs text-gray-400 mt-1 leading-relaxed">
-            Monday mornings: what you owe, what's waiting, what broke. And the moment a
-            working board goes dark — including one that returns nothing while still
-            reporting success, which nothing else would tell you about.
-            <span class="block mt-1">Both need Telegram configured in <code class="text-[11px]">.env</code>.</span>
-          </div>
-          <button @click="testDigest()" :disabled="busy==='digest'"
-            class="mt-3 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5">
-            <i class="ti ti-send"></i>
-            <span x-text="busy==='digest' ? 'Sending…' : 'Preview this week\'s digest'"></span>
-          </button>
-          <pre x-show="digestPreview" class="mt-3 text-[11px] bg-gray-50 border border-gray-100 rounded-md p-3 whitespace-pre-wrap text-gray-600" x-text="digestPreview"></pre>
-        </div>
-      </div>
-
-<div class="mt-6 max-w-2xl">
+      <!-- Privacy (user's personal data choice) -->
+<div class="mt-5 max-w-2xl">
         <h3 class="text-sm font-semibold text-gray-700 mb-1">Privacy</h3>
         <div class="text-xs text-gray-400 mb-3">
           Writing a cover letter genuinely needs your background — that's the point of it.
@@ -1475,26 +1513,7 @@
           </div>
         </div>
       </div>
-
-<div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-1">Configuration files</h3>
-        <div class="text-xs text-gray-400 mb-3">Edit these directly in your editor. Companies and profile can also be edited from the tabs above.</div>
-        <div class="card divide-y divide-gray-100">
-          <template x-for="f in cfgFiles" :key="f.path">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-              <div class="min-w-0">
-                <div class="text-sm font-medium" x-text="f.label"></div>
-                <div class="text-xs text-gray-400 mt-0.5" x-text="f.description"></div>
-              </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <span x-show="!f.exists" class="text-[11px] px-1.5 py-0.5 rounded bg-red-50 text-red-500">missing</span>
-                <code @click="copyPath(f.path)" class="cursor-pointer text-[12px] px-2 py-1 rounded bg-brand/10 text-brand hover:bg-brand/20" :title="'Click to copy'" x-text="f.path"></code>
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
-    </div>    <!-- ─── Import ─── -->
+    </div>
     <div x-show="tab==='importTab'">
       <h2 class="text-lg font-semibold mb-4 hidden md:block">Import jobs</h2>
       <div class="text-sm text-gray-500 mb-4 max-w-2xl">Bring jobs in from a job-alert

@@ -448,3 +448,51 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 .focus-panel-h .fp-close:hover { color:var(--ink); }
 .focus-panel-body > .fp-sec { border-top:1px solid var(--line-2); }
 .focus-panel-body > .fp-sec:first-child { border-top:none; }
+
+/* ============================================================================
+   Admin · Operations — activity stats + run timeline + expandable errors.
+   ============================================================================ */
+.op-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:6px; max-width:42rem; }
+.op-stat { border-radius:12px; padding:12px; text-align:center; border:1px solid var(--line); background:#fff; }
+.op-stat .v { font-size:19px; font-weight:700; font-variant-numeric:tabular-nums; }
+.op-stat .k { font-size:10px; color:var(--ink-3); margin-top:2px; }
+.op-stat.gd .v { color:var(--green); } .op-stat.rd .v { color:var(--red); } .op-stat.bl .v { color:var(--blue); }
+
+.op-h { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3);
+        margin:22px 0 10px; display:flex; align-items:center; gap:7px; max-width:42rem; }
+.op-h i { color:var(--brand); font-size:13px; }
+
+/* Run timeline. */
+.op-tl { position:relative; padding:6px 16px; }
+.op-tl .spine { position:absolute; left:22px; top:14px; bottom:14px; width:2px; background:var(--line); }
+.op-run { position:relative; padding:11px 0 11px 22px; border-bottom:1px solid var(--line-2); }
+.op-run:last-child { border-bottom:none; }
+.op-run::before { content:''; position:absolute; left:-3px; top:16px; width:9px; height:9px; border-radius:50%;
+                  background:var(--green); border:2px solid #fff; box-shadow:0 0 0 1px var(--line); z-index:1; }
+.op-run.err::before { background:var(--red); }
+.op-run .top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.op-run .when { font-size:13px; font-weight:600; }
+.op-run .kept { font-size:13px; font-weight:700; color:var(--green); flex-shrink:0; }
+.op-run .meta { font-size:11.5px; color:var(--ink-3); margin-top:2px; }
+
+/* Show-all toggle button. */
+.op-more { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; padding:10px;
+           border-top:1px solid var(--line-2); font-size:12px; font-weight:600; color:var(--brand);
+           cursor:pointer; background:none; }
+.op-more:hover { background:var(--hover); }
+
+/* Errors — expandable. */
+.op-err { border-bottom:1px solid var(--line-2); }
+.op-err:last-child { border-bottom:none; }
+.op-err-head { display:flex; align-items:flex-start; gap:9px; padding:12px 16px; cursor:pointer; }
+.op-err-head:hover { background:var(--hover); }
+.op-err .edot { width:7px; height:7px; border-radius:50%; background:var(--red); margin-top:5px; flex-shrink:0; }
+.op-err .ek { font-size:12.5px; font-weight:600; }
+.op-err .em { font-size:11.5px; color:var(--ink-2); margin-top:1px; line-height:1.45; }
+.op-err .ewhere { font-size:9.5px; padding:1px 6px; border-radius:20px; background:var(--hover); color:var(--ink-3); font-weight:600; }
+.op-err .eplus { margin-left:auto; color:var(--ink-3); font-size:15px; flex-shrink:0; transition:transform .2s; }
+.op-err.open .eplus { transform:rotate(45deg); color:var(--brand); }
+.op-err-detail { padding:0 16px 14px 34px; }
+.op-err-detail pre { font-size:11px; color:var(--ink-2); background:var(--hover); border:1px solid var(--line-2);
+                     border-radius:8px; padding:11px; overflow-x:auto; white-space:pre-wrap; word-break:break-word; }
+.op-err-meta { display:flex; gap:12px; font-size:10.5px; color:var(--ink-3); margin-bottom:7px; }

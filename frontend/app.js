@@ -8,6 +8,9 @@ function jobpilot() {
     adminMode: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_admin_mode') === '1'),
     adminSubtab: 'system',   // Admin page sub-tab: 'system' | 'operations' | 'maintenance'
     adminFocus: 'providers', // System sub-tab: which focus-tile panel is open (null = none)
+    opsRunsAll: false,       // Operations: show all runs vs latest 5
+    opsErrAll: false,        // Operations: show all errors vs latest 5
+    opsErrExpanded: null,    // Operations: which error id is expanded (full detail)
     // Job ids ticked for a selective score. Cleared on tab change: acting on
     // jobs that scrolled out of view is never what was meant.
     pickedJobs: [],
@@ -411,6 +414,31 @@ function jobpilot() {
       await this.loadHealth?.();
       this.showSnack(r.count ? `Cleared ${r.count} removed source(s)` : 'Nothing to clean up');
     },
+    // ───────── Operations (run history + errors) helpers ─────────
+    // The runs table stores started_at as SQLite datetime('now') — a UTC string like
+    // "2026-08-08 14:12:03". Turn it into a friendly "Fri, Aug 8 · 2:12 PM" (local time).
+    fmtRunTime(s) {
+      if (!s) return '';
+      // Treat the stored value as UTC; append Z so the browser converts to local.
+      const iso = s.includes('T') ? s : s.replace(' ', 'T');
+      const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+      if (isNaN(d)) return s;
+      const day = d.toLocaleDateString(undefined, { weekday: 'short' });
+      const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      return `${day}, ${date} · ${time}`;
+    },
+    // Latest 5 runs, or all when expanded.
+    visibleRuns() {
+      return this.opsRunsAll ? this.runs : this.runs.slice(0, 5);
+    },
+    visibleErrors() {
+      return this.opsErrAll ? this.errors : this.errors.slice(0, 5);
+    },
+    toggleErr(id) {
+      this.opsErrExpanded = this.opsErrExpanded === id ? null : id;
+    },
+
     // ───────── Sources UI helpers ─────────
     // Health verdict → { label, tone } for the badge and letter-tile colour. An inactive
     // source reads "OFF"; one with no run yet reads "NEW".

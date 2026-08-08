@@ -601,7 +601,7 @@
           <span class="src-attn-peek" x-show="!srcAttnOpen" x-text="brokenBoards().map(b=>b.name).slice(0,3).join(', ') + (brokenBoards().length>3 ? '…' : '')"></span>
           <i class="ti src-attn-chev" :class="srcAttnOpen ? 'ti-chevron-up' : 'ti-chevron-down'"></i>
         </div>
-        <div x-show="srcAttnOpen" x-cloak>
+        <div x-show="srcAttnOpen" x-cloak class="src-attn-scroll">
           <template x-for="b in brokenBoards()" :key="b.name">
             <div class="src-attn-item" :class="boardIssue(b).tone">
               <div class="src-attn-top">

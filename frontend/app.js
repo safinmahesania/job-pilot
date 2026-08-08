@@ -7,6 +7,7 @@ function jobpilot() {
     // Off by default so the everyday view stays clean; remembered across reloads.
     adminMode: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_admin_mode') === '1'),
     adminSubtab: 'system',   // Admin page sub-tab: 'system' | 'operations' | 'maintenance'
+    adminFocus: 'providers', // System sub-tab: which focus-tile panel is open (null = none)
     // Job ids ticked for a selective score. Cleared on tab change: acting on
     // jobs that scrolled out of view is never what was meant.
     pickedJobs: [],

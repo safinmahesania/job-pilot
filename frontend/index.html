@@ -1058,233 +1058,262 @@
 
       <!-- ═══ TAB: System & AI ═══ -->
       <div x-show="adminSubtab==='system'">
+      <div class="focusgrid">
 
-      <!-- ══ System & AI settings (admin) ══ -->
-      <div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Automation</h3>
-      <div class="card p-4 max-w-2xl mb-5">
-        <div class="flex items-center justify-between mb-1">
-          <span class="text-sm font-medium">Auto-fetch</span>
-          <button @click="sched.enabled = !sched.enabled; saveSchedule()" class="sw" :class="sched.enabled ? 'on' : 'off'"><span></span></button>
+        <!-- Tile: AI providers -->
+        <div class="focus wide accent" :class="adminFocus==='providers' && 'open'" @click="adminFocus = adminFocus==='providers' ? null : 'providers'">
+          <div class="focus-ic"><i class="ti ti-cpu"></i></div>
+          <div class="focus-stat"><div class="v" style="color:var(--brand-strong)"><span x-text="llm.available"></span>/<span x-text="llm.total"></span></div><div class="k">up</div></div>
+          <div class="focus-t">AI providers</div>
+          <div class="focus-d">The models that read and score every job.</div>
+          <div class="focus-chips">
+            <template x-for="p in llm.providers" :key="p.name">
+              <span class="fchip"><span class="d" :class="!(p.enabled && p.configured) && 'off'"></span> <span x-text="p.label"></span></span>
+            </template>
+          </div>
+          <i class="ti ti-chevron-down focus-caret"></i>
         </div>
-        <div class="text-xs text-gray-400 mb-3">Runs the pipeline automatically while JobPilot is open.</div>
-        <div class="flex items-center gap-2">
-          <span class="text-sm text-gray-600">Every</span>
-          <input type="number" min="0.5" max="168" step="0.5" x-model.number="sched.interval_hours" @change="saveSchedule()" class="w-20 fld text-right">
-          <span class="text-sm text-gray-600">hours</span>
-        </div>
-        <div class="text-xs text-gray-400 mt-3" x-show="sched.enabled && nextRun">Next run: <span x-text="nextRun"></span></div>
-        <div class="text-xs text-gray-400 mt-2">If the app was closed past a due run, it fires shortly after you reopen it.</div>
-      </div>
 
-      </div>
-
-      <div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Scoring model</h3>
-      <div class="card p-4 max-w-2xl mb-5">
-        <div class="text-sm font-medium mb-1">Scoring model</div>
-        <div class="text-xs text-gray-400 mb-3">14b is more accurate; 7b is faster and uses less memory. Falls back to 7b automatically if a job runs out of memory.</div>
-        <div class="flex items-center gap-3">
-          <select x-model="selectedModel" @change="saveModel()" class="fld max-w-xs">
-            <option value="qwen2.5:14b">qwen2.5:14b — best quality</option>
-            <option value="qwen2.5:7b">qwen2.5:7b — faster</option>
-          </select>
-          <span class="text-xs px-2 py-1 rounded-md" x-show="modelState.fallback_active" style="background:#F7EDD8; color:#7A4E0C;">
-            currently on 7b (fallback)
-          </span>
-        </div>
-      </div>
-
-      </div>
-
-<div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">AI features</h3>
-        <div class="card divide-y divide-gray-100">
-          <div class="flex items-start justify-between gap-4 p-4">
-            <div>
-              <div class="text-sm font-medium">Scrape-time AI</div>
-              <div class="text-xs text-gray-400 mt-0.5">
-                Used during a run: scores every new job against your profile.
-                When off, jobs are still fetched and filtered — they're just stored unscored.
+        <!-- Panel: AI providers -->
+        <div class="focus-panel" x-show="adminFocus==='providers'" x-cloak>
+          <div class="focus-panel-h">
+            <div class="pi"><i class="ti ti-cpu"></i></div>
+            <div><div class="pt">AI providers</div><div class="pd">Tried in order — first available handles the job. Keys live in <code class="text-brand">.env</code>.</div></div>
+            <div class="fp-close" @click.stop="adminFocus=null"><i class="ti ti-x"></i></div>
+          </div>
+          <div class="focus-panel-body">
+            <!-- summary -->
+            <div class="fp-sec p-4 flex flex-wrap gap-6">
+              <div>
+                <div class="text-[11px] uppercase tracking-wide text-gray-400">Available</div>
+                <div class="text-lg font-semibold"><span class="text-green-600" x-text="llm.available"></span><span class="text-gray-400"> / </span><span x-text="llm.total"></span></div>
+              </div>
+              <div class="min-w-[180px]">
+                <div class="text-[11px] uppercase tracking-wide text-gray-400">Combined daily usage</div>
+                <div class="text-lg font-semibold tabular-nums">
+                  <span x-text="fmtNum(llm.combined_tokens)"></span><span class="text-gray-400"> / </span><span x-text="fmtNum(llm.combined_limit)"></span>
+                </div>
+                <div class="text-xs text-gray-400">tokens across hosted keys</div>
               </div>
             </div>
-            <button @click="toggleFeature('scoring')" class="sw shrink-0 mt-0.5" :class="ai.scoring ? 'on' : 'off'"><span></span></button>
-          </div>
-          <div class="flex items-start justify-between gap-4 p-4">
-            <div>
-              <div class="text-sm font-medium">On-demand AI</div>
-              <div class="text-xs text-gray-400 mt-0.5">
-                User-triggered: cover letter and resume generation.
-                When off, the Cover letter button returns an error instead of generating.
-              </div>
-            </div>
-            <button @click="toggleFeature('generation')" class="sw shrink-0 mt-0.5" :class="ai.generation ? 'on' : 'off'"><span></span></button>
-          </div>
-        </div>
-      </div>
-
-<div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-1">AI providers</h3>
-        <div class="text-xs text-gray-400 mb-3">Used for cover letters and resumes. Automatic failover — when one hits its rate limit, the next is tried. Keys live in your <code class="text-brand">.env</code>.</div>
-
-        <!-- summary -->
-        <div class="card p-4 mb-3 flex flex-wrap gap-6">
-          <div>
-            <div class="text-[11px] uppercase tracking-wide text-gray-400">Available</div>
-            <div class="text-lg font-semibold"><span class="text-green-600" x-text="llm.available"></span><span class="text-gray-400"> / </span><span x-text="llm.total"></span></div>
-          </div>
-          <div class="min-w-[180px]">
-            <div class="text-[11px] uppercase tracking-wide text-gray-400">Combined daily usage</div>
-            <div class="text-lg font-semibold tabular-nums">
-              <span x-text="fmtNum(llm.combined_tokens)"></span><span class="text-gray-400"> / </span><span x-text="fmtNum(llm.combined_limit)"></span>
-            </div>
-            <div class="text-xs text-gray-400">tokens across hosted keys</div>
-          </div>
-        </div>
-
-        <!-- per provider -->
-        <div class="space-y-3">
-          <template x-for="(p, i) in llm.providers" :key="p.name">
-            <div class="card p-4">
-              <div class="flex items-start gap-2">
-                <span class="w-2 h-2 rounded-full mt-2 shrink-0" :class="p.enabled && p.configured ? 'bg-green-500' : 'bg-gray-300'"></span>
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="font-semibold text-sm" x-text="p.label"></span>
-                    <span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500" x-text="i === 0 ? 'primary' : 'fallback ' + i"></span>
+            <!-- per provider -->
+            <template x-for="(p, i) in llm.providers" :key="p.name">
+              <div class="fp-sec p-4">
+                <div class="flex items-start gap-2">
+                  <span class="w-2 h-2 rounded-full mt-2 shrink-0" :class="p.enabled && p.configured ? 'bg-green-500' : 'bg-gray-300'"></span>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="font-semibold text-sm" x-text="p.label"></span>
+                      <span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500" x-text="i === 0 ? 'primary' : 'fallback ' + i"></span>
+                    </div>
+                    <div class="text-xs text-gray-400 mt-0.5" x-text="p.note"></div>
                   </div>
-                  <div class="text-xs text-gray-400 mt-0.5" x-text="p.note"></div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button @click="moveProvider(i, -1)" :disabled="i === 0" class="text-gray-400 hover:text-brand disabled:opacity-25" title="Try earlier"><i class="ti ti-arrow-up"></i></button>
+                    <button @click="moveProvider(i, 1)" :disabled="i === llm.providers.length - 1" class="text-gray-400 hover:text-brand disabled:opacity-25" title="Try later"><i class="ti ti-arrow-down"></i></button>
+                    <button @click="toggleProvider(p)" class="sw ml-1" :class="p.enabled ? 'on' : 'off'"><span></span></button>
+                  </div>
                 </div>
-                <div class="flex items-center gap-1 shrink-0">
-                  <button @click="moveProvider(i, -1)" :disabled="i === 0" class="text-gray-400 hover:text-brand disabled:opacity-25" title="Try earlier"><i class="ti ti-arrow-up"></i></button>
-                  <button @click="moveProvider(i, 1)" :disabled="i === llm.providers.length - 1" class="text-gray-400 hover:text-brand disabled:opacity-25" title="Try later"><i class="ti ti-arrow-down"></i></button>
-                  <button @click="toggleProvider(p)" class="sw ml-1" :class="p.enabled ? 'on' : 'off'"><span></span></button>
+                <div class="flex items-center gap-2 mt-3 text-xs flex-wrap" x-show="p.env">
+                  <span class="text-gray-400">Env var</span>
+                  <code class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600" x-text="p.env"></code>
+                  <span x-show="p.configured" class="px-1.5 py-0.5 rounded bg-green-50 text-green-600 font-medium">✓ set</span>
+                  <span x-show="!p.configured" class="px-1.5 py-0.5 rounded bg-red-50 text-red-500 font-medium">missing</span>
+                  <template x-if="p.key_preview">
+                    <code class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-400" x-text="p.key_preview"></code>
+                  </template>
                 </div>
-              </div>
-
-              <!-- key status -->
-              <div class="flex items-center gap-2 mt-3 text-xs flex-wrap" x-show="p.env">
-                <span class="text-gray-400">Env var</span>
-                <code class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600" x-text="p.env"></code>
-                <span x-show="p.configured" class="px-1.5 py-0.5 rounded bg-green-50 text-green-600 font-medium">✓ set</span>
-                <span x-show="!p.configured" class="px-1.5 py-0.5 rounded bg-red-50 text-red-500 font-medium">missing</span>
-                <template x-if="p.key_preview">
-                  <code class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-400" x-text="p.key_preview"></code>
+                <template x-if="p.daily_tokens">
+                  <div class="mt-3">
+                    <div class="flex items-center justify-between text-xs mb-1">
+                      <span class="text-gray-400">Daily usage (UTC)</span>
+                      <span class="text-gray-500 tabular-nums">
+                        <span x-text="fmtNum(p.tokens_used)"></span> / <span x-text="fmtNum(p.daily_tokens)"></span>
+                        (<span x-text="p.percent"></span>%)
+                      </span>
+                    </div>
+                    <div class="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div class="h-full rounded-full transition-all"
+                           :class="p.percent >= 90 ? 'bg-red-500' : (p.percent >= 70 ? 'bg-amber-500' : 'bg-brand')"
+                           :style="`width:${Math.min(p.percent || 0, 100)}%`"></div>
+                    </div>
+                    <div class="text-xs text-gray-400 mt-1"><span x-text="p.requests_today"></span> requests today</div>
+                  </div>
                 </template>
-              </div>
-
-              <!-- usage bar (hosted providers only) -->
-              <template x-if="p.daily_tokens">
-                <div class="mt-3">
-                  <div class="flex items-center justify-between text-xs mb-1">
-                    <span class="text-gray-400">Daily usage (UTC)</span>
-                    <span class="text-gray-500 tabular-nums">
-                      <span x-text="fmtNum(p.tokens_used)"></span> / <span x-text="fmtNum(p.daily_tokens)"></span>
-                      (<span x-text="p.percent"></span>%)
-                    </span>
-                  </div>
-                  <div class="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                    <div class="h-full rounded-full transition-all"
-                         :class="p.percent >= 90 ? 'bg-red-500' : (p.percent >= 70 ? 'bg-amber-500' : 'bg-brand')"
-                         :style="`width:${Math.min(p.percent || 0, 100)}%`"></div>
-                  </div>
-                  <div class="text-xs text-gray-400 mt-1"><span x-text="p.requests_today"></span> requests today</div>
+                <div x-show="!p.daily_tokens" class="mt-3 text-xs text-gray-400">
+                  Local — no quota. <span x-text="p.requests_today"></span> requests today.
                 </div>
-              </template>
-              <div x-show="!p.daily_tokens" class="mt-3 text-xs text-gray-400">
-                Local — no quota. <span x-text="p.requests_today"></span> requests today.
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Tile: AI behaviour -->
+        <div class="focus" :class="adminFocus==='behaviour' && 'open'" @click="adminFocus = adminFocus==='behaviour' ? null : 'behaviour'">
+          <div class="focus-ic"><i class="ti ti-sparkles"></i></div>
+          <div class="focus-stat"><div class="v" x-text="(ai.scoring?1:0)+(ai.generation?1:0)"></div><div class="k">on</div></div>
+          <div class="focus-t">AI behaviour</div>
+          <div class="focus-d">When AI runs &amp; which model scores.</div>
+          <i class="ti ti-chevron-down focus-caret"></i>
+        </div>
+
+        <!-- Tile: Automation -->
+        <div class="focus" :class="adminFocus==='auto' && 'open'" @click="adminFocus = adminFocus==='auto' ? null : 'auto'">
+          <div class="focus-ic"><i class="ti ti-refresh"></i></div>
+          <div class="focus-stat"><div class="v" :style="sched.enabled ? 'color:var(--green)' : 'color:var(--ink-3)'" x-text="sched.enabled ? 'On' : 'Off'"></div><div class="k" x-show="sched.enabled"><span x-text="sched.interval_hours"></span>h</div></div>
+          <div class="focus-t">Automation</div>
+          <div class="focus-d">Auto-fetch on a schedule.</div>
+          <i class="ti ti-chevron-down focus-caret"></i>
+        </div>
+
+        <!-- Panel: AI behaviour (opens under behaviour+automation row) -->
+        <div class="focus-panel" x-show="adminFocus==='behaviour'" x-cloak>
+          <div class="focus-panel-h">
+            <div class="pi"><i class="ti ti-sparkles"></i></div>
+            <div><div class="pt">AI behaviour</div><div class="pd">When AI runs and how scoring works.</div></div>
+            <div class="fp-close" @click.stop="adminFocus=null"><i class="ti ti-x"></i></div>
+          </div>
+          <div class="focus-panel-body">
+            <div class="fp-sec flex items-start justify-between gap-4 p-4">
+              <div>
+                <div class="text-sm font-medium">Scrape-time AI</div>
+                <div class="text-xs text-gray-400 mt-0.5">Scores every new job against your profile during a run. When off, jobs are fetched and filtered but stored unscored.</div>
+              </div>
+              <button @click="toggleFeature('scoring')" class="sw shrink-0 mt-0.5" :class="ai.scoring ? 'on' : 'off'"><span></span></button>
+            </div>
+            <div class="fp-sec flex items-start justify-between gap-4 p-4">
+              <div>
+                <div class="text-sm font-medium">On-demand AI</div>
+                <div class="text-xs text-gray-400 mt-0.5">Cover letter and resume generation. When off, the Cover letter button returns an error.</div>
+              </div>
+              <button @click="toggleFeature('generation')" class="sw shrink-0 mt-0.5" :class="ai.generation ? 'on' : 'off'"><span></span></button>
+            </div>
+            <div class="fp-sec p-4">
+              <div class="text-sm font-medium mb-1">Scoring model</div>
+              <div class="text-xs text-gray-400 mb-3">14b is more accurate; 7b is faster and uses less memory. Falls back to 7b automatically if a job runs out of memory.</div>
+              <div class="flex items-center gap-3">
+                <select x-model="selectedModel" @change="saveModel()" class="fld max-w-xs">
+                  <option value="qwen2.5:14b">qwen2.5:14b — best quality</option>
+                  <option value="qwen2.5:7b">qwen2.5:7b — faster</option>
+                </select>
+                <span class="text-xs px-2 py-1 rounded-md" x-show="modelState.fallback_active" style="background:#F7EDD8; color:#7A4E0C;">
+                  currently on 7b (fallback)
+                </span>
               </div>
             </div>
-          </template>
-        </div>
-      </div>
-
-      <div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Scoring engine</h3>
-        <div class="card divide-y divide-gray-100">
-          <div class="flex items-start justify-between gap-4 p-4">
-            <div>
-              <div class="text-sm font-medium">Score through the provider chain</div>
-              <div class="text-xs text-gray-400 mt-1 leading-relaxed">
-                Uses Cerebras / Gemini instead of local Ollama — far faster, and a better
-                judgement of fit. Ollama stays at the end of the chain, so an offline machine
-                still works. Turn this off to pin scoring to local only.
+            <div class="fp-sec flex items-start justify-between gap-4 p-4">
+              <div>
+                <div class="text-sm font-medium">Score through the provider chain</div>
+                <div class="text-xs text-gray-400 mt-1 leading-relaxed">Uses Cerebras / Gemini instead of local Ollama — faster and a better judgement of fit. Ollama stays at the end so an offline machine still works.</div>
               </div>
+              <button @click="fb.scoring_via_chain = !fb.scoring_via_chain; saveScoring()" class="sw shrink-0 mt-0.5" :class="fb.scoring_via_chain ? 'on' : 'off'"><span></span></button>
             </div>
-            <button @click="fb.scoring_via_chain = !fb.scoring_via_chain; saveScoring()"
-              class="sw shrink-0 mt-0.5" :class="fb.scoring_via_chain ? 'on' : 'off'"><span></span></button>
-          </div>
-
-          <div class="flex items-start justify-between gap-4 p-4">
-            <div>
-              <div class="text-sm font-medium">Follow job links to recover descriptions</div>
-              <div class="text-xs text-gray-400 mt-1 leading-relaxed">
-                Alert-email links are tracking redirects. Following one lets LinkedIn or Indeed
-                know the message was engaged with. Turn it off and every alert-email job stays
-                <b>unscored</b>, because scoring needs a description.
+            <div class="fp-sec flex items-start justify-between gap-4 p-4">
+              <div>
+                <div class="text-sm font-medium">Follow job links to recover descriptions</div>
+                <div class="text-xs text-gray-400 mt-1 leading-relaxed">Alert-email links are tracking redirects. Turn it off and every alert-email job stays <b>unscored</b>, because scoring needs a description.</div>
               </div>
+              <button @click="privacy.follow_job_links = !privacy.follow_job_links; savePrivacy()" class="sw shrink-0 mt-0.5" :class="privacy.follow_job_links ? 'on' : 'off'"><span></span></button>
             </div>
-            <button @click="privacy.follow_job_links = !privacy.follow_job_links; savePrivacy()"
-              class="sw shrink-0 mt-0.5" :class="privacy.follow_job_links ? 'on' : 'off'"><span></span></button>
           </div>
-
         </div>
-      </div>
 
-      <div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Notifications</h3>
-      <div class="card p-4 max-w-2xl mb-5">
-        <div class="flex items-center justify-between mb-1">
-          <span class="text-sm font-medium">Telegram notifications</span>
-          <button @click="notify.enabled = !notify.enabled; saveNotify()" class="sw"
-            :class="notify.enabled ? 'on' : 'off'" :disabled="!notify.configured"><span></span></button>
-        </div>
-        <div class="text-xs text-gray-400 mb-3" x-show="notify.configured">Sends a run summary to Telegram after each run.</div>
-        <div class="text-xs text-red-500" x-show="!notify.configured">Not configured — add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to .env.</div>
-      </div>
-
-      </div>
-
-<div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Alerts</h3>
-        <div class="card p-4">
-          <div class="text-sm font-medium">Weekly digest &amp; source alerts</div>
-          <div class="text-xs text-gray-400 mt-1 leading-relaxed">
-            Monday mornings: what you owe, what's waiting, what broke. And the moment a
-            working board goes dark — including one that returns nothing while still
-            reporting success, which nothing else would tell you about.
-            <span class="block mt-1">Both need Telegram configured in <code class="text-[11px]">.env</code>.</span>
+        <!-- Panel: Automation -->
+        <div class="focus-panel" x-show="adminFocus==='auto'" x-cloak>
+          <div class="focus-panel-h">
+            <div class="pi"><i class="ti ti-refresh"></i></div>
+            <div><div class="pt">Automation</div><div class="pd">Fetching on its own.</div></div>
+            <div class="fp-close" @click.stop="adminFocus=null"><i class="ti ti-x"></i></div>
           </div>
-          <button @click="testDigest()" :disabled="busy==='digest'"
-            class="mt-3 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5">
-            <i class="ti ti-send"></i>
-            <span x-text="busy==='digest' ? 'Sending…' : 'Preview this week\'s digest'"></span>
-          </button>
-          <pre x-show="digestPreview" class="mt-3 text-[11px] bg-gray-50 border border-gray-100 rounded-md p-3 whitespace-pre-wrap text-gray-600" x-text="digestPreview"></pre>
-        </div>
-      </div>
-
-<div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Connection tests</h3>
-        <div class="card divide-y divide-gray-100">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div>
-              <div class="text-sm font-medium">Test Telegram</div>
-              <div class="text-xs text-gray-400 mt-0.5">Send a test message to verify the bot and chat ID.</div>
+          <div class="focus-panel-body">
+            <div class="fp-sec p-4">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-sm font-medium">Auto-fetch</span>
+                <button @click="sched.enabled = !sched.enabled; saveSchedule()" class="sw" :class="sched.enabled ? 'on' : 'off'"><span></span></button>
+              </div>
+              <div class="text-xs text-gray-400 mb-3">Runs the pipeline automatically while JobPilot is open.</div>
+              <div class="flex items-center gap-2">
+                <span class="text-sm text-gray-600">Every</span>
+                <input type="number" min="0.5" max="168" step="0.5" x-model.number="sched.interval_hours" @change="saveSchedule()" class="w-20 fld text-right">
+                <span class="text-sm text-gray-600">hours</span>
+              </div>
+              <div class="text-xs text-gray-400 mt-3" x-show="sched.enabled && nextRun">Next run: <span x-text="nextRun"></span></div>
+              <div class="text-xs text-gray-400 mt-2">If the app was closed past a due run, it fires shortly after you reopen it.</div>
             </div>
-            <button @click="testNotify()" :disabled="!notify.configured" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Send test</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div>
-              <div class="text-sm font-medium">Test AI</div>
-              <div class="text-xs text-gray-400 mt-0.5">Run a tiny prompt through the provider chain and report which one answered.</div>
-            </div>
-            <button @click="testAI()" :disabled="busy" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Test AI</button>
           </div>
         </div>
+
+        <!-- Tile: Notifications -->
+        <div class="focus" :class="adminFocus==='notif' && 'open'" @click="adminFocus = adminFocus==='notif' ? null : 'notif'">
+          <div class="focus-ic"><i class="ti ti-bell"></i></div>
+          <div class="focus-stat"><div class="v" :style="notify.enabled ? 'color:var(--green)' : 'color:var(--ink-3)'" x-text="notify.enabled ? 'On' : 'Off'"></div><div class="k">TG</div></div>
+          <div class="focus-t">Notifications</div>
+          <div class="focus-d">Telegram summaries &amp; digest.</div>
+          <i class="ti ti-chevron-down focus-caret"></i>
+        </div>
+
+        <!-- Tile: Connection tests -->
+        <div class="focus" :class="adminFocus==='tests' && 'open'" @click="adminFocus = adminFocus==='tests' ? null : 'tests'">
+          <div class="focus-ic"><i class="ti ti-plug"></i></div>
+          <div class="focus-t">Connection tests</div>
+          <div class="focus-d">Check Telegram &amp; AI.</div>
+          <i class="ti ti-chevron-down focus-caret"></i>
+        </div>
+
+        <!-- Panel: Notifications -->
+        <div class="focus-panel" x-show="adminFocus==='notif'" x-cloak>
+          <div class="focus-panel-h">
+            <div class="pi"><i class="ti ti-bell"></i></div>
+            <div><div class="pt">Notifications &amp; alerts</div><div class="pd">How the app pings you.</div></div>
+            <div class="fp-close" @click.stop="adminFocus=null"><i class="ti ti-x"></i></div>
+          </div>
+          <div class="focus-panel-body">
+            <div class="fp-sec p-4">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-sm font-medium">Telegram notifications</span>
+                <button @click="notify.enabled = !notify.enabled; saveNotify()" class="sw" :class="notify.enabled ? 'on' : 'off'" :disabled="!notify.configured"><span></span></button>
+              </div>
+              <div class="text-xs text-gray-400" x-show="notify.configured">Sends a run summary to Telegram after each run.</div>
+              <div class="text-xs text-red-500" x-show="!notify.configured">Not configured — add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to .env.</div>
+            </div>
+            <div class="fp-sec p-4">
+              <div class="text-sm font-medium">Weekly digest &amp; source alerts</div>
+              <div class="text-xs text-gray-400 mt-1 leading-relaxed">Monday mornings: what you owe, what's waiting, what broke — including a board that returns nothing while still reporting success. Both need Telegram configured in <code class="text-[11px]">.env</code>.</div>
+              <button @click="testDigest()" :disabled="busy==='digest'" class="mt-3 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5">
+                <i class="ti ti-send"></i>
+                <span x-text="busy==='digest' ? 'Sending…' : 'Preview this week\'s digest'"></span>
+              </button>
+              <pre x-show="digestPreview" class="mt-3 text-[11px] bg-gray-50 border border-gray-100 rounded-md p-3 whitespace-pre-wrap text-gray-600" x-text="digestPreview"></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel: Connection tests -->
+        <div class="focus-panel" x-show="adminFocus==='tests'" x-cloak>
+          <div class="focus-panel-h">
+            <div class="pi"><i class="ti ti-plug"></i></div>
+            <div><div class="pt">Connection tests</div><div class="pd">Ping each service.</div></div>
+            <div class="fp-close" @click.stop="adminFocus=null"><i class="ti ti-x"></i></div>
+          </div>
+          <div class="focus-panel-body">
+            <div class="fp-sec flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+              <div>
+                <div class="text-sm font-medium">Test Telegram</div>
+                <div class="text-xs text-gray-400 mt-0.5">Send a test message to verify the bot and chat ID.</div>
+              </div>
+              <button @click="testNotify()" :disabled="!notify.configured" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Send test</button>
+            </div>
+            <div class="fp-sec flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+              <div>
+                <div class="text-sm font-medium">Test AI</div>
+                <div class="text-xs text-gray-400 mt-0.5">Run a tiny prompt through the provider chain and report which one answered.</div>
+              </div>
+              <button @click="testAI()" :disabled="busy" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40 self-start">Test AI</button>
+            </div>
+          </div>
+        </div>
+
       </div>
-
-
       </div>
       <!-- ═══ END TAB: System & AI ═══ -->
 

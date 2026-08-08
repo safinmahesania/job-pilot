@@ -329,6 +329,63 @@ def maint_nuclear():
     return maintenance.nuclear_reset()
 
 
+@router.get("/api/maint/preview")
+def maint_preview(conn=Depends(_db_dep)):
+    """Live counts of what each maintenance action would touch.
+
+    The Maintenance tab shows these next to each action — "142 jobs", "18 expired",
+    "0 below threshold" — so a run has a visible target and it's clear when there's
+    nothing to do. Computed in one request so the tab doesn't fan out a dozen calls.
+    """
+    from pathlib import Path
+    from src import expiry
+    from src.paths import MIN_DESCRIPTION_CHARS
+
+    def q(sql, *args):
+        return conn.execute(sql, args).fetchone()[0]
+
+    total = q("SELECT COUNT(*) FROM jobs")
+    threshold = int(_get_setting(conn, "score_threshold", 70))
+
+    # Feed jobs still carrying a short snippet (candidates for description enrichment).
+    snippets = q(
+        "SELECT COUNT(*) FROM jobs WHERE status='surfaced' "
+        "AND (description IS NULL OR LENGTH(description) < ?)",
+        MIN_DESCRIPTION_CHARS,
+    )
+
+    # Live jobs past their deadline — the same check sweep-expired uses.
+    rows = conn.execute(
+        "SELECT deadline, description FROM jobs WHERE status='surfaced'"
+    ).fetchall()
+    expired = sum(
+        1 for r in rows
+        if expiry.has_expired({"deadline": r[0], "description": r[1]})
+    )
+
+    # Feed jobs scoring under the threshold (cleanup candidates).
+    low = q(
+        "SELECT COUNT(*) FROM jobs WHERE status='surfaced' AND score IS NOT NULL AND score < ?",
+        threshold,
+    )
+
+    # Rough cache size on disk, in MB.
+    cache_bytes = 0
+    for name in ("__pycache__", "logs", "data/cache"):
+        p = Path(name)
+        if p.exists():
+            cache_bytes += sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+    cache_mb = round(cache_bytes / (1024 * 1024), 1)
+
+    return {
+        "total": total,
+        "snippets": snippets,
+        "expired": expired,
+        "low": low,
+        "cache_mb": cache_mb,
+    }
+
+
 # ── Error log ──
 
 @router.get("/api/errors")

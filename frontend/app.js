@@ -7,6 +7,7 @@ function jobpilot() {
     // Off by default so the everyday view stays clean; remembered across reloads.
     adminMode: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_admin_mode') === '1'),
     adminSubtab: 'system',   // Admin page sub-tab: 'system' | 'operations' | 'maintenance'
+    maintPreview: null,      // live counts for the Maintenance tab: {total, snippets, expired, low, cache_mb}
     adminFocus: 'providers', // System sub-tab: which focus-tile panel is open (null = none)
     opsRunsAll: false,       // Operations: show all runs vs latest 5
     opsErrAll: false,        // Operations: show all errors vs latest 5
@@ -194,6 +195,7 @@ function jobpilot() {
       else if (t === 'settings') { await this.loadPrivacy(); await this.loadFeedback(); }
       else if (t === 'admin') {
         await this.loadLLM(); await this.loadAI(); await this.loadPrivacy(); await this.loadFeedback();
+        this.loadMaintPreview();
       }
     },
 
@@ -1409,6 +1411,20 @@ function jobpilot() {
       const picked = [...this.selectedSources];
       await this.runNow(picked);
       this.selectedSources = [];
+    },
+
+    // Live counts for the Maintenance tab, so each action shows what it'll touch.
+    async loadMaintPreview() {
+      try {
+        const r = await fetch('/api/maint/preview');
+        if (r.ok) this.maintPreview = await r.json();
+      } catch (e) { /* leave preview null — the tab just shows no numbers */ }
+    },
+    // 1204 → "1.2k" so a big count fits the little number badge.
+    fmtCount(n) {
+      if (n == null) return '–';
+      if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+      return String(n);
     },
 
     // Re-score a single job on demand. The user taps the refresh on a card when they've

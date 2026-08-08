@@ -79,12 +79,20 @@ class TestReads:
         "/api/runs", "/api/schedule", "/api/model", "/api/notify",
         "/api/llm/providers", "/api/ai-features", "/api/privacy",
         "/api/feedback", "/api/followups", "/api/import/template",
+        "/api/maint/preview",
     ])
     def test_it_answers(self, client, path):
         assert client.get(path).status_code == 200
 
     def test_counts_carry_the_followup_badge(self, client):
         assert "followups" in client.get("/api/counts").json()
+
+    def test_maint_preview_reports_action_targets(self, client):
+        """The Maintenance tab shows a live count next to each action; this checks the
+        endpoint returns those target counts so the numbers can render."""
+        body = client.get("/api/maint/preview").json()
+        for key in ("total", "snippets", "expired", "low", "cache_mb"):
+            assert key in body
 
 
 class TestWrites:

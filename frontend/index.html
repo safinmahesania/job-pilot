@@ -1428,108 +1428,159 @@
 
       <!-- ═══ TAB: Maintenance ═══ -->
       <div x-show="adminSubtab==='maintenance'">
-<div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Maintenance</h3>
-        <div class="card divide-y divide-gray-100">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Re-score all jobs</div><div class="text-xs text-gray-400 mt-0.5">Re-run AI scoring with the current profile. Slow.</div></div>
-            <button @click="maint('rescore',{url:'/api/maint/rescore',label:'Re-scored',heavy:true,busyLabel:'Re-scoring all jobs…',confirm:'Re-score all jobs? This runs the AI on every job and may take a while.'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md bg-brand text-white self-start">Re-score</button>
+
+      <!-- Keep it fresh — actions that act on the feed, each with a live target count -->
+      <div class="op-h"><i class="ti ti-refresh"></i> Keep it fresh</div>
+
+      <!-- Fetch full descriptions -->
+      <div class="w-card">
+        <div class="w-num" :class="maintPreview && maintPreview.snippets===0 && 'zero'">
+          <div class="v" x-text="maintPreview ? fmtCount(maintPreview.snippets) : '–'"></div>
+          <div class="u">snippets</div>
+        </div>
+        <div class="w-body">
+          <div class="w-t">Fetch full descriptions</div>
+          <div class="w-d">Feed jobs still on a short Adzuna snippet — fetches the full posting and re-scores. Safe to run again.</div>
+        </div>
+        <div class="w-act">
+          <button @click="maint('enrich',{url:'/api/jobs/enrich-existing',label:'Enriched',busyLabel:'Fetching descriptions…'}); loadMaintPreview()" class="btn" style="height:34px; font-size:13px; padding:0 13px">Fetch</button>
+          <button @click="diagnoseEnrich()" class="btn" style="height:34px; font-size:13px; padding:0 11px; color:var(--ink-3)" title="Show where the Adzuna links point, without fetching">Diagnose</button>
+        </div>
+      </div>
+
+      <!-- Dismiss expired -->
+      <div class="w-card">
+        <div class="w-num" :class="maintPreview && maintPreview.expired===0 && 'zero'">
+          <div class="v" x-text="maintPreview ? fmtCount(maintPreview.expired) : '–'"></div>
+          <div class="u">expired</div>
+        </div>
+        <div class="w-body">
+          <div class="w-t">Dismiss expired jobs</div>
+          <div class="w-d">Live jobs whose application deadline has passed — from the stored date or one in the description.</div>
+        </div>
+        <div class="w-act">
+          <button @click="maint('sweep',{url:'/api/jobs/sweep-expired',label:'Dismissed',busyLabel:'Checking deadlines…'}); loadMaintPreview()"
+            class="btn" style="height:34px; font-size:13px; padding:0 13px" :disabled="maintPreview && maintPreview.expired===0">Dismiss</button>
+        </div>
+      </div>
+
+      <!-- Cleanup below threshold -->
+      <div class="w-card">
+        <div class="w-num" :class="maintPreview && maintPreview.low===0 && 'zero'">
+          <div class="v" x-text="maintPreview ? fmtCount(maintPreview.low) : '–'"></div>
+          <div class="u">low</div>
+        </div>
+        <div class="w-body">
+          <div class="w-t">Cleanup below threshold</div>
+          <div class="w-d">Archive feed jobs scoring under your threshold.</div>
+        </div>
+        <div class="w-act">
+          <button @click="maint('cleanup',{url:'/api/maint/cleanup',label:'Archived'}); loadMaintPreview()"
+            class="btn" style="height:34px; font-size:13px; padding:0 13px" :disabled="maintPreview && maintPreview.low===0">Cleanup</button>
+        </div>
+      </div>
+
+      <!-- Clear old jobs -->
+      <div class="w-card">
+        <div class="w-num"><i class="ti ti-calendar-minus"></i></div>
+        <div class="w-body">
+          <div class="w-t">Clear old jobs</div>
+          <div class="w-d">Permanently delete jobs older than a set number of days.</div>
+        </div>
+        <div class="w-act" style="align-items:center">
+          <input type="number" min="1" x-model.number="clearDays" class="w-14 fld text-right" style="height:34px">
+          <span class="text-xs text-gray-400">days</span>
+          <button @click="maint('clear',{url:'/api/maint/clear-old',body:{days:clearDays},label:'Deleted',confirm:'Permanently delete jobs older than '+clearDays+' days?'}); loadMaintPreview()" class="btn" style="height:34px; font-size:13px; padding:0 13px">Clear</button>
+        </div>
+      </div>
+
+      <!-- System — export, cache, config, restart -->
+      <div class="op-h"><i class="ti ti-settings"></i> System</div>
+
+      <!-- Export CSV -->
+      <div class="w-card">
+        <div class="w-num"><div class="v" x-text="maintPreview ? fmtCount(maintPreview.total) : '–'"></div><div class="u">jobs</div></div>
+        <div class="w-body">
+          <div class="w-t">Export as CSV</div>
+          <div class="w-d">Download every job for backup or Excel.</div>
+        </div>
+        <div class="w-act"><button @click="exportCsv()" class="btn" style="height:34px; font-size:13px; padding:0 13px">Download</button></div>
+      </div>
+
+      <!-- Clean cache -->
+      <div class="w-card">
+        <div class="w-num" :class="maintPreview && maintPreview.cache_mb===0 && 'zero'">
+          <div class="v" x-text="maintPreview ? maintPreview.cache_mb : '–'"></div>
+          <div class="u">MB</div>
+        </div>
+        <div class="w-body">
+          <div class="w-t">Clean cache &amp; logs</div>
+          <div class="w-d">Delete Python cache and log files. Jobs preserved.</div>
+        </div>
+        <div class="w-act"><button @click="maint('cache',{url:'/api/maint/clean-cache',label:'Cleaned'}); loadMaintPreview()" class="btn" style="height:34px; font-size:13px; padding:0 13px">Clean</button></div>
+      </div>
+
+      <!-- Reload sources + Restart -->
+      <div class="w-card">
+        <div class="w-num"><i class="ti ti-reload"></i></div>
+        <div class="w-body">
+          <div class="w-t">Reload sources · Restart server</div>
+          <div class="w-d">Re-read your source config, or do a full process restart after pulling new code.</div>
+        </div>
+        <div class="w-act">
+          <button @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})" class="btn" style="height:34px; font-size:13px; padding:0 13px">Reload sources</button>
+          <button @click="restartServer()" :disabled="restarting" class="btn" style="height:34px; font-size:13px; padding:0 13px; border-color:#EAD5A8; color:var(--amber)">
+            <span x-text="restarting ? 'Restarting…' : 'Restart'"></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Clear run history -->
+      <div class="w-card">
+        <div class="w-num"><i class="ti ti-history"></i></div>
+        <div class="w-body">
+          <div class="w-t">Clear run history</div>
+          <div class="w-d">Wipe the run list on the Operations tab. Jobs are safe.</div>
+        </div>
+        <div class="w-act"><button @click="maint('clear-runs',{url:'/api/maint/clear-runs',label:'Cleared',confirm:'Clear the run history?'})" class="btn" style="height:34px; font-size:13px; padding:0 13px">Clear logs</button></div>
+      </div>
+
+      <!-- Danger zone -->
+      <div class="w-danger">
+        <div class="w-danger-h"><i class="ti ti-alert-triangle"></i> Danger zone · cannot be undone</div>
+        <div class="w-danger-row">
+          <div>
+            <div class="dt"><i class="ti ti-skull"></i> Reset all jobs <span x-show="maintPreview" style="font-weight:400; color:var(--ink-3)">· <span x-text="maintPreview && maintPreview.total"></span> jobs</span></div>
+            <div class="dd">Wipe all jobs from the DB for a fresh start. Config is kept.</div>
           </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Fetch full Adzuna descriptions</div><div class="text-xs text-gray-400 mt-0.5">Adzuna gives a short snippet. This fetches the full posting for feed jobs still on a snippet (from Adzuna, Lever or Greenhouse) and re-scores them. Safe to run again.</div></div>
-            <div class="flex gap-2 shrink-0 self-start">
-              <button @click="maint('enrich',{url:'/api/jobs/enrich-existing',label:'Enriched',busyLabel:'Fetching descriptions…'})" class="text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Fetch full descriptions</button>
-              <button @click="diagnoseEnrich()" class="text-[13px] h-9 px-3 rounded-md border border-gray-200 hover:bg-gray-50" title="Show where the Adzuna links point, without fetching">Diagnose</button>
+          <button @click="maint('reset',{url:'/api/maint/reset',label:'Reset',confirm:'This deletes ALL jobs permanently. Continue?'}); loadMaintPreview()" class="btn red" style="height:34px; font-size:13px; padding:0 15px">Reset jobs</button>
+        </div>
+        <div class="w-danger-row">
+          <div>
+            <div class="dt"><i class="ti ti-radioactive"></i> Nuclear reset</div>
+            <div class="dd">Wipes jobs, dedupe log, source health, run history, AI quota, backups and cache. Config, .env and settings are kept.</div>
+          </div>
+          <button @click="maint('nuclear',{url:'/api/maint/nuclear',label:'Wiped',heavy:true,busyLabel:'Wiping everything…',confirm:'NUCLEAR RESET — wipes all jobs, history, quota tracking and backups. Config and settings kept. Continue?'}); loadMaintPreview()" class="btn rfill" style="height:34px; font-size:13px; padding:0 15px">☢ Reset everything</button>
+        </div>
+      </div>
+
+      <!-- Config files -->
+      <div class="op-h"><i class="ti ti-file-code"></i> Configuration files</div>
+      <div class="card w-cfg overflow-hidden">
+        <template x-for="f in cfgFiles" :key="f.path">
+          <div class="w-cfg-row">
+            <div class="min-w-0">
+              <div class="text-sm font-medium" x-text="f.label"></div>
+              <div class="text-xs text-gray-400 mt-0.5" x-text="f.description"></div>
             </div>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Dismiss expired jobs</div><div class="text-xs text-gray-400 mt-0.5">Find live jobs whose application deadline has passed — from the stored date or one written in the description — and dismiss them.</div></div>
-            <button @click="maint('sweep',{url:'/api/jobs/sweep-expired',label:'Dismissed',busyLabel:'Checking deadlines…'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Dismiss expired</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Cleanup below threshold</div><div class="text-xs text-gray-400 mt-0.5">Archive feed jobs scoring under the threshold.</div></div>
-            <button @click="maint('cleanup',{url:'/api/maint/cleanup',label:'Archived'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Cleanup</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Clear old jobs</div><div class="text-xs text-gray-400 mt-0.5">Permanently delete jobs older than N days.</div></div>
             <div class="flex items-center gap-2 shrink-0">
-              <input type="number" min="1" x-model.number="clearDays" class="w-16 fld text-right">
-              <span class="text-xs text-gray-400">days</span>
-              <button @click="maint('clear',{url:'/api/maint/clear-old',body:{days:clearDays},label:'Deleted',confirm:'Permanently delete jobs older than '+clearDays+' days?'})" class="text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50">Clear</button>
+              <span x-show="!f.exists" class="text-[11px] px-1.5 py-0.5 rounded bg-red-50 text-red-500">missing</span>
+              <code @click="copyPath(f.path)" class="cursor-pointer text-[12px] px-2 py-1 rounded bg-brand/10 text-brand hover:bg-brand/20" :title="'Click to copy'" x-text="f.path"></code>
             </div>
           </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Export jobs as CSV</div><div class="text-xs text-gray-400 mt-0.5">Download all jobs for backup or Excel.</div></div>
-            <button @click="exportCsv()" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Download</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Reload config</div><div class="text-xs text-gray-400 mt-0.5">Re-read profile.yaml + companies.yaml.</div></div>
-            <button @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Reload</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div><div class="text-sm font-medium">Restart server</div><div class="text-xs text-gray-400 mt-0.5">Full process restart — use after pulling new code or if it's wedged. Reconnects in a few seconds.</div></div>
-            <button @click="restartServer()" :disabled="restarting" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-amber-200 text-amber-700 hover:bg-amber-50 self-start disabled:opacity-50">
-              <span x-text="restarting ? 'Restarting…' : 'Restart'"></span>
-            </button>
-          </div>
-        </div>
+        </template>
       </div>
 
-<div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Storage &amp; cleanup</h3>
-        <div class="card divide-y divide-gray-100">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div>
-              <div class="text-sm font-medium flex items-center gap-1.5"><i class="ti ti-brush text-gray-400"></i> Clean cache &amp; logs</div>
-              <div class="text-xs text-gray-400 mt-0.5">Delete Python cache and log files. Safe — jobs preserved.</div>
-            </div>
-            <button @click="maint('cache',{url:'/api/maint/clean-cache',label:'Cleaned'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Clean</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div>
-              <div class="text-sm font-medium flex items-center gap-1.5"><i class="ti ti-history text-gray-400"></i> Clear run history</div>
-              <div class="text-xs text-gray-400 mt-0.5">Wipe the run list on the Admin tab. Jobs are safe.</div>
-            </div>
-            <button @click="maint('clear-runs',{url:'/api/maint/clear-runs',label:'Cleared',confirm:'Clear the run history?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-gray-200 hover:bg-gray-50 self-start">Clear logs</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-            <div>
-              <div class="text-sm font-medium text-red-600 flex items-center gap-1.5"><i class="ti ti-skull"></i> Reset all jobs <span class="text-xs font-normal">(destructive)</span></div>
-              <div class="text-xs text-gray-400 mt-0.5">Wipe all jobs from the DB. Use for a fresh start after a bad scrape. Cannot be undone.</div>
-            </div>
-            <button @click="maint('reset',{url:'/api/maint/reset',label:'Reset',confirm:'This deletes ALL jobs permanently. Continue?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md border border-red-300 text-red-600 hover:bg-red-50 self-start">Reset jobs</button>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-red-50/40">
-            <div>
-              <div class="text-sm font-semibold text-red-600 flex items-center gap-1.5"><i class="ti ti-radioactive"></i> Nuclear reset — wipe everything</div>
-              <div class="text-xs text-gray-500 mt-0.5">
-                Wipes all application data in one shot: jobs, dedupe log, source health, run history, AI quota tracking, backups and cache.
-                <span class="text-gray-400">Preserves your config files (profile.yaml, companies.yaml), your .env and your settings.</span>
-              </div>
-            </div>
-            <button @click="maint('nuclear',{url:'/api/maint/nuclear',label:'Wiped',heavy:true,busyLabel:'Wiping everything…',confirm:'NUCLEAR RESET — this wipes all jobs, history, quota tracking and backups. Your config and settings are kept. Continue?'})" class="shrink-0 text-[13px] h-9 px-4 rounded-md bg-red-600 text-white self-start">☢ Reset everything</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-6 max-w-2xl">
-        <h3 class="text-sm font-semibold text-gray-700 mb-1">Configuration files</h3>
-        <div class="text-xs text-gray-400 mb-3">Edit these directly in your editor. Companies and profile can also be edited from the tabs above.</div>
-        <div class="card divide-y divide-gray-100">
-          <template x-for="f in cfgFiles" :key="f.path">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-              <div class="min-w-0">
-                <div class="text-sm font-medium" x-text="f.label"></div>
-                <div class="text-xs text-gray-400 mt-0.5" x-text="f.description"></div>
-              </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <span x-show="!f.exists" class="text-[11px] px-1.5 py-0.5 rounded bg-red-50 text-red-500">missing</span>
-                <code @click="copyPath(f.path)" class="cursor-pointer text-[12px] px-2 py-1 rounded bg-brand/10 text-brand hover:bg-brand/20" :title="'Click to copy'" x-text="f.path"></code>
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
       </div>
       <!-- ═══ END TAB: Maintenance ═══ -->
     </div>

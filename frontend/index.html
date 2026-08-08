@@ -592,25 +592,37 @@
         </button>
       </div>
 
-      <!-- Sources needing attention — a clean summary of what's not working, so
-           broken boards are visible without hunting through every card. -->
-      <div class="src-attn" x-show="brokenBoards().length" x-cloak>
-        <div class="src-attn-h">
+      <!-- Sources needing attention — collapsed to a single summary line by default;
+           expand to read exactly what's wrong with each board and jump to it. -->
+      <div class="src-attn" :class="brokenBoards().length && boardsWorstTone()" x-show="brokenBoards().length" x-cloak>
+        <div class="src-attn-h" @click="srcAttnOpen = !srcAttnOpen">
           <i class="ti ti-alert-triangle"></i>
-          <span><span x-text="brokenBoards().length"></span> source<span x-show="brokenBoards().length!==1">s</span> need attention</span>
+          <span><b x-text="brokenBoards().length"></b> source<span x-show="brokenBoards().length!==1">s</span> need attention</span>
+          <span class="src-attn-peek" x-show="!srcAttnOpen" x-text="brokenBoards().map(b=>b.name).slice(0,3).join(', ') + (brokenBoards().length>3 ? '…' : '')"></span>
+          <i class="ti src-attn-chev" :class="srcAttnOpen ? 'ti-chevron-up' : 'ti-chevron-down'"></i>
         </div>
-        <template x-for="b in brokenBoards()" :key="b.name">
-          <div class="src-attn-row" :class="boardIssue(b).tone"
-               @click="srcSearch=b.name; expandedSource=null"
-               title="Filter to this source below">
-            <i class="ti" :class="boardIssue(b).icon"></i>
-            <div class="min-w-0">
-              <div class="src-attn-name"><span x-text="b.name"></span> · <span class="t" x-text="boardIssue(b).title"></span></div>
-              <div class="src-attn-sub" x-text="boardIssue(b).sub"></div>
+        <div x-show="srcAttnOpen" x-cloak>
+          <template x-for="b in brokenBoards()" :key="b.name">
+            <div class="src-attn-item" :class="boardIssue(b).tone">
+              <div class="src-attn-top">
+                <i class="ti" :class="boardIssue(b).icon"></i>
+                <div class="min-w-0 flex-1">
+                  <div class="src-attn-name" x-text="b.name"></div>
+                  <div class="src-attn-title" x-text="boardIssue(b).title"></div>
+                </div>
+                <span class="src-attn-ats" x-text="b.ats" x-show="b.ats"></span>
+              </div>
+              <div class="src-attn-detail" x-text="boardIssue(b).sub"></div>
+              <div class="src-attn-meta">
+                <span x-show="b.detail" class="src-attn-raw" x-text="b.detail"></span>
+                <span><b x-text="b.fetched ?? 0"></b> fetched · <b x-text="b.kept ?? 0"></b> kept on recent runs</span>
+              </div>
+              <button class="src-attn-jump" @click="srcSearch=b.name; expandedSource=null; srcAttnOpen=false">
+                <i class="ti ti-arrow-down"></i> Find this source below
+              </button>
             </div>
-            <i class="ti ti-chevron-right src-attn-go"></i>
-          </div>
-        </template>
+          </template>
+        </div>
       </div>
 
       <!-- Clean-up action (counts now live in the health pills below) -->
@@ -1059,24 +1071,6 @@
     <div x-show="tab==='admin'">
       <h2 class="text-lg font-semibold mb-1 hidden md:block">Admin</h2>
       <p class="text-[13px] text-gray-400 mb-4">System setup, how the app's doing, and database actions.</p>
-      <!-- Boards that stopped working. The silent ones lead: an erroring board
-           already shows red, but one returning 200-and-nothing looks perfect. -->
-      <template x-if="brokenBoards().length">
-        <div class="mb-4 rounded-lg border border-red-200 bg-red-50 overflow-hidden">
-          <div class="flex items-center gap-2 px-4 py-2.5 border-b border-red-200">
-            <i class="ti ti-plug-connected-x text-red-600"></i>
-            <span class="text-sm font-semibold text-red-800">
-              <span x-text="brokenBoards().length"></span> source<span x-show="brokenBoards().length!==1">s</span> not working
-            </span>
-          </div>
-          <template x-for="b in brokenBoards()" :key="b.name">
-            <div class="px-4 py-2.5 border-b border-red-100 last:border-0">
-              <div class="text-sm font-medium text-red-900" x-text="b.name"></div>
-              <div class="text-xs text-red-700 mt-0.5" x-text="b.detail"></div>
-            </div>
-          </template>
-        </div>
-      </template>
 
       <!-- Sub-tabs -->
       <div class="adm-subtabs">
@@ -1412,40 +1406,6 @@
         </button>
       </div>
 
-      <!-- Errors as "needs attention" alert cards -->
-      <div class="op-h" style="justify-content:space-between">
-        <span style="display:flex; align-items:center; gap:7px"><i class="ti ti-alert-triangle"></i> Needs attention</span>
-        <button x-show="errors.length" @click="clearErrors()" class="text-xs h-7 px-3 rounded-md border border-gray-200 hover:bg-gray-50 font-medium normal-case tracking-normal">Clear</button>
-      </div>
-      <div style="max-width:42rem">
-        <div :class="opsErrAll && 'op-scroll'">
-          <template x-for="e in visibleErrors()" :key="e.id">
-            <div class="op-alert" :class="[errorView(e).tone, opsErrExpanded===e.id && 'open']">
-              <div class="op-alert-t" @click="toggleErr(e.id)">
-                <i class="ti" :class="errorView(e).icon"></i>
-                <span x-text="errorView(e).title"></span>
-                <span x-show="e.notified" class="text-[9.5px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-semibold" title="sent to Telegram">notified</span>
-                <i class="ti ti-plus plus"></i>
-              </div>
-              <div class="op-alert-s" x-text="errorView(e).sub + ' · ' + relTime(e.at)"></div>
-              <div class="op-alert-detail" x-show="opsErrExpanded===e.id" x-cloak>
-                <div class="drow"><span class="dk">When</span><span class="dv" x-text="fmtRunTime(e.at)"></span></div>
-                <div class="drow" x-show="e.where"><span class="dk">Source</span><span class="dv" x-text="e.where"></span></div>
-                <div class="drow"><span class="dk">Type</span><span class="dv" x-text="e.kind"></span></div>
-                <div class="drow" x-show="e.notified"><span class="dk">Sent to</span><span class="dv">Telegram ✓</span></div>
-                <pre x-show="e.traceback" x-text="e.traceback"></pre>
-                <div x-show="!e.traceback" class="text-xs text-gray-400 italic mt-2">No traceback — the source reported this without raising.</div>
-              </div>
-            </div>
-          </template>
-        </div>
-        <button class="op-more" style="border:1px solid var(--line); border-radius:11px; margin-top:2px" x-show="errors.length>5" @click="opsErrAll=!opsErrAll">
-          <span x-text="opsErrAll ? 'Show latest 5' : 'Show all ' + errors.length + ' errors'"></span>
-          <i class="ti" :class="opsErrAll ? 'ti-chevron-up' : 'ti-chevron-down'"></i>
-        </button>
-        <div x-show="errors.length===0" class="op-allgood"><i class="ti ti-circle-check"></i> Nothing has gone wrong. Good.</div>
-      </div>
-
       </div>
       <!-- ═══ END TAB: Operations ═══ -->
 
@@ -1487,8 +1447,8 @@
           <div class="w-d">Feed jobs still on a short Adzuna snippet — fetches the full posting and re-scores. Safe to run again.</div>
         </div>
         <div class="w-act">
-          <button @click="maint('enrich',{url:'/api/jobs/enrich-existing',label:'Enriched',busyLabel:'Fetching descriptions…'}); loadMaintPreview()" class="btn" style="height:34px; font-size:13px; padding:0 13px">Fetch</button>
-          <button @click="diagnoseEnrich()" class="btn" style="height:34px; font-size:13px; padding:0 11px; color:var(--ink-3)" title="Show where the Adzuna links point, without fetching">Diagnose</button>
+          <button @click="maint('enrich',{url:'/api/jobs/enrich-existing',label:'Enriched',busyLabel:'Fetching descriptions…'}); loadMaintPreview()" class="btn" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-download"></i> Fetch</button>
+          <button @click="diagnoseEnrich()" class="btn" style="height:34px; font-size:13px; padding:0 11px; color:var(--ink-3)" title="Show where the Adzuna links point, without fetching"><i class="ti ti-stethoscope"></i> Diagnose</button>
         </div>
       </div>
 
@@ -1503,7 +1463,7 @@
         </div>
         <div class="w-act">
           <button @click="maint('sweep',{url:'/api/jobs/sweep-expired',label:'Dismissed',busyLabel:'Checking deadlines…'}); loadMaintPreview()"
-            class="btn" style="height:34px; font-size:13px; padding:0 13px" :disabled="maintPreview && maintPreview.expired===0">Dismiss</button>
+            class="btn" style="height:34px; font-size:13px; padding:0 13px" :disabled="maintPreview && maintPreview.expired===0"><i class="ti ti-calendar-x"></i> Dismiss</button>
         </div>
       </div>
 
@@ -1516,7 +1476,7 @@
         <div class="w-act" style="align-items:center">
           <input type="number" min="1" x-model.number="clearDays" class="w-14 fld text-right" style="height:34px">
           <span class="text-xs text-gray-400">days</span>
-          <button @click="maint('clear',{url:'/api/maint/clear-old',body:{days:clearDays},label:'Deleted',confirm:'Permanently delete jobs older than '+clearDays+' days?'}); loadMaintPreview()" class="btn" style="height:34px; font-size:13px; padding:0 13px">Clear</button>
+          <button @click="maint('clear',{url:'/api/maint/clear-old',body:{days:clearDays},label:'Deleted',confirm:'Permanently delete jobs older than '+clearDays+' days?'}); loadMaintPreview()" class="btn" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-trash"></i> Clear</button>
         </div>
       </div>
 
@@ -1529,7 +1489,7 @@
           <div class="w-t">Export as CSV</div>
           <div class="w-d">Download every job for backup or Excel.</div>
         </div>
-        <div class="w-act"><button @click="exportCsv()" class="btn" style="height:34px; font-size:13px; padding:0 13px">Download</button></div>
+        <div class="w-act"><button @click="exportCsv()" class="btn" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-file-export"></i> Download</button></div>
       </div>
 
       <div class="w-card">
@@ -1541,7 +1501,7 @@
           <div class="w-t">Clean cache &amp; logs</div>
           <div class="w-d">Delete Python cache and log files. Jobs preserved.</div>
         </div>
-        <div class="w-act"><button @click="maint('cache',{url:'/api/maint/clean-cache',label:'Cleaned'}); loadMaintPreview()" class="btn" style="height:34px; font-size:13px; padding:0 13px">Clean</button></div>
+        <div class="w-act"><button @click="maint('cache',{url:'/api/maint/clean-cache',label:'Cleaned'}); loadMaintPreview()" class="btn" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-brush"></i> Clean</button></div>
       </div>
 
       <!-- Reload sources — its own card -->
@@ -1551,7 +1511,7 @@
           <div class="w-t">Reload sources</div>
           <div class="w-d">Re-read your source config without a full restart.</div>
         </div>
-        <div class="w-act"><button @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})" class="btn" style="height:34px; font-size:13px; padding:0 13px">Reload</button></div>
+        <div class="w-act"><button @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})" class="btn" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-reload"></i> Reload</button></div>
       </div>
 
       <!-- Restart — its own card -->
@@ -1574,7 +1534,7 @@
           <div class="w-t">Clear run history</div>
           <div class="w-d">Wipe the run list on the Operations tab. Jobs are safe.</div>
         </div>
-        <div class="w-act"><button @click="maint('clear-runs',{url:'/api/maint/clear-runs',label:'Cleared',confirm:'Clear the run history?'})" class="btn" style="height:34px; font-size:13px; padding:0 13px">Clear logs</button></div>
+        <div class="w-act"><button @click="maint('clear-runs',{url:'/api/maint/clear-runs',label:'Cleared',confirm:'Clear the run history?'})" class="btn" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-eraser"></i> Clear logs</button></div>
       </div>
 
       <!-- Danger zone -->

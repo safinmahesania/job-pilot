@@ -18,6 +18,7 @@ function jobpilot() {
     pickedJobs: [],
     selectMode: false,    // when on, clicking a card selects it for bulk rescore
     rescoringId: null,    // id of the job currently being re-scored via its card button
+    srcAttnOpen: false,   // Sources page: is the "needs attention" panel expanded
     // What the running pipeline is doing, polled from /api/run/status.
     runProgress: null,
     // The run panel starts collapsed. The phase and a percentage are what you check
@@ -1725,6 +1726,11 @@ function jobpilot() {
     brokenBoards() {
       return this.health.filter(b =>
         ['silent', 'erroring', 'never_worked'].includes(b.verdict));
+    },
+    // The worst tone among broken boards, so the collapsed panel header takes on the
+    // colour of the most serious problem (red beats amber).
+    boardsWorstTone() {
+      return this.brokenBoards().some(b => this.boardIssue(b).tone === 'red') ? 'red' : 'amber';
     },
     // Turn a broken board's verdict into a plain-language problem for the sources page.
     boardIssue(b) {

@@ -411,7 +411,7 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
          min-height:118px; display:flex; flex-direction:column; }
 .focus:hover { border-color:var(--brand-ring); box-shadow:0 4px 16px rgba(169,109,20,.08); }
 .focus.wide { grid-column:span 2; }
-.focus.accent { background:linear-gradient(135deg, #FBF4E6 0%, #FEFCF8 55%, #fff 100%); }
+.focus.accent { background:var(--brand-tint); }
 .focus.open { border-color:var(--brand); box-shadow:0 4px 20px rgba(169,109,20,.1); }
 .focus-ic { width:38px; height:38px; border-radius:11px; background:var(--brand-tint);
             color:var(--brand-strong); display:flex; align-items:center; justify-content:center;
@@ -566,29 +566,48 @@ h1,h2,h3 { letter-spacing: -0.02em; color: var(--ink); }
 
 /* Maintenance summary hero — the state of the pile at a glance, so the tab opens
    with a sense of what's there rather than a cold wall of action rows. */
-.mt-hero { max-width:42rem; background:linear-gradient(135deg, #1C1B19, #2A2724); border-radius:16px;
-           padding:20px 22px; color:#fff; display:flex; align-items:center; gap:24px; margin-bottom:20px; }
+.mt-hero { max-width:42rem; background:var(--brand-tint); border:1px solid rgba(169,109,20,.15);
+           border-radius:16px; padding:20px 22px; display:flex; align-items:center; gap:24px; margin-bottom:20px; }
 .mt-hero-main { flex-shrink:0; }
-.mt-hero-num { font-size:38px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
-.mt-hero-lbl { font-size:11px; color:#8A8580; text-transform:uppercase; letter-spacing:.05em; margin-top:5px; }
+.mt-hero-num { font-size:38px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; color:var(--brand-strong); }
+.mt-hero-lbl { font-size:11px; color:var(--brand-strong); opacity:.65; text-transform:uppercase; letter-spacing:.05em; margin-top:5px; }
 .mt-hero-stats { display:flex; gap:20px; margin-left:auto; }
 .mt-hs { text-align:center; }
-.mt-hs .v { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; color:#E7C77E; }
-.mt-hs.ok .v { color:#5FBF95; }
-.mt-hs .k { font-size:10px; color:#B8B4AE; text-transform:uppercase; letter-spacing:.04em; margin-top:3px; }
+.mt-hs .v { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--brand); }
+.mt-hs.ok .v { color:var(--brand); opacity:.4; }
+.mt-hs .k { font-size:10px; color:var(--brand-strong); opacity:.6; text-transform:uppercase; letter-spacing:.04em; margin-top:3px; }
 
-/* Sources page — "needs attention" summary of broken boards, so problems are
-   visible up front and one tap filters the list to that source. */
-.src-attn { border:1px solid rgba(220,91,75,.28); border-radius:14px; overflow:hidden; margin-bottom:18px; }
-.src-attn-h { background:var(--red-bg); padding:11px 15px; font-size:12px; font-weight:700; color:var(--red);
-              display:flex; align-items:center; gap:8px; }
-.src-attn-row { display:flex; align-items:center; gap:12px; padding:12px 15px; border-top:1px solid var(--line-2);
-                cursor:pointer; transition:background .12s; }
-.src-attn-row:hover { background:var(--hover); }
-.src-attn-row > i:first-child { font-size:17px; flex-shrink:0; }
-.src-attn-row.red > i:first-child { color:var(--red); }
-.src-attn-row.amber > i:first-child { color:var(--amber); }
-.src-attn-name { font-size:13px; font-weight:600; }
-.src-attn-name .t { color:var(--ink-2); font-weight:500; }
-.src-attn-sub { font-size:11.5px; color:var(--ink-3); margin-top:2px; }
-.src-attn-go { margin-left:auto; color:var(--ink-3); font-size:16px; flex-shrink:0; }
+/* Sources page — "needs attention" panel. Collapsed to one summary line; expands
+   into a clear, readable card per broken board with the reason and a jump link. */
+.src-attn { border:1px solid var(--line); border-radius:14px; overflow:hidden; margin-bottom:18px; background:#fff; }
+.src-attn.red { border-color:rgba(220,91,75,.32); }
+.src-attn.amber { border-color:rgba(183,121,31,.32); }
+.src-attn-h { padding:13px 16px; font-size:13px; font-weight:650; display:flex; align-items:center; gap:9px;
+              cursor:pointer; color:var(--ink); }
+.src-attn.red .src-attn-h { background:var(--red-bg); color:var(--red); }
+.src-attn.amber .src-attn-h { background:var(--amber-bg); color:var(--amber); }
+.src-attn-h > i:first-child { font-size:17px; flex-shrink:0; }
+.src-attn-h b { font-weight:800; }
+.src-attn-peek { font-weight:500; font-size:12px; opacity:.7; margin-left:2px; overflow:hidden;
+                 text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
+.src-attn-chev { margin-left:auto; font-size:16px; flex-shrink:0; opacity:.7; }
+
+.src-attn-item { padding:14px 16px; border-top:1px solid var(--line-2); }
+.src-attn-top { display:flex; align-items:flex-start; gap:11px; }
+.src-attn-top > i:first-child { font-size:18px; flex-shrink:0; margin-top:1px; }
+.src-attn-item.red .src-attn-top > i:first-child { color:var(--red); }
+.src-attn-item.amber .src-attn-top > i:first-child { color:var(--amber); }
+.src-attn-name { font-size:14px; font-weight:700; }
+.src-attn-title { font-size:12px; font-weight:600; margin-top:1px; }
+.src-attn-item.red .src-attn-title { color:var(--red); }
+.src-attn-item.amber .src-attn-title { color:var(--amber); }
+.src-attn-ats { font-size:10.5px; font-weight:600; color:var(--ink-3); background:var(--hover);
+                padding:3px 8px; border-radius:6px; flex-shrink:0; }
+.src-attn-detail { font-size:12.5px; color:var(--ink-2); line-height:1.5; margin:8px 0 0 29px; }
+.src-attn-meta { font-size:11px; color:var(--ink-3); margin:7px 0 0 29px; display:flex; flex-direction:column; gap:3px; }
+.src-attn-meta b { color:var(--ink-2); font-weight:600; }
+.src-attn-raw { font-family:'JetBrains Mono', ui-monospace, monospace; font-size:10.5px; color:var(--ink-3);
+                background:var(--hover); padding:4px 8px; border-radius:6px; word-break:break-word; }
+.src-attn-jump { margin:11px 0 0 29px; font-size:12px; font-weight:600; color:var(--brand);
+                 display:inline-flex; align-items:center; gap:5px; cursor:pointer; background:none; }
+.src-attn-jump:hover { color:var(--brand-strong); }

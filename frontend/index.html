@@ -288,9 +288,17 @@
         </div>
 
         <template x-for="job in filtered()" :key="job.id">
-          <div class="card p-4 sm:p-5 group transition"
+          <div class="card p-4 sm:p-5 group transition relative"
                :class="selectMode ? (isJobPicked(job.id) ? 'ring-2 ring-brand border-brand cursor-pointer' : 'cursor-pointer hover:border-gray-300') : 'card-hover'"
                @click="selectMode && toggleJobPicked(job.id)">
+            <!-- Re-score: top-right corner. Refreshes just this job's score with the
+                 current profile, updating it in place. Hidden in select mode. -->
+            <button x-show="!selectMode" @click.stop="rescoreOne(job)" :disabled="rescoringId===job.id"
+              class="absolute top-3 right-3 z-10 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12px] font-medium text-gray-400 hover:text-brand hover:bg-brand/5 border border-transparent hover:border-brand/20 transition disabled:opacity-60"
+              :title="'Re-score this job with your current profile'">
+              <i class="ti ti-refresh text-[13px]" :class="rescoringId===job.id && 'animate-spin'"></i>
+              <span x-text="rescoringId===job.id ? 'Scoring…' : 'Re-score'"></span>
+            </button>
             <div class="flex gap-3 sm:gap-4">
               <!-- Selection indicator: only in select mode. A tick circle that fills
                    when the card is picked. Whole card is the click target. -->
@@ -306,7 +314,7 @@
               </div>
               <div class="flex-1 min-w-0">
                 <!-- Title leads -->
-                <div class="font-semibold text-[16px] leading-snug hover:text-brand" :class="!selectMode && 'cursor-pointer'" @click="!selectMode && openDetail(job)" x-text="job.title"></div>
+                <div class="font-semibold text-[16px] leading-snug hover:text-brand pr-24" :class="!selectMode && 'cursor-pointer'" @click="!selectMode && openDetail(job)" x-text="job.title"></div>
                 <!-- Company + location, one quiet line -->
                 <div class="text-[13.5px] text-gray-500 mt-1 font-medium">
                   <span x-text="job.company"></span><span x-show="job.location"> · <span x-text="job.location"></span></span>
@@ -345,12 +353,6 @@
                   <template x-if="tab!=='dismissed'">
                     <button @click="setStatus(job,'dismissed')" class="btn" style="height:34px; font-size:13px; padding:0 13px; background:transparent; color:var(--ink-3)">Dismiss</button>
                   </template>
-                  <button @click="rescoreOne(job)" :disabled="rescoringId===job.id"
-                    class="btn" style="height:34px; font-size:13px; padding:0 11px; background:transparent; color:var(--ink-3)"
-                    :title="'Re-score this job with your current profile'">
-                    <i class="ti ti-refresh" :class="rescoringId===job.id && 'animate-spin'"></i>
-                    <span x-text="rescoringId===job.id ? 'Scoring…' : 'Re-score'"></span>
-                  </button>
                   <template x-if="tab==='dismissed'">
                     <button @click="setStatus(job,'surfaced')" class="btn btn-ghost" style="height:34px; font-size:13px; padding:0 13px"><i class="ti ti-arrow-back-up"></i> Restore</button>
                   </template>
@@ -588,6 +590,27 @@
         <button @click="addFormOpen = !addFormOpen" class="btn btn-primary shrink-0" style="height:36px; font-size:13px">
           <i class="ti" :class="addFormOpen ? 'ti-x' : 'ti-plus'"></i> <span x-text="addFormOpen ? 'Close' : 'Add source'"></span>
         </button>
+      </div>
+
+      <!-- Sources needing attention — a clean summary of what's not working, so
+           broken boards are visible without hunting through every card. -->
+      <div class="src-attn" x-show="brokenBoards().length" x-cloak>
+        <div class="src-attn-h">
+          <i class="ti ti-alert-triangle"></i>
+          <span><span x-text="brokenBoards().length"></span> source<span x-show="brokenBoards().length!==1">s</span> need attention</span>
+        </div>
+        <template x-for="b in brokenBoards()" :key="b.name">
+          <div class="src-attn-row" :class="boardIssue(b).tone"
+               @click="srcSearch=b.name; expandedSource=null"
+               title="Filter to this source below">
+            <i class="ti" :class="boardIssue(b).icon"></i>
+            <div class="min-w-0">
+              <div class="src-attn-name"><span x-text="b.name"></span> · <span class="t" x-text="boardIssue(b).title"></span></div>
+              <div class="src-attn-sub" x-text="boardIssue(b).sub"></div>
+            </div>
+            <i class="ti ti-chevron-right src-attn-go"></i>
+          </div>
+        </template>
       </div>
 
       <!-- Clean-up action (counts now live in the health pills below) -->
@@ -1063,11 +1086,11 @@
       </div>
 
       <!-- ═══ TAB: System & AI ═══ -->
-      <div x-show="adminSubtab==='system'">
+      <div x-show="adminSubtab==='system'" @click="adminFocus=null">
       <div class="focusgrid">
 
         <!-- Tile: AI providers -->
-        <div class="focus wide accent" :class="adminFocus==='providers' && 'open'" @click="adminFocus = adminFocus==='providers' ? null : 'providers'">
+        <div class="focus wide accent" :class="adminFocus==='providers' && 'open'" @click.stop="adminFocus = adminFocus==='providers' ? null : 'providers'">
           <div class="focus-ic"><i class="ti ti-cpu"></i></div>
           <div class="focus-stat"><div class="v" style="color:var(--brand-strong)"><span x-text="llm.available"></span>/<span x-text="llm.total"></span></div><div class="k">up</div></div>
           <div class="focus-t">AI providers</div>
@@ -1081,7 +1104,7 @@
         </div>
 
         <!-- Panel: AI providers -->
-        <div class="focus-panel" x-show="adminFocus==='providers'" x-cloak>
+        <div class="focus-panel" @click.stop x-show="adminFocus==='providers'" x-cloak>
           <div class="focus-panel-h">
             <div class="pi"><i class="ti ti-cpu"></i></div>
             <div><div class="pt">AI providers</div><div class="pd">Tried in order — first available handles the job. Keys live in <code class="text-brand">.env</code>.</div></div>
@@ -1155,7 +1178,7 @@
         </div>
 
         <!-- Tile: AI behaviour -->
-        <div class="focus" :class="adminFocus==='behaviour' && 'open'" @click="adminFocus = adminFocus==='behaviour' ? null : 'behaviour'">
+        <div class="focus" :class="adminFocus==='behaviour' && 'open'" @click.stop="adminFocus = adminFocus==='behaviour' ? null : 'behaviour'">
           <div class="focus-ic"><i class="ti ti-sparkles"></i></div>
           <div class="focus-stat"><div class="v" x-text="(ai.scoring?1:0)+(ai.generation?1:0)"></div><div class="k">on</div></div>
           <div class="focus-t">AI behaviour</div>
@@ -1164,7 +1187,7 @@
         </div>
 
         <!-- Tile: Automation -->
-        <div class="focus" :class="adminFocus==='auto' && 'open'" @click="adminFocus = adminFocus==='auto' ? null : 'auto'">
+        <div class="focus" :class="adminFocus==='auto' && 'open'" @click.stop="adminFocus = adminFocus==='auto' ? null : 'auto'">
           <div class="focus-ic"><i class="ti ti-refresh"></i></div>
           <div class="focus-stat"><div class="v" :style="sched.enabled ? 'color:var(--green)' : 'color:var(--ink-3)'" x-text="sched.enabled ? 'On' : 'Off'"></div><div class="k" x-show="sched.enabled"><span x-text="sched.interval_hours"></span>h</div></div>
           <div class="focus-t">Automation</div>
@@ -1173,7 +1196,7 @@
         </div>
 
         <!-- Panel: AI behaviour (opens under behaviour+automation row) -->
-        <div class="focus-panel" x-show="adminFocus==='behaviour'" x-cloak>
+        <div class="focus-panel" @click.stop x-show="adminFocus==='behaviour'" x-cloak>
           <div class="focus-panel-h">
             <div class="pi"><i class="ti ti-sparkles"></i></div>
             <div><div class="pt">AI behaviour</div><div class="pd">When AI runs and how scoring works.</div></div>
@@ -1225,7 +1248,7 @@
         </div>
 
         <!-- Panel: Automation -->
-        <div class="focus-panel" x-show="adminFocus==='auto'" x-cloak>
+        <div class="focus-panel" @click.stop x-show="adminFocus==='auto'" x-cloak>
           <div class="focus-panel-h">
             <div class="pi"><i class="ti ti-refresh"></i></div>
             <div><div class="pt">Automation</div><div class="pd">Fetching on its own.</div></div>
@@ -1250,7 +1273,7 @@
         </div>
 
         <!-- Tile: Notifications -->
-        <div class="focus" :class="adminFocus==='notif' && 'open'" @click="adminFocus = adminFocus==='notif' ? null : 'notif'">
+        <div class="focus" :class="adminFocus==='notif' && 'open'" @click.stop="adminFocus = adminFocus==='notif' ? null : 'notif'">
           <div class="focus-ic"><i class="ti ti-bell"></i></div>
           <div class="focus-stat"><div class="v" :style="notify.enabled ? 'color:var(--green)' : 'color:var(--ink-3)'" x-text="notify.enabled ? 'On' : 'Off'"></div><div class="k">TG</div></div>
           <div class="focus-t">Notifications</div>
@@ -1259,7 +1282,7 @@
         </div>
 
         <!-- Tile: Connection tests -->
-        <div class="focus" :class="adminFocus==='tests' && 'open'" @click="adminFocus = adminFocus==='tests' ? null : 'tests'">
+        <div class="focus" :class="adminFocus==='tests' && 'open'" @click.stop="adminFocus = adminFocus==='tests' ? null : 'tests'">
           <div class="focus-ic"><i class="ti ti-plug"></i></div>
           <div class="focus-t">Connection tests</div>
           <div class="focus-d">Check Telegram &amp; AI.</div>
@@ -1267,7 +1290,7 @@
         </div>
 
         <!-- Panel: Notifications -->
-        <div class="focus-panel" x-show="adminFocus==='notif'" x-cloak>
+        <div class="focus-panel" @click.stop x-show="adminFocus==='notif'" x-cloak>
           <div class="focus-panel-h">
             <div class="pi"><i class="ti ti-bell"></i></div>
             <div><div class="pt">Notifications &amp; alerts</div><div class="pd">How the app pings you.</div></div>
@@ -1295,7 +1318,7 @@
         </div>
 
         <!-- Panel: Connection tests -->
-        <div class="focus-panel" x-show="adminFocus==='tests'" x-cloak>
+        <div class="focus-panel" @click.stop x-show="adminFocus==='tests'" x-cloak>
           <div class="focus-panel-h">
             <div class="pi"><i class="ti ti-plug"></i></div>
             <div><div class="pt">Connection tests</div><div class="pd">Ping each service.</div></div>
@@ -1429,10 +1452,31 @@
       <!-- ═══ TAB: Maintenance ═══ -->
       <div x-show="adminSubtab==='maintenance'">
 
-      <!-- Keep it fresh — actions that act on the feed, each with a live target count -->
+      <!-- Summary hero: the state of the pile at a glance -->
+      <div class="mt-hero" x-show="maintPreview" x-cloak>
+        <div class="mt-hero-main">
+          <div class="mt-hero-num" x-text="maintPreview ? fmtCount(maintPreview.total) : '–'"></div>
+          <div class="mt-hero-lbl">jobs in the database</div>
+        </div>
+        <div class="mt-hero-stats">
+          <div class="mt-hs" :class="maintPreview && maintPreview.snippets===0 && 'ok'">
+            <div class="v" x-text="maintPreview ? maintPreview.snippets : '–'"></div>
+            <div class="k">on a snippet</div>
+          </div>
+          <div class="mt-hs" :class="maintPreview && maintPreview.expired===0 && 'ok'">
+            <div class="v" x-text="maintPreview ? maintPreview.expired : '–'"></div>
+            <div class="k">expired</div>
+          </div>
+          <div class="mt-hs ok">
+            <div class="v" x-text="maintPreview ? maintPreview.cache_mb : '–'"></div>
+            <div class="k">MB cache</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Keep it fresh -->
       <div class="op-h"><i class="ti ti-refresh"></i> Keep it fresh</div>
 
-      <!-- Fetch full descriptions -->
       <div class="w-card">
         <div class="w-num" :class="maintPreview && maintPreview.snippets===0 && 'zero'">
           <div class="v" x-text="maintPreview ? fmtCount(maintPreview.snippets) : '–'"></div>
@@ -1448,7 +1492,6 @@
         </div>
       </div>
 
-      <!-- Dismiss expired -->
       <div class="w-card">
         <div class="w-num" :class="maintPreview && maintPreview.expired===0 && 'zero'">
           <div class="v" x-text="maintPreview ? fmtCount(maintPreview.expired) : '–'"></div>
@@ -1464,23 +1507,6 @@
         </div>
       </div>
 
-      <!-- Cleanup below threshold -->
-      <div class="w-card">
-        <div class="w-num" :class="maintPreview && maintPreview.low===0 && 'zero'">
-          <div class="v" x-text="maintPreview ? fmtCount(maintPreview.low) : '–'"></div>
-          <div class="u">low</div>
-        </div>
-        <div class="w-body">
-          <div class="w-t">Cleanup below threshold</div>
-          <div class="w-d">Archive feed jobs scoring under your threshold.</div>
-        </div>
-        <div class="w-act">
-          <button @click="maint('cleanup',{url:'/api/maint/cleanup',label:'Archived'}); loadMaintPreview()"
-            class="btn" style="height:34px; font-size:13px; padding:0 13px" :disabled="maintPreview && maintPreview.low===0">Cleanup</button>
-        </div>
-      </div>
-
-      <!-- Clear old jobs -->
       <div class="w-card">
         <div class="w-num"><i class="ti ti-calendar-minus"></i></div>
         <div class="w-body">
@@ -1494,10 +1520,9 @@
         </div>
       </div>
 
-      <!-- System — export, cache, config, restart -->
+      <!-- System -->
       <div class="op-h"><i class="ti ti-settings"></i> System</div>
 
-      <!-- Export CSV -->
       <div class="w-card">
         <div class="w-num"><div class="v" x-text="maintPreview ? fmtCount(maintPreview.total) : '–'"></div><div class="u">jobs</div></div>
         <div class="w-body">
@@ -1507,7 +1532,6 @@
         <div class="w-act"><button @click="exportCsv()" class="btn" style="height:34px; font-size:13px; padding:0 13px">Download</button></div>
       </div>
 
-      <!-- Clean cache -->
       <div class="w-card">
         <div class="w-num" :class="maintPreview && maintPreview.cache_mb===0 && 'zero'">
           <div class="v" x-text="maintPreview ? maintPreview.cache_mb : '–'"></div>
@@ -1520,22 +1544,30 @@
         <div class="w-act"><button @click="maint('cache',{url:'/api/maint/clean-cache',label:'Cleaned'}); loadMaintPreview()" class="btn" style="height:34px; font-size:13px; padding:0 13px">Clean</button></div>
       </div>
 
-      <!-- Reload sources + Restart -->
+      <!-- Reload sources — its own card -->
       <div class="w-card">
         <div class="w-num"><i class="ti ti-reload"></i></div>
         <div class="w-body">
-          <div class="w-t">Reload sources · Restart server</div>
-          <div class="w-d">Re-read your source config, or do a full process restart after pulling new code.</div>
+          <div class="w-t">Reload sources</div>
+          <div class="w-d">Re-read your source config without a full restart.</div>
+        </div>
+        <div class="w-act"><button @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})" class="btn" style="height:34px; font-size:13px; padding:0 13px">Reload</button></div>
+      </div>
+
+      <!-- Restart — its own card -->
+      <div class="w-card">
+        <div class="w-num"><i class="ti ti-power" style="color:var(--amber)"></i></div>
+        <div class="w-body">
+          <div class="w-t">Restart server</div>
+          <div class="w-d">Full process restart — use after pulling new code or if it's wedged. Reconnects in a few seconds.</div>
         </div>
         <div class="w-act">
-          <button @click="maint('reload',{url:'/api/maint/reload',label:'Reloaded'})" class="btn" style="height:34px; font-size:13px; padding:0 13px">Reload sources</button>
           <button @click="restartServer()" :disabled="restarting" class="btn" style="height:34px; font-size:13px; padding:0 13px; border-color:#EAD5A8; color:var(--amber)">
             <span x-text="restarting ? 'Restarting…' : 'Restart'"></span>
           </button>
         </div>
       </div>
 
-      <!-- Clear run history -->
       <div class="w-card">
         <div class="w-num"><i class="ti ti-history"></i></div>
         <div class="w-body">

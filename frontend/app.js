@@ -8,7 +8,7 @@ function jobpilot() {
     adminMode: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_admin_mode') === '1'),
     adminSubtab: 'system',   // Admin page sub-tab: 'system' | 'operations' | 'maintenance'
     maintPreview: null,      // live counts for the Maintenance tab: {total, snippets, expired, low, cache_mb}
-    adminFocus: 'providers', // System sub-tab: which focus-tile panel is open (null = none)
+    adminFocus: null,        // System sub-tab: which focus-tile panel is open (null = none)
     opsRunsAll: false,       // Operations: show all runs vs latest 5
     opsErrAll: false,        // Operations: show all errors vs latest 5
     opsErrExpanded: null,    // Operations: which error id is expanded (full detail)
@@ -1725,6 +1725,15 @@ function jobpilot() {
     brokenBoards() {
       return this.health.filter(b =>
         ['silent', 'erroring', 'never_worked'].includes(b.verdict));
+    },
+    // Turn a broken board's verdict into a plain-language problem for the sources page.
+    boardIssue(b) {
+      const map = {
+        silent: { title: 'Returns nothing', sub: 'Reports success but brings back zero jobs — likely a silent block or a changed page.', icon: 'ti-plug-connected-x', tone: 'red' },
+        erroring: { title: 'Fetch is failing', sub: b.detail || 'The request errored on the last runs.', icon: 'ti-alert-triangle', tone: 'red' },
+        never_worked: { title: 'Never brought anything in', sub: 'Has run but has never returned a job — check the token or query.', icon: 'ti-help-circle', tone: 'amber' },
+      };
+      return map[b.verdict] || { title: 'Needs a look', sub: b.detail || '', icon: 'ti-alert-triangle', tone: 'amber' };
     },
 
     tier(score) {

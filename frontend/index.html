@@ -1028,9 +1028,8 @@
 
     <!-- ─── Admin ─── -->
     <div x-show="tab==='admin'">
-      <h2 class="text-lg font-semibold mb-4 hidden md:block">Admin</h2>
-      <div class="text-sm text-gray-500 mb-4 max-w-2xl">System and AI setup, how the app is doing,
-        and the buttons that act on the whole database. The destructive ones are at the bottom.</div>
+      <h2 class="text-lg font-semibold mb-1 hidden md:block">Admin</h2>
+      <p class="text-[13px] text-gray-400 mb-4">System setup, how the app's doing, and database actions.</p>
       <!-- Boards that stopped working. The silent ones lead: an erroring board
            already shows red, but one returning 200-and-nothing looks perfect. -->
       <template x-if="brokenBoards().length">
@@ -1050,6 +1049,15 @@
         </div>
       </template>
 
+      <!-- Sub-tabs -->
+      <div class="adm-subtabs">
+        <span class="adm-subtab" :class="adminSubtab==='system' && 'on'" @click="adminSubtab='system'"><i class="ti ti-robot"></i> System &amp; AI</span>
+        <span class="adm-subtab" :class="adminSubtab==='operations' && 'on'" @click="adminSubtab='operations'"><i class="ti ti-activity"></i> Operations</span>
+        <span class="adm-subtab" :class="adminSubtab==='maintenance' && 'on'" @click="adminSubtab='maintenance'"><i class="ti ti-tool"></i> Maintenance</span>
+      </div>
+
+      <!-- ═══ TAB: System & AI ═══ -->
+      <div x-show="adminSubtab==='system'">
 
       <!-- ══ System & AI settings (admin) ══ -->
       <div class="mt-6 max-w-2xl">
@@ -1277,9 +1285,12 @@
       </div>
 
 
-      <!-- ══ Operations & maintenance ══ -->
-      <div class="border-t border-gray-100 mt-8 pt-2"></div>
-      <div class="text-sm text-gray-500 mt-6 mb-3">Run history</div>
+      </div>
+      <!-- ═══ END TAB: System & AI ═══ -->
+
+      <!-- ═══ TAB: Operations ═══ -->
+      <div x-show="adminSubtab==='operations'">
+      <div class="text-sm text-gray-500 mb-3">Run history</div>
       <div class="card overflow-hidden">
         <template x-for="r in runs" :key="r.id">
           <div class="flex items-center gap-3 px-3 sm:px-4 py-3 border-b border-gray-100 last:border-0">
@@ -1331,7 +1342,11 @@
         </template>
         <div x-show="errors.length===0" class="px-4 py-8 text-center text-gray-400 text-sm">Nothing has gone wrong. Good.</div>
       </div>
-    
+      </div>
+      <!-- ═══ END TAB: Operations ═══ -->
+
+      <!-- ═══ TAB: Maintenance ═══ -->
+      <div x-show="adminSubtab==='maintenance'">
 <div class="mt-6 max-w-2xl">
         <h3 class="text-sm font-semibold text-gray-700 mb-3">Maintenance</h3>
         <div class="card divide-y divide-gray-100">
@@ -1434,6 +1449,8 @@
           </template>
         </div>
       </div>
+      </div>
+      <!-- ═══ END TAB: Maintenance ═══ -->
     </div>
 
     <!-- ─── Settings ─── -->

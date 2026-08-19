@@ -31,8 +31,27 @@ FIELDS = [
     "instructions",
 ]
 
-DB_PATH = Path(__file__).parent / "data" / "jobpilot.db"
 DESC_LIMIT = 1800  # how much of the raw description to show (chars)
+
+
+def _find_db() -> Path:
+    """Locate data/jobpilot.db no matter where the script sits (root, scripts/, etc.).
+
+    Walks up from this file's folder and the current working dir looking for
+    data/jobpilot.db, so it works whether you run it from the project root or
+    from inside a scripts/ subfolder.
+    """
+    starts = [Path(__file__).resolve().parent, Path.cwd()]
+    for start in starts:
+        for base in [start, *start.parents]:
+            candidate = base / "data" / "jobpilot.db"
+            if candidate.exists():
+                return candidate
+    # fall back to the old guess so the error message is sensible
+    return Path(__file__).resolve().parent / "data" / "jobpilot.db"
+
+
+DB_PATH = _find_db()
 
 
 def _wrap(label: str, value: str, width: int = 100) -> str:
@@ -112,7 +131,9 @@ def dump(n: int, write_report: bool) -> None:
     emit("=" * 104)
 
     if write_report:
-        report = Path(__file__).parent / "extraction_report.txt"
+        # write to the project root (the folder that contains data/), not next
+        # to the script — easier to find if the script lives in scripts/
+        report = DB_PATH.parent.parent / "extraction_report.txt"
         report.write_text("\n".join(out_lines), encoding="utf-8")
         print(f"\n>>> Report written to {report}  — share this file.")
 

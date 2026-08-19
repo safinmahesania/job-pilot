@@ -1,35 +1,16 @@
-"""SQLite persistence: seen-log dedup + kept jobs."""
-import sqlite3
-
-from src.paths import DB_PATH as DB
-
-
-def _tune(conn: sqlite3.Connection) -> sqlite3.Connection:
-    """The two pragmas that let the scheduler and the UI share one database.
-
-    The pipeline runs in a background thread and writes; you browse the feed in a
-    request thread and read. With SQLite's default rollback journal, a writer blocks
-    readers for the length of the write, so a fetch running while you click around
-    surfaces as "database is locked".
-
-    WAL (write-ahead logging) lets readers keep reading while a writer writes — they
-    see the last committed state until the write lands. busy_timeout gives any call
-    that does still hit a lock five seconds to wait for it instead of failing
-    instantly. journal_mode is a property of the database file and persists; the
-    timeout is per connection, so it is set every time.
-    """
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
+"""Persistence layer. Talks to Postgres through src.db, which gives the SQLite
+call surface the code was written against (? / :name params, hybrid rows,
+explicit commits, `with conn:`)."""
+from src import db
 
 
 def connect():
-    # check_same_thread=False: this connection is used from FastAPI's threadpool and
-    # from the scheduler's background thread, neither of which guarantees the creating
-    # thread is the using thread. Each caller gets its own connection and doesn't share
-    # it concurrently, so this is safe; without it every DB call raises "SQLite objects
-    # created in a thread can only be used in that same thread".
-    return _tune(sqlite3.connect(DB, check_same_thread=False))
+    """Open a Postgres connection (SQLite-compatible surface via src.db).
+
+    Each caller gets its own connection and doesn't share it concurrently across
+    the FastAPI threadpool and the scheduler's background thread, so this is safe.
+    """
+    return db.connect()
 
 
 def already_seen(conn, dedupe_hash: str) -> bool:
@@ -41,51 +22,54 @@ def already_seen(conn, dedupe_hash: str) -> bool:
 
 def mark_seen(conn, dedupe_hash: str, decision: str, score: float | None = None):
     conn.execute(
-        "INSERT OR IGNORE INTO seen (dedupe_hash, decision, score) VALUES (?, ?, ?)",
+        "INSERT INTO seen (dedupe_hash, decision, score) VALUES (?, ?, ?) "
+        "ON CONFLICT (dedupe_hash) DO NOTHING",
         (dedupe_hash, decision, score),
     )
 
 
 def save_job(conn, job: dict):
-    # job_type, deadline and the salary pair used to be missing from this list, so
-    # adapters filled them and the columns stayed NULL — which quietly disabled
-    # profile.yaml's `salary_floor` filter. Anything the schema stores must be
-    # named here.
+    """Insert a posting into the SHARED jobs pool.
 
-    # A job's post URL (source_url) is what "View posting" opens. Some boards only give
-    # an apply link, leaving source_url empty — so the card would have nothing to view.
-    # Fall back to apply_url so there's always a posting to open; the reverse too, so
-    # "Apply" is never dead either.
+    In the multi-user model the jobs table holds only what belongs to the posting
+    itself: the raw fields plus the 11 extracted ones. The per-user judgement —
+    score, status, notes — lives in user_jobs and is written separately when a
+    user's feed is built, so nothing here touches it. INSERT … ON CONFLICT DO
+    NOTHING keeps the pool deduplicated on dedupe_hash.
+    """
+    # A job's post URL (source_url) is what "View posting" opens. Some boards only
+    # give an apply link; fall back so there's always something to open, and the
+    # reverse so "Apply" is never dead either.
     if not (job.get("source_url") or "").strip():
         job["source_url"] = job.get("apply_url") or ""
     if not (job.get("apply_url") or "").strip():
         job["apply_url"] = job.get("source_url") or ""
 
-    # Extraction fields (src/extract.py) may or may not be on the dict — a job
-    # that hasn't been extracted yet simply carries none of them. Default every
-    # one so the named-parameter INSERT never trips on a missing key.
+    # remote is a 0/1 int on the dict but a boolean column in Postgres.
+    job["remote"] = bool(job.get("remote"))
+
+    # Extraction fields (src/extract.py) may or may not be on the dict — default
+    # every one so the named-parameter INSERT never trips on a missing key.
     for _f in ("work_mode", "seniority_level", "location_detail", "salary_text",
                "benefits", "responsibilities", "requirements", "nice_to_have",
                "tech_stack", "about_company", "instructions", "extracted_at"):
         job.setdefault(_f, None)
 
     conn.execute(
-        """INSERT OR IGNORE INTO jobs
+        """INSERT INTO jobs
            (dedupe_hash, source, source_url, apply_url, title, company,
-            location, remote, description, posted_date, score, skills_score,
-            seniority_score, domain_score, rationale, flags,
+            location, remote, description, posted_date,
             job_type, deadline, language, salary_min, salary_max,
             work_mode, seniority_level, location_detail, salary_text, benefits,
             responsibilities, requirements, nice_to_have, tech_stack,
             about_company, instructions, extracted_at)
            VALUES (:dedupe_hash, :source, :source_url, :apply_url, :title,
                    :company, :location, :remote, :description, :posted_date,
-                   :score, :skills_score, :seniority_score, :domain_score,
-                   :rationale, :flags,
                    :job_type, :deadline, :language, :salary_min, :salary_max,
                    :work_mode, :seniority_level, :location_detail, :salary_text,
                    :benefits, :responsibilities, :requirements, :nice_to_have,
-                   :tech_stack, :about_company, :instructions, :extracted_at)""",
+                   :tech_stack, :about_company, :instructions, :extracted_at)
+           ON CONFLICT (dedupe_hash) DO NOTHING""",
         job,
     )
 
@@ -133,7 +117,7 @@ def save_source_health(conn, name, ats, stat, when):
         "SELECT zero_streak, error_streak, last_ok, alerted FROM source_health "
         "WHERE name = ?", (name,)
     ).fetchone()
-    zero_streak, error_streak, last_ok, alerted = prior or (0, 0, None, 0)
+    zero_streak, error_streak, last_ok, alerted = prior or (0, 0, None, False)
 
     if failed:
         error_streak += 1
@@ -146,7 +130,7 @@ def save_source_health(conn, name, ats, stat, when):
         zero_streak = 0
         error_streak = 0
         last_ok = when
-        alerted = 0
+        alerted = False
 
     conn.execute(
         """INSERT INTO source_health
@@ -169,19 +153,19 @@ def mark_health_alerted(conn, names: list[str]):
     """Don't report the same broken board every single run."""
     if not names:
         return
-    conn.executemany("UPDATE source_health SET alerted = 1 WHERE name = ?",
+    conn.executemany("UPDATE source_health SET alerted = true WHERE name = ?",
                      [(n,) for n in names])
     conn.commit()
 
 
 def get_setting(conn, key, default=None):
-    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
     return row[0] if row else default
 
 
 def set_setting(conn, key, value):
     conn.execute(
-        "INSERT INTO settings (key,value) VALUES (?,?) "
+        "INSERT INTO app_settings (key,value) VALUES (?,?) "
         "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
         (key, str(value)),
     )
@@ -216,14 +200,14 @@ def record_error(conn, where: str, exc: BaseException,
     import traceback as _tb
 
     tb = "".join(_tb.format_exception(type(exc), exc, exc.__traceback__))
-    cur = conn.execute(
+    row = conn.execute(
         "INSERT INTO errors (where_, kind, message, traceback, notified) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (where, type(exc).__name__, str(exc), tb, 1 if notified else 0),
-    )
+        "VALUES (?, ?, ?, ?, ?) RETURNING id",
+        (where, type(exc).__name__, str(exc), tb, bool(notified)),
+    ).fetchone()
     _trim_errors(conn)
     conn.commit()
-    return cur.lastrowid
+    return row[0]
 
 
 def recent_errors(conn, limit: int = 100) -> list[dict]:
@@ -265,9 +249,10 @@ def record_source_error(conn, where: str, message: str) -> int:
 
     A broken board does not raise into the pool — one bad source must not stop the
     run — so there is no traceback to keep, only the reason the board reported."""
-    cur = conn.execute(
+    row = conn.execute(
         "INSERT INTO errors (where_, kind, message, traceback, notified) "
-        "VALUES (?, 'FetchError', ?, '', 0)", (where, str(message)[:500]))
+        "VALUES (?, 'FetchError', ?, '', false) RETURNING id",
+        (where, str(message)[:500])).fetchone()
     _trim_errors(conn)
     conn.commit()
-    return cur.lastrowid
+    return row[0]

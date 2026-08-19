@@ -1,0 +1,1247 @@
+========================================================================================================
+EXTRACTION VERIFICATION — 20 random jobs (881 of 946 jobs extracted)
+========================================================================================================
+
+########################################################################################################
+[1/20]  JOB 278  —  Software Developer Automation Tester  @  Air Canada
+         raw location: Dorval, Montréal
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  Being part of Air Canada is to become part of an iconic Canadian symbol, recently ranked the best
+  Airline in North America. Let your career take flight by joining our diverse and vibrant team at the
+  leading edge of passenger aviation. We are seeking a Software Developer Automation Tester to help
+  accelerate the adoption of intelligent automation testing across Air Canada’s IT, Data, and Digital
+  teams. This role is responsible for integrating automation solutions and frameworks provided by the
+  Ai…
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        (blank)
+  seniority_level  (blank)
+  location_detail  Dorval, Montréal
+  salary_text      (blank)
+  benefits         (blank)
+  responsibilities (blank)
+  requirements     (blank)
+  nice_to_have     (blank)
+  tech_stack       (blank)
+  about_company    Being part of Air Canada is to become part of an iconic Canadian symbol, recently ranked the best
+                   Airline in North America. Let your career take flight by joining our diverse and vibrant team at the
+                   leading edge of passenger aviation.
+  instructions     (blank)
+
+
+########################################################################################################
+[2/20]  JOB 945  —  Développeur.euse Front-End Junior - Temporaire  @  Sid Lee
+         raw location: Montreal, QC (Hybrid)
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  About the job
+  Temporaire : 3 MOIS
+  
+  QUI NOUS SOMMES
+  
+  Sid Lee est un collectif créatif multidisciplinaire qui cherche à briser l’ordinaire pour repenser
+  la façon dont les marques connectent par la créativité, la culture, l'innovation et le design. Plus
+  de 300 artisan·e·s travaillent avec cœur comme une seule équipe à partir des bureaux de Montréal,
+  Toronto, New York, Paris, Londres et San Francisco. En défiant les attentes, notre travail définit
+  l’avenir des marques et le monde qui les entoure. Sa communauté créative inclut aussi Yard, Digital
+  Kitchen, Sid Lee Sport, Sid Lee Architecture et Haigo.
+  
+  Sid Lee puise dans sa riche palette de disciplines, allant de l’artisanat à la culture et à
+  l’innovation, afin de permettre à ses client·e·s de se surpasser afin de gagner la confiance de leur
+  clientèle et d’accroître leur influence.
+  
+  Sid Lee fait partie de kyu, un collectif mondial d’entreprises créatives de premier plan établi par
+  Hakuhodo DY Holdings. Sid Lee est également à l’origine de C2 Montréal, l’une des plus grandes
+  conférences internationales consacrées à la créativité en affaires.
+  
+  RÔLE
+  
+  Au sein d’une équipe créative, technique et dynamique, le.la Développeur.euse Front-End Junior
+  contribue activement à la maintenance et à l’évolution d’un projet numérique ambitieux pour un
+  client local. Doté.e d’une grande rigueur et d’un sens aigu du détail, il.elle veille à maintenir
+  des standards de qualité élevés à chaque étape du processus.
+  
+  Technologies utilisées : HTML, CSS, JavaScript
+  
+  RESPONSABILITÉS
+  
+  Collaborer à la maintenance et au développement du projet numérique, basé sur les besoins établis;
+  Intégrer les contenus, rédiger et maintenir un code structuré et évolutif selon les priorités
+  établies;
+  Formuler des recommandations pour résoudre les enjeux front-end et amélio
+  … [1372 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        hybrid
+  seniority_level  junior
+  location_detail  Montreal, QC
+  salary_text      (blank)
+  benefits         (blank)
+  responsibilities Collaborer à la maintenance et au développement du projet numérique, basé sur les besoins établis;
+                   Intégrer les contenus, rédiger et maintenir un code structuré et évolutif selon les priorités
+                   établies; Formuler des recommandations pour résoudre les enjeux front-end et améliorer l'expérience
+                   utilisateur; Tester, réviser et assurer la qualité des éléments intégrés sur une diversité de
+                   navigateurs et plateformes; Optimiser la performance, la responsivité (mobile), et l’accessibilité
+                   des interfaces; Identifier et corriger les bugs d’intégration, ajuster le rendu en fonction des
+                   retours des clients et des équipes QA; Participer activement aux réunions de suivi et de gestion de
+                   projets.
+  requirements     Au moins 1 an d’expérience dans un poste similaire. Diplôme collégial en multimédia ou domaine
+                   connexe. Maîtrise des langages HTML, CSS et JavaScript. Excellente maîtrise du français, tant à
+                   l’oral qu’à l’écrit.
+  nice_to_have     (blank)
+  tech_stack       HTML, CSS, JavaScript
+  about_company    Sid Lee est un collectif créatif multidisciplinaire qui cherche à briser l’ordinaire pour repenser
+                   la façon dont les marques connectent par la créativité, la culture, l'innovation et le design. Plus
+                   de 300 artisan·e·s travaillent avec cœur comme une seule équipe à partir des bureaux de Montréal,
+                   Toronto, New York, Paris, Londres et San Francisco.
+  instructions     (blank)
+
+
+########################################################################################################
+[3/20]  JOB 478  —  Junior UI developer / Développeur UI junior  @  Hewlett Packard Enterprise
+         raw location: Saint-Laurent, Montréal
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  Junior UI developer / Développeur UI junior This role has been designed as ‘’Onsite’ with an
+  expectation that you will primarily work from an HPE office. Who We Are: Hewlett Packard Enterprise
+  is the global edge-to-cloud company advancing the way people live and work. We help companies
+  connect, protect, analyze, and act on their data and applications wherever they live, from edge to
+  cloud, so they can turn insights into outcomes at the speed required to thrive in today’s complex
+  world. Our cult…
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        onsite
+  seniority_level  junior
+  location_detail  Saint-Laurent, Montréal
+  salary_text      (blank)
+  benefits         (blank)
+  responsibilities (blank)
+  requirements     (blank)
+  nice_to_have     (blank)
+  tech_stack       (blank)
+  about_company    Hewlett Packard Enterprise is the global edge-to-cloud company advancing the way people live and
+                   work. We help companies connect, protect, analyze, and act on their data and applications wherever
+                   they live, from edge to cloud, so they can turn insights into outcomes at the speed required to
+                   thrive in today’s complex world.
+  instructions     (blank)
+
+
+########################################################################################################
+[4/20]  JOB 196  —  Java Developers (all levels)  @  CGI
+         raw location: United Kingdom (Remote)
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  About the job
+  Position Description
+  
+  At CGI, we’re shaping the future of digital UK Government solutions, building secure, high-impact
+  platforms that improve services for millions across the UK. As a Java Developer , you’ll play a
+  pivotal role in designing and developing scalable, resilient back-end systems using the latest Java
+  and microservices technologies. You’ll collaborate with skilled professionals who take ownership of
+  their work, share ideas freely, and are empowered to create solutions that make a lasting
+  difference. This is an opportunity to contribute to a variety of major national UK Government
+  programmes where innovation, teamwork, and continuous learning come together to deliver meaningful
+  results for our clients and UK helping improve UK citizens' lives.
+  
+  CGI was recognised in the Sunday Times Best Places to Work List 2025 and has been named a UK ‘Best
+  Employer’ by the Financial Times. We offer a competitive salary, excellent pension, private
+  healthcare, plus a share scheme (3.5% + 3.5% matching) which makes you a CGI Partner not just an
+  employee. We are committed to inclusivity, building a genuinely diverse community of tech talent and
+  inspiring everyone to pursue careers in our sector, including our Armed Forces, and are proud to
+  hold a Gold Award in recognition of our support of the Armed Forces Corporate Covenant. Join us and
+  you’ll be part of an open, friendly community of experts. We’ll train and support you in taking your
+  career wherever you want it to go.
+  
+  Due to the secure nature of our work programmes, you will need to hold UK Security Clearance or be
+  eligible to go through this clearance. These roles will be predominately hybrid with some work based
+  in UK CGI or client offices depending on the specific programme. Travel away from base office wi
+  … [3666 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        hybrid
+  seniority_level  (blank)
+  location_detail  United Kingdom
+  salary_text      (blank)
+  benefits         competitive salary, excellent pension, private healthcare, share scheme (3.5% + 3.5% matching)
+  responsibilities Design and Develop: Build and enhance Java-based microservices using Spring Boot and related
+                   frameworks Collaborate and Deliver: Work closely with developers, architects, and testers to ensure
+                   technical excellence and timely delivery Optimise and Innovate: Improve performance, scalability,
+                   and maintainability of systems through continuous iteration Contribute and Support: Participate in
+                   agile ceremonies, share knowledge, and support a culture of quality and innovation Secure and
+                   Maintain: Ensure all solutions meet strict security and compliance requirements
+  requirements     Proven experience as a Java Developer or Software Engineer working at SFIA level 3,4 or 5 Strong
+                   proficiency in Java, Spring Boot, and RESTful API development Experience with microservices
+                   architecture and containerisation (e.g., Docker, Kubernetes) Familiarity with Agile/Scrum
+                   methodologies and CI/CD pipelines Understanding of cloud environments (AWS/Azure/GCP) and DevOps
+                   principles
+  nice_to_have     Experience of WSO2
+  tech_stack       Java, Spring Boot, RESTful API development, microservices architecture, Docker, Kubernetes, AWS,
+                   Azure, GCP
+  about_company    At CGI, we’re shaping the future of digital UK Government solutions, building secure, high-impact
+                   platforms that improve services for millions across the UK. We offer a competitive salary, excellent
+                   pension, private healthcare, share scheme (3.5% + 3.5% matching) which makes you a CGI Partner not
+                   just an employee. We are committed to inclusivity, building a genuinely diverse community of tech
+                   talent and inspiring everyone to pursue careers in our sector.
+  instructions     (blank)
+
+
+########################################################################################################
+[5/20]  JOB 906  —  Junior Unity Developer  @  Hyper Hippo
+         raw location: Vancouver, BC
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  Full job description
+  The Opportunity
+  
+  As a Junior Unity Developer, you will participate in the development and maintenance of our live
+  mobile games and assist in the creation of new mobile titles. Working closely with experienced
+  developers who will guide and mentor you, you’ll help implement new features that evolve our games
+  and take them to new heights — growing our player base and bringing our fans back for more. Scaling
+  our games into the top of the charts, you’ll help ensure our features are stable, scalable, and
+  performant to keep players around the globe engaged!
+  
+  
+  A Junior Unity Developer’s Impact
+  
+  Deliver small, well-defined programming tasks with guidance and direction from your lead, growing
+  your scope as you develop
+  Build features and systems based on designs and input from team
+  Debug your own code, design for testability, and document how to test your features
+  Work with other teams and departments throughout the development process, from ideation to release
+  and live operations support
+  Break down tasks into clear plans with dependencies and time estimates
+  Follow team best practices and coding standards, and apply solid data structures, algorithms, and
+  resource management techniques
+  Coordinate work with peers, offer constructive opinions, and share project status through clear
+  communication
+  Learn continuously from the engineering team and own your professional development plan
+  
+  Your Track Record Includes
+  
+  1+ years commercial experience with Unity and C#
+  Demonstrated knowledge of good programming practices and computer science fundamentals (data
+  structures, algorithms)
+  Eagerness to learn, take feedback, and grow alongside a collaborative team
+  Computer Science/Software Engineering degree or equivalent experience
+  Backend development experience is a plus
+  
+  Hyper
+  … [2838 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        remote
+  seniority_level  junior
+  location_detail  Vancouver, BC
+  salary_text      $66,450 - $76,420 for candidates located in Alberta, British Columbia, and Ontario
+  benefits         Extended health, dental & vision benefits (plan premiums 100% covered by the company) + a $600
+                   health & wellness spending account + an Employee & Family Assistance Program; 4 weeks vacation +
+                   paid winter holiday closure + 10 paid personal/sick days per year; Annual $3,000 self development
+                   “Brain Fund” budget + 5 paid professional development days to attend conferences, courses, training;
+                   Home Ergonomic Benefit for your home office - $1,000 + company laptop (choice of PC or Mac!) and
+                   accessories required to work effectively; Paid short or long term parental and compassionate
+                   caregiver leave - up to 16 weeks’ top up; Charitable gift matching up to $1,000 per year for
+                   recognized causes that you support + 3 paid volunteer days per year
+  responsibilities Deliver small, well-defined programming tasks with guidance and direction from your lead, growing
+                   your scope as you develop; Build features and systems based on designs and input from team; Debug
+                   your own code, design for testability, and document how to test your features; Work with other teams
+                   and departments throughout the development process, from ideation to release and live operations
+                   support; Break down tasks into clear plans with dependencies and time estimates; Follow team best
+                   practices and coding standards, and apply solid data structures, algorithms, and resource management
+                   techniques; Coordinate work with peers, offer constructive opinions, and share project status
+                   through clear communication; Learn continuously from the engineering team and own your professional
+                   development plan
+  requirements     1+ years commercial experience with Unity and C#; Demonstrated knowledge of good programming
+                   practices and computer science fundamentals (data structures, algorithms); Eagerness to learn, take
+                   feedback, and grow alongside a collaborative team; Computer Science/Software Engineering degree or
+                   equivalent experience
+  nice_to_have     Backend development experience is a plus
+  tech_stack       Unity, C#
+  about_company    Hyper Hippo is an award-winning mobile game studio dedicated to making entertainment that has a
+                   positive impact on the world. We foster a creator-driven culture, meaning that when you’re part of
+                   the Hyper Hippo team, this is your studio.
+  instructions     (blank)
+
+
+########################################################################################################
+[6/20]  JOB 1056  —  Ruby on Rails Software Developer  @  Leonardo Canada Inc.
+         raw location: Ottawa, Ontario, CA
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  We are seeking a talented Ruby on Rails Software Developer to join our expanding development team at
+  Leonardo Canada Inc. (LCI). As a developer, you will play a critical role in building and scaling
+  our platform while contributing to our overall product vision. If you are passionate about coding
+  and thrive in an agile environment, we want to hear from you!
+  Key Responsibilities:
+  • Understand product requirements and detailed system design
+  • Translate system design to software architecture and implementation of features across the entire
+  stack (frontend and backend).
+  • Contribute to technical discussions and solution design
+  • Create software system design documents
+  • Write clean, maintainable, and efficient code.
+  • Design and optimize database schemas
+  • Monitor and improve database and system performance
+  • Create unit, integration and functional tests
+  • Participate in code reviews, ensuring quality and security standards.
+  • Debug and resolve application bugs
+  • Collaborate with cross-functional teams (Product Owner, Systems, Software, Verification &amp;
+  Validation)
+  What We Are Looking For:
+  • 1-6 years of professional experience as a Ruby on Rails developer.
+  • Strong proficiency in front-end technologies such as JavaScript, HTML, CSS, and relevant
+  frameworks.
+  • Experience with version control tools such as Git and platforms such as Bitbucket, GitHub, etc.
+  • Experience with relational databases, particularly PostgreSQL.
+  • Knowledge of building RESTful APIs and working with third-party APIs.
+  • Strong problem-solving skills and the ability to work independently as well as in a team.
+  • Excellent communication and collaboration skills.
+  Bonus Skills (Nice to Haves):
+  • Familiarity with Agile methodologies, such as Scrum or Kanban.
+  • Familiarity with background job processing tools
+  … [968 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        (blank)
+  seniority_level  (blank)
+  location_detail  Ottawa, Ontario, CA
+  salary_text      (blank)
+  benefits         (blank)
+  responsibilities Understand product requirements and detailed system design Translate system design to software
+                   architecture and implementation of features across the entire stack (frontend and backend).
+                   Contribute to technical discussions and solution design Create software system design documents
+                   Write clean, maintainable, and efficient code. Design and optimize database schemas Monitor and
+                   improve database and system performance Create unit, integration and functional tests Participate in
+                   code reviews, ensuring quality and security standards. Debug and resolve application bugs
+                   Collaborate with cross-functional teams (Product Owner, Systems, Software, Verification &amp;
+                   Validation)
+  requirements     1-6 years of professional experience as a Ruby on Rails developer. Strong proficiency in front-end
+                   technologies such as JavaScript, HTML, CSS, and relevant frameworks. Experience with version control
+                   tools such as Git and platforms such as Bitbucket, GitHub, etc. Experience with relational
+                   databases, particularly PostgreSQL. Knowledge of building RESTful APIs and working with third-party
+                   APIs. Strong problem-solving skills and the ability to work independently as well as in a team.
+                   Excellent communication and collaboration skills. It is a condition of employment that the
+                   successful candidate receive a secret level security clearance. To obtain such a clearance, the
+                   candidate: Must be either a Canadian citizen or permanent resident of Canada; Must have lived in
+                   Canada continuously for the past 10 years &amp; not have a criminal record; Must be able to obtain a
+                   Canadian Industrial Security Clearance to NATO SECRET level; Must be eligible for International
+                   Traffic in Arms Regulations (ITAR) and Controlled Goods Regulations Program (CGRP) government
+                   clearances.
+  nice_to_have     Familiarity with Agile methodologies, such as Scrum or Kanban. Familiarity with background job
+                   processing tools like SideKiq, Faktory, ActiveJob. Experience with Mapping and Geospatial
+                   technologies Experience with HTML Over the Wire (Hotwire) Familiarity with Docker and containerized
+                   environments. Experience with GoLang including understanding of syntax, idioms, and best practices
+                   Knowledge of DevOps tools like Jenkins, Bitbucket, SonarQube Experience contributing to technical
+                   design documentation.
+  tech_stack       Ruby on Rails, JavaScript, HTML, CSS, Git, Bitbucket, GitHub, PostgreSQL, RESTful APIs, SideKiq,
+                   Faktory, ActiveJob, Hotwire, Docker, GoLang, Jenkins, SonarQube
+  about_company    We are seeking a talented Ruby on Rails Software Developer to join our expanding development team at
+                   Leonardo Canada Inc. (LCI). As a developer, you will play a critical role in building and scaling
+                   our platform while contributing to our overall product vision. If you are passionate about coding
+                   and thrive in an agile environment, we want to hear from you!
+  instructions     (blank)
+
+
+########################################################################################################
+[7/20]  JOB 775  —  Python AI/ML Developer – Python, FastAPI, AWS & Generative AI (LLMs)  @  Astra North Infoteck Inc.
+         raw location: Toronto, Ontario
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  Python AI/ML Developer – Python, FastAPI, AWS &amp; Generative AI (LLMs)      Required Skills &amp;
+  Experience:   • 5+ years of professional experience in software development.  • Strong proficiency
+  in Python (FastAPI, Flask, asyncio, pandas, etc.).  • Hands-on experience with AWS services related
+  to AI/ML and serverless architectures.  • Strong understanding of LLMs, transformers, embeddings,
+  vector databases, and Generative AI concepts.  • Experience with Git, containerization (Docker), and
+  orchestration (Kubernetes/EKS is a bonus).  • Familiarity with security, compliance, and responsible
+  AI guidelines.
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        (blank)
+  seniority_level  (blank)
+  location_detail  Toronto, Ontario
+  salary_text      (blank)
+  benefits         (blank)
+  responsibilities (blank)
+  requirements     5+ years of professional experience in software development. Strong proficiency in Python (FastAPI,
+                   Flask, asyncio, pandas, etc.). Hands-on experience with AWS services related to AI/ML and serverless
+                   architectures. Strong understanding of LLMs, transformers, embeddings, vector databases, and
+                   Generative AI concepts. Experience with Git, containerization (Docker), and orchestration
+                   (Kubernetes/EKS is a bonus). Familiarity with security, compliance, and responsible AI guidelines.
+  nice_to_have     (blank)
+  tech_stack       Python, FastAPI, Flask, asyncio, pandas, AWS, LLMs, transformers, embeddings, vector databases
+  about_company    (blank)
+  instructions     (blank)
+
+
+########################################################################################################
+[8/20]  JOB 576  —  Specialist Software Development  @  Canadian National Railway 
+         raw location: Montréal, Québec
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  Specialist Software Development At CN, everyday brings new and exciting challenges. You can expect
+  an interesting environment where you’re part of making sure our business is running optimally and
+  safely―helping keep the economy on track. We provide the kind of paid training and opportunities
+  that long-term careers are built on and we recognize hard workers who strive to make a difference.
+  You will be able to thrive in our close-knit, safety-focused culture working together as ONE TEAM.
+  The car…
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        (blank)
+  seniority_level  (blank)
+  location_detail  Montréal, Québec
+  salary_text      (blank)
+  benefits         paid training and opportunities that long-term careers are built on
+  responsibilities (blank)
+  requirements     (blank)
+  nice_to_have     (blank)
+  tech_stack       (blank)
+  about_company    At CN, everyday brings new and exciting challenges. You can expect an interesting environment where
+                   you’re part of making sure our business is running optimally and safely―helping keep the economy on
+                   track. We provide the kind of paid training and opportunities that long-term careers are built on
+                   and we recognize hard workers who strive to make a difference. You will be able to thrive in our
+                   close-knit, safety-focused culture working together as ONE TEAM. The car…
+  instructions     (blank)
+
+
+########################################################################################################
+[9/20]  JOB 419  —  Embedded Software Engineer – Intern  @  Ciena Government Solutions
+         raw location: Canada
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  As the global leader in high-speed connectivity, Ciena is committed to a people-first approach. Our
+  teams enjoy a culture focused on prioritizing a flexible work environment that empowers individual
+  growth, well-being, and belonging. We’re a technology company that leads with our humanity—driving
+  our business priorities alongside meaningful social, community, and societal impact.
+  
+  How You Will Contribute:
+  
+  We design, implement, and maintain real-time embedded platform and application software for several
+  of Ciena’s flagship products. Functional areas in our scope range from low level bit flipping
+  drivers to high level software state machines for interfacing with external applications:
+  
+  Linux and VxWorks kernels and base software components
+  Drivers for proprietary and 3rd party ASICs, FPGAs, and other hardware components.
+  Hardware/software interface to provide bridging of various abstraction layers.
+  Fault and alarms subsystems to detect, report and maintain defects and manage their hysteresis and
+  co-relations.
+  System applications such as traffic/equipment protection, performance monitoring, etc.
+  SDKs that abstract the underlying low-level software and hardware to facility platform application
+  developments and integration.
+  Must Haves:
+  
+  Enrolled in a bachelor’s or master's degree in computer or electrical engineering, computer science,
+  or similar disciplines
+  Experience with C or C++
+  Assets:
+  
+  Developing software for embedded systems or telecom products
+  Understanding of CPU hardware architectures, hardware functional specifications, hardware timing
+  diagrams, device data sheets
+  Understanding of real-time operating systems and embedded systems
+  Software development tools such as git, BitBucket, Gerrit, Jira, etc.
+  Unit test frameworks such as Google Test, JUnit, Robot, PyTest,
+  … [1544 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        (blank)
+  seniority_level  intern
+  location_detail  Canada
+  salary_text      $25 to $32
+  benefits         Employee Assistance Program (EAP), company-paid holidays, paid sick leave, and vacation pay as
+                   required by applicable laws.
+  responsibilities Design, implement, and maintain real-time embedded platform and application software for several of
+                   Ciena’s flagship products. Functional areas include Linux and VxWorks kernels and base software
+                   components, drivers for proprietary and 3rd party ASICs, FPGAs, and other hardware components,
+                   hardware/software interface to provide bridging of various abstraction layers, fault and alarms
+                   subsystems, system applications such as traffic/equipment protection, performance monitoring, SDKs
+                   that abstract the underlying low-level software and hardware.
+  requirements     Enrolled in a bachelor’s or master's degree in computer or electrical engineering, computer science,
+                   or similar disciplines. Experience with C or C++.
+  nice_to_have     Developing software for embedded systems or telecom products, understanding of CPU hardware
+                   architectures, real-time operating systems and embedded systems, software development tools such as
+                   git, BitBucket, Gerrit, Jira, unit test frameworks like Google Test, JUnit, Robot, PyTest, debuggers
+                   and tools (e.g., gdb), high-level programming and scripting languages such as Java, Python, Perl,
+                   Tcl, bash, YANG modeling language and toolchains, software development methodologies such as Agile
+                   or Waterfall, familiarity with datacom and telecom concepts.
+  tech_stack       (blank)
+  about_company    As the global leader in high-speed connectivity, Ciena is committed to a people-first approach. Our
+                   teams enjoy a culture focused on prioritizing a flexible work environment that empowers individual
+                   growth, well-being, and belonging. We’re a technology company that leads with our humanity—driving
+                   our business priorities alongside meaningful social, community, and societal impact.
+  instructions     (blank)
+
+
+########################################################################################################
+[10/20]  JOB 822  —  IT Security Analyst x2 - 12 month contract  @  CorGTA
+         raw location: Toronto, Ontario
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  Job DescriptionJob Description Role: IT Security Analyst x2 Rates: Up to $82.00 p/h INC. Location:
+  Scarborough, ON Structure: Hybrid, 12 month contract   --    We have a great new opportunity to
+  support one of our clients in a contract capacity!    Please see below for more information on the
+  position and if interested, apply with an updated resume aligned to the needs of the role.
+  Candidate Requirements/Must Have Skills:   10+ years of working experience with 5+ as an IT Security
+  Analyst  3-5+ years of experience with proxy (Zscaler or similar enterprise technology)  1+ years
+  experience to reflect strong knowledge of networking: being able to troubleshoot networks.
+  Experience in implementing security policy in large enterprise setting.  Nice-To-Have Skills:  1)
+  Bilingual in Spanish 2) Experience within FI/ banking an asset 3) Familiarity/experience with:
+  Bluecoat/Broadcom 4) Exp operating in public cloud environments    --  CorGTA is an equal
+  opportunity employer, please apply with an updated resume and ensure the required skills you are
+  able to speak to for this position are included.  At times, CorGTA or itsclient partners may utilize
+  AI tools to assist with the hiring processes.    By submitting your application, you consent to be
+  contacted by CorGTA via email, SMS, or phone regarding current and future opportunities, and
+  acknowledge our collection and use of your personal information in accordance with our Privacy
+  Policy and Terms of Service:www.corgta.com/privacy-policy    For more roles like this, please go
+  towww.corgta.com/find-a-job/
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        hybrid
+  seniority_level  (blank)
+  location_detail  Scarborough, ON
+  salary_text      Up to $82.00 p/h INC.
+  benefits         (blank)
+  responsibilities (blank)
+  requirements     10+ years of working experience with 5+ as an IT Security Analyst, 3-5+ years of experience with
+                   proxy (Zscaler or similar enterprise technology), 1+ years experience to reflect strong knowledge of
+                   networking: being able to troubleshoot networks, Experience in implementing security policy in large
+                   enterprise setting
+  nice_to_have     Bilingual in Spanish, Experience within FI/ banking an asset, Familiarity/experience with
+                   Bluecoat/Broadcom, Exp operating in public cloud environments
+  tech_stack       (blank)
+  about_company    (blank)
+  instructions     apply with an updated resume aligned to the needs of the role
+
+
+########################################################################################################
+[11/20]  JOB 1022  —  Salesforce Developer  @  Moneris
+         raw location: Toronto, Ontario
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  Your Moneris Career – The Opportunity   As a Salesforce Developer, you will help design and deliver
+  scalable solutions across Sales Cloud, Experience Cloud, and Revenue Cloud to support key business
+  operations and customer experiences. You’ll play an important role in building and optimizing
+  Salesforce capabilities within a complex, integrated environment. This role involves developing
+  custom solutions using Apex and Lightning Web Components while integrating Salesforce with internal
+  and external systems through APIs and MuleSoft. The team prioritizes high-quality engineering
+  practices, robust data architecture, and continuous improvement in a fast-evolving platform
+  ecosystem.   Location:  You will be based in our Toronto office, balancing in-office collaboration
+  with remote flexibility.     Reporting Relationship : You will report to the Senior Manager,
+  Software Development and Architecture   Posting Type:  Replacement Position   Salary Range:  The
+  expected base salary range for this role is $85,000 - $119,000   Total compensation may also include
+  variable or discretionary incentive components, including but not limited to bonuses and
+  commissions. Individual job offers are determined by various factors, including experience,
+  education, skills, certifications, and other business needs.      Your Moneris Career – What you’ll
+  do     Develop and customize Salesforce applications using Apex, Lightning Web Components, and
+  declarative tools.    Design scalable solutions across Sales Cloud, Experience Cloud, and Revenue
+  Cloud.    Review code, solution designs, and integration strategies across development teams.
+  Build and maintain integrations using Salesforce APIs and MuleSoft.    Translate business
+  requirements into secure, high-performance technical solutions.    Contrib
+  … [3475 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        hybrid
+  seniority_level  (blank)
+  location_detail  Toronto, Ontario
+  salary_text      The expected base salary range for this role is $85,000 - $119,000
+  benefits         ['Comprehensive Total Rewards Program, including performance-based bonuses, flexible benefits
+                   starting from day one, and your choice of a health spending account (HSA) or personal spending
+                   account (PSA)', 'Retirement planning support, with profit-sharing programs including company match
+                   and a defined contribution pension plan', 'Growth & development opportunities, including unlimited
+                   access to Coursera, mentorship programs, and an internal gig marketplace', 'Holistic wellness
+                   support, with an Employee & Family Assistance Program, 24/7 virtual healthcare, and workplace
+                   wellness initiatives', 'Flexibility that works for you, including hybrid work arrangements, a Work
+                   from Abroad program, and paid time off programs', 'Recognition and rewards, with company-wide
+                   recognition programs, exclusive banking perks from RBC & BMO, and access to great employee
+                   discounts']
+  responsibilities ['Develop and customize Salesforce applications using Apex, Lightning Web Components, and
+                   declarative tools.', 'Design scalable solutions across Sales Cloud, Experience Cloud, and Revenue
+                   Cloud.', 'Review code, solution designs, and integration strategies across development teams.',
+                   'Build and maintain integrations using Salesforce APIs and MuleSoft.', 'Translate business
+                   requirements into secure, high-performance technical solutions.', 'Contribute to data model design,
+                   schema optimization, and platform architecture.', 'Participate in Agile delivery, including sprint
+                   planning, QA, and UAT support.', 'Maintain code quality through peer reviews and adherence to best
+                   practices.', 'Optimize code and integrations for performance, maintainability, and scalability.']
+  requirements     ['3+ years of Salesforce development experience.', 'Expertise in Apex, Lightning Web Components, and
+                   Visualforce.', 'Strong experience in Salesforce data model design and schema optimization.',
+                   'Experience with Salesforce APIs and integration patterns.', 'Strong understanding of Salesforce
+                   security model (profiles, permission sets, sharing rules, Shield).', 'Experience with Flows, Apex
+                   triggers, and automation strategies.', 'Experience working with MuleSoft for integrations.',
+                   'Experience delivering scalable, secure, production-grade Salesforce solutions.', 'Experience
+                   leading delivery of large Salesforce implementations with integrations.']
+  nice_to_have     ['Experience with Revenue Cloud and CPQ.', 'Exposure to CI/CD and DevOps practices within Salesforce
+                   environments.']
+  tech_stack       Salesforce, Sales Cloud, Experience Cloud, Revenue Cloud, Apex, Lightning Web Components, APIs,
+                   MuleSoft, Visualforce, Flows, Apex triggers, CPQ, CI/CD, DevOps
+  about_company    At Moneris, we believe in empowering you to succeed—personally and professionally. As part of our
+                   team, you'll have access to resources, opportunities, and an inclusive environment that supports
+                   your development and career.
+  instructions     (blank)
+
+
+########################################################################################################
+[12/20]  JOB 761  —  Full Stack Web Developer  @  Shop Innovator
+         raw location: Toronto, Ontario
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  Job description
+  We’re Hiring: Web Developer
+  
+  
+  
+  We are looking for a talented and reliable Web Developer to join our growing team and support
+  multiple development projects across our brands and platforms.
+  
+  This role will involve working on a variety of projects, including Shopify apps, and ongoing Shopify
+  store updates.
+  
+  
+  
+  Remote Work Opportunity
+  This is a remote role, and the selected candidate will be able to work from anywhere.
+  
+  
+  
+  Canada-Based Applicants Preferred
+  We are especially interested in applicants based in Canada for this role. This may be a payroll-
+  based opportunity for the right candidate.
+  
+  
+  
+  Requirements
+  
+  Experience in web development
+  Strong knowledge of HTML, CSS, and JavaScript
+  Experience building or maintaining Shopify apps
+  Experience with SaaS or software product development
+  Experience with React, Node.js, or similar frameworks
+  Experience working with eCommerce brands
+  Understanding of performance optimization and technical SEO
+  Experience with GitHub or version control workflows
+  Experience with Shopify development and theme customization
+  Experience with APIs, integrations, and backend/frontend workflows
+  Ability to troubleshoot and solve technical issues independently
+  Strong attention to detail
+  Include "Star Innovator" in your cover letter to confirm you've read the job description.
+  Good communication and time management skills
+  Ability to manage multiple development tasks and priorities
+  
+  
+  ️ Responsibilities
+  
+  Support development work
+  Assist with building, maintaining, and improving Shopify apps
+  Implement Shopify store updates and customizations
+  Develop and maintain web pages, features, and integrations
+  Troubleshoot bugs and technical issues
+  Improve website functionality, performance, and user experience
+  Collaborate with internal teams on technical require
+  … [305 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        remote
+  seniority_level  (blank)
+  location_detail  Toronto, Ontario
+  salary_text      (blank)
+  benefits         (blank)
+  responsibilities Support development work Assist with building, maintaining, and improving Shopify apps Implement
+                   Shopify store updates and customizations Develop and maintain web pages, features, and integrations
+                   Troubleshoot bugs and technical issues Improve website functionality, performance, and user
+                   experience Collaborate with internal teams on technical requirements and project execution Help
+                   maintain clean, scalable, and reliable code
+  requirements     Experience in web development Strong knowledge of HTML, CSS, and JavaScript Experience building or
+                   maintaining Shopify apps Experience with SaaS or software product development Experience with React,
+                   Node.js, or similar frameworks Experience working with eCommerce brands Understanding of performance
+                   optimization and technical SEO Experience with GitHub or version control workflows Experience with
+                   Shopify development and theme customization Experience with APIs, integrations, and backend/frontend
+                   workflows Ability to troubleshoot and solve technical issues independently Strong attention to
+                   detail Include "Star Innovator" in your cover letter to confirm you've read the job description.
+                   Good communication and time management skills Ability to manage multiple development tasks and
+                   priorities
+  nice_to_have     (blank)
+  tech_stack       HTML, CSS, JavaScript, React, Node.js, Shopify, GitHub
+  about_company    (blank)
+  instructions     (blank)
+
+
+########################################################################################################
+[13/20]  JOB 923  —  Full Stack Engineer  @  Feathery
+         raw location: Toronto, ON (Hybrid)
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  About Feathery
+  
+  Feathery automates data intake workflows for insurance and wealth management firms. Industry leaders
+  rely on Feathery to power mission-critical workflows like underwriting, client onboarding, and
+  automated account openings.
+  
+  With rapid revenue growth and expanding enterprise demand, we’re scaling our engineering team to
+  support increasingly complex, data-intensive workflows across our platform.
+  
+  Why We’re Hiring
+  
+  As Feathery grows, both the complexity of our backend systems and the sophistication of our frontend
+  product experience are increasing.
+  
+  We’re hiring a Full Stack Engineer to help build and scale core product capabilities end-to-end.
+  This role is ideal for someone who enjoys owning features across the stack — from designing APIs and
+  backend systems to crafting intuitive, high-performance user interfaces.
+  
+  You’ll work closely with product, design, and engineering to ship impactful features and shape the
+  overall architecture of the platform.
+  
+  About The Role
+  
+  This is a high-ownership role that blends:
+  
+  Full stack product development (frontend + backend)
+  System design and API development
+  UI/UX implementation and performance optimization
+  Cross-functional collaboration with product and design
+  
+  You’ll zoom out to influence system architecture and zoom in to deliver polished, end-to-end product
+  experiences.
+  
+  What You’ll Do
+  
+  Full Stack Product Development
+  
+  Design and build end-to-end features across frontend and backend systems
+  Develop APIs and services that power core product functionality
+  Build intuitive, responsive, and high-performance user interfaces
+  Own features from concept through production
+  
+  Backend Systems & Infrastructure
+  
+  Build and scale backend services for workflow automation and data processing
+  Develop asynchronous pipelines and distribute
+  … [2625 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        hybrid
+  seniority_level  (blank)
+  location_detail  Toronto, ON
+  salary_text      Competitive compensation and equity
+  benefits         Health, dental, and vision coverage Unlimited PTO Downtown Toronto office location Office snacks and
+                   lunches A supportive, low-ego team that values ownership and growth Company offsite to connect and
+                   recharge
+  responsibilities Design and build end-to-end features across frontend and backend systems Develop APIs and services
+                   that power core product functionality Build intuitive, responsive, and high-performance user
+                   interfaces Own features from concept through production Build and scale backend services for
+                   workflow automation and data processing Develop asynchronous pipelines and distributed systems for
+                   handling large volume of data Work with AWS services and queueing systems (e.g., SQS) to support
+                   scalable infrastructure Ensure reliability, performance, and observability across systems Implement
+                   user interfaces using modern frameworks (e.g., React) Optimize frontend performance, responsiveness,
+                   and usability Collaborate with design to deliver polished, accessible user experiences Contribute to
+                   frontend architecture and component systems Partner with product and design to define and build new
+                   features Work with other engineers to integrate APIs and data models effectively Contribute to
+                   product planning, technical scoping, and architecture decisions Help translate customer needs into
+                   scalable technical solutions
+  requirements     3–6+ years of experience building full stack applications Strong proficiency in
+                   JavaScript/TypeScript and modern frontend frameworks (e.g., React) Experience with backend
+                   frameworks such as Node.js, Django, or similar Experience designing APIs and working with
+                   distributed systems or asynchronous processing Familiarity with AWS and cloud infrastructure Strong
+                   understanding of performance, scalability, and reliability Experience shipping features end-to-end
+                   in a collaborative environment Comfortable working in a fast-paced, high-growth startup environment
+                   Strong communication and collaboration skills
+  nice_to_have     Experience building workflow tools, internal platforms, or data-heavy applications Familiarity with
+                   document processing, OCR, or AI/ML integrations Experience with drag-and-drop interfaces or complex
+                   frontend state management Experience optimizing systems for high throughput and low latency
+                   Background in financial services or other regulated industries Experience at a high-growth B2B SaaS
+                   company
+  tech_stack       JavaScript, TypeScript, React, Node.js, Django, AWS, SQS
+  about_company    Feathery automates data intake workflows for insurance and wealth management firms. Industry leaders
+                   rely on Feathery to power mission-critical workflows like underwriting, client onboarding, and
+                   automated account openings.  With rapid revenue growth and expanding enterprise demand, we’re
+                   scaling our engineering team to support increasingly complex, data-intensive workflows across our
+                   platform.
+  instructions     (blank)
+
+
+########################################################################################################
+[14/20]  JOB 1007  —  Proposal Writer and Operations  @  D2L
+         raw location: Kitchener, Ontario; Toronto, Ontario; Canada - Remote
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  <p>D2L is a cloud company that is modernizing education and building the Future of Work. The old
+  models of teaching and learning are in the midst of the largest transformation in history, and D2L
+  is at the heart of that fundamental shift. </p>
+  <p>New models of teaching and learning enable a personalized, student-centric experience – and
+  deliver improved retention, engagement, satisfaction, and results for learners of all ages – in
+  schools, campuses, and companies.</p>
+  <p>D2L is disrupting the way the world learns, by providing the next generation learning environment
+  and solutions to engage and inspire learners. And most importantly, by giving customers a platform
+  that is easy, flexible, and smart. No other company provides a solution as robust and innovative as
+  D2L.</p>
+  <p>D2L has had a singular mission for 25 years and is dedicated to that same mission in the years
+  ahead: to transform the way the world learns – and by doing so, we will help improve human potential
+  globally.</p>
+  <p>Every application we receive is personally reviewed by a member of our Talent Acquisition team -
+  yes, a real person looks at your resume! While we use AI tools internally to streamline tasks like
+  meeting notes, summaries, and administrative work, these tools never rank resumes, make hiring
+  decisions, or influence candidate evaluations.</p>
+  <p>As a Proposal Writer, you will work in a high impact, fast-paced, deadline driven environment and
+  will primarily be responsible for the creation of custom sales collateral for prospective and
+  existing clients. This will include writing and project management in support of compelling and
+  competitive custom documents. This role will require excellent writing, storytelling, communication,
+  collaboration, time management, and project management skills.</p>
+  <
+  … [5232 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        remote
+  seniority_level  (blank)
+  location_detail  Kitchener, Ontario; Toronto, Ontario; Canada
+  salary_text      Base Salary Range$61,500—$78,500 CAD
+  benefits         Wellness Subsidy, Equity Grants, Variable Incentive, Impactful work transforming the way the world
+                   learns, Flexible work arrangements, Learning and Growth opportunities, Tuition reimbursement
+  responsibilities Support D2L’s global Revenue organization by writing creative and compelling proactive / unsolicited
+                   proposals, pitch documents, presentation leave behinds, and other custom sales collateral that
+                   differentiates D2L from our competitors and helps generate new business. Manage creation of multiple
+                   sales documents on tight schedules and under elevated pressure. Perform writing and editing to
+                   ensure sales documents are interesting, compelling, succinct, and error-free. Enforce approved style
+                   guidelines and ensure a consistent look and feel of all outgoing documents. Contribute to the
+                   expansion and enhancement of the custom request program. Identify opportunities for efficiencies
+                   (e.g., creating repeatable, self-serve templates) and enhanced productivity. Work cross functionally
+                   with subject matter experts within the organization to create sales documents while maintaining a
+                   technical understanding of D2L product and service offerings. Facilitate document reviews. Provide
+                   feedback on content library articles and contribute new content articles. Develop and cultivate
+                   strong relationships with relevant areas of the business to help strengthen partnerships and success
+                   within the team Review, edit, and provide guidance on the creation of cover letters, executive
+                   summaries, and other key parts of proposals as needed Work with other Proposal team members to
+                   create and improve best practices that ensure team operations are successful and efficient Manage
+                   and support operational activities (e.g., building how-to resources for team and other stakeholders
+                   across D2L, updating team templates, support content initiatives, etc.). Special projects as
+                   assigned.
+  requirements     2+ years’ experience in a fast-paced, high volume writing environment. Excellent knowledge of
+                   Microsoft Office applications Ability to effectively use AI-enabled tools and emerging best
+                   practices to support proposal writing, content development, operational efficiency, and high-quality
+                   deliverables. Ability to work independently and as part of a team; ability to adhere to strict
+                   deadlines Bachelor’s Degree preferably in Business, Technical Writing, English, Communications, or
+                   Journalism
+  nice_to_have     Experience in high-tech industry is preferred. Experience writing persuasive documents an asset.
+                   Experience with proposal automation software considered an asset
+  tech_stack       Microsoft Office applications, AI-enabled tools, proposal automation software
+  about_company    D2L is a cloud company that is modernizing education and building the Future of Work. The old models
+                   of teaching and learning are in the midst of the largest transformation in history, and D2L is at
+                   the heart of that fundamental shift. New models of teaching and learning enable a personalized,
+                   student-centric experience – and deliver improved retention, engagement, satisfaction, and results
+                   for learners of all ages – in schools, campuses, and companies. D2L is disrupting the way the world
+                   learns, by providing the next generation learning environment and solutions to engage and inspire
+                   learners. And most importantly, by giving customers a platform that is easy, flexible, and smart. No
+                   other company provides a solution as robust and innovative as D2L. D2L has had a singular mission
+                   for 25 years and is dedicated to that same mission in the years ahead: to transform the way the
+                   world learns – and by doing so, we will help improve human potential globally. Every application we
+                   receive is personally reviewed by a member of our Talent Acquisition team - yes, a real person looks
+                   at your resume! While we use AI tools internally to streamline tasks like meeting notes, summaries,
+                   and administrative work, these tools never rank resumes, make hiring decisions, or influence
+                   candidate evaluations.
+  instructions     (blank)
+
+
+########################################################################################################
+[15/20]  JOB 868  —  Quality Engineer  @  StackAdapt
+         raw location: Canada; Ontario; Vancouver
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  <p>StackAdapt is the leading technology company that empowers marketers to reach, engage, and
+  convert audiences with precision. With 465 billion automated optimizations per second, the AI-
+  powered StackAdapt Marketing Platform seamlessly connects brand and performance marketing to drive
+  measurable results across the entire customer journey. The most forward-thinking marketers choose
+  StackAdapt to orchestrate high-impact campaigns across programmatic advertising and marketing
+  channels.</p>
+  StackAdapt is seeking a talented<strong> Quality Engineer</strong> who is passionate about software
+  quality and test automation to be part of a highly impactful team that will directly affect the
+  success of product releases in a cross-functional agile environment. In addition, you will be
+  responsible for implementing reliable and scalable automation test cases and integrating them into
+  our CI/CD pipeline. These initiatives will serve to enhance our software quality, accelerate our
+  defect detection and prevention capabilities, and transform our software development process.
+  
+  Learn more about our engineering culture here: <a
+  href="https://www.youtube.com/watch?v=LXM2NrkhKZc">https://www.youtube.com/watch?v=LXM2NrkhKZc</a>
+  
+  StackAdapt is a remote-first company, we are open to candidates located anywhere in Canada for this
+  position.
+  
+  <h3>What You'll Be Doing:</h3>
+  <ul>
+  <li>Participate in the development of in-house automated and functional test scripts and tooling
+  that address areas such as functional, system, API, integration, UI and regression testing </li>
+  <li>Work collaboratively with Platform, Product, DevOps, and other teams in order to deploy and run
+  automated tests on test environments with CI/CD</li>
+  <li>Provide timely test result feedback to the Platform Team, the QA team and o
+  … [5115 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        remote
+  seniority_level  (blank)
+  location_detail  Vancouver, Ontario, Canada
+  salary_text      $84,000—$115,500 CAD
+  benefits         Highly competitive salary, Retirement/ 401K/ Pension Savings globally, Competitive Paid time off
+                   packages including birthday's off!, Access to a comprehensive mental health care program, Health
+                   benefits from day one of employment, Work from home reimbursements, Optional global WeWork
+                   membership for those who want a change from their home office and hubs in London and Toronto, Robust
+                   training and onboarding program, Coverage and support of personal development initiatives
+                   (conferences, courses, books etc), Access to StackAdapt programmatic courses and certifications to
+                   support continuous learning, An awesome parental leave program
+  responsibilities Participate in the development of in-house automated and functional test scripts and tooling that
+                   address areas such as functional, system, API, integration, UI and regression testing Work
+                   collaboratively with Platform, Product, DevOps, and other teams in order to deploy and run automated
+                   tests on test environments with CI/CD Provide timely test result feedback to the Platform Team, the
+                   QA team and other relevant stakeholders Participate in technical planning, code review and
+                   architectural decision-making
+  requirements     2+ years of professional, hands-on test automation experience with API &amp; UI test automation
+                   frameworks such as Playwright, Selenium, Cypress, Mocha, Jest or Junit Fluency in at least one of
+                   Javascript, Typescript, Python, or Java Experience with CI/CD tools like Jenkins, Github Actions,
+                   CircleCI Strong understanding of scalable system design for web-based APIs and backend processing
+                   systems In-depth understanding of QA methodologies in a software company with short release cycles
+                   Experience writing test cases that cover edge/negative cases, compatibility, and concurrency tests
+                   in test case management tools like TestRail Experience working with relational databases Hands-on
+                   experience with SQL and ability to query for large data sets
+  nice_to_have     (blank)
+  tech_stack       (blank)
+  about_company    StackAdapt is the leading technology company that empowers marketers to reach, engage, and convert
+                   audiences with precision. With 465 billion automated optimizations per second, the AI-powered
+                   StackAdapt Marketing Platform seamlessly connects brand and performance marketing to drive
+                   measurable results across the entire customer journey. The most forward-thinking marketers choose
+                   StackAdapt to orchestrate high-impact campaigns across programmatic advertising and marketing
+                   channels.
+  instructions     (blank)
+
+
+########################################################################################################
+[16/20]  JOB 301  —  Pega Developer  @  Virtusa
+         raw location: Toronto, Ontario
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  Pega Developer - adzuna.ca
+  (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-KH3X9HR2');
+  window.dataLayer = window.dataLayer || [];
+  What?
+  Where?
+  Search
+  Advanced
+  window.addEventListener("load", function(e) {    setTimeout(function() {
+  var tokenData = "eyJhbGciOiJIUzI1NiJ9.eyJjb250ZXh0Ijoiam9ic19DQSIsImRlZHVwZWQiOiIiLCJlcG9jaHRpbWUiOj
+  E3ODU3MjY0NTQsImFnZW50IjoiTW96aWxsYS81LjAgKFdpbmRvd3MgTlQgMTAuMDsgV2luNjQ7IHg2NCkgQXBwbGVXZWJLaXQvNT
+  M3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgQ2hyb21lLzEyMi4wIFNhZmFyaS81MzcuMzYiLCJkZWxldGVkIjoiIiwiYWRfaWQiOi
+  I1NzYxNzU5NDE3IiwidHlwZSI6ImRldGFpbHMiLCJzZSI6bnVsbCwiY2xpY2tfaWQiOiIycVE0ZWVpTzhSRzMyT3h2NVBzLTV3Ii
+  wibm90aWZfaWQiOm51bGwsImRjaWQiOiI3OTM3NDc3YS04ZWU4LTExZjEtYTkzOC05YjFlMThkNTUzZGIiLCJpc19yZWNqb2JzIj
+  owLCJpcCI6IjI2MDc6ZmE0OToyODNjOjQwMDpkMWZkOmM3OGI6NDExMzpiZmU0Iiwic291cmNlX2lkIjo1MTYzNzl9.aMoV9uquV
+  ThvF0gXimFdTFmTZOic1RcDzt65yrOrB8Y";
+  var urlData   = "https://www.adzuna.ca/_count";
+  if (window.FormData && navigator.sendBeacon) {
+  var formData = new FormData();
+  formData.append("token", tokenData);
+  if (navigator.sendBeacon(urlData, formData)) {
+  return;
+  }
+  }
+  $.ajax({ type: 'POST', url: urlData, data: { token: tokenData } });
+  }, 1000);
+  }, false);
+  Pega Developer
+  ❮ back to last search
+  Virtusa
+  Toronto, Ontario
+  Full time
+  CLOSING SOON
+  Apply for this job
+  Software Developer with Pega Expertise   Location   PCS CA- CANADA   Years of Experience   5-7 Years
+  Job Summary   We are seeking a skilled Software Developer with strong expertise in Pega to join our
+  dynamic team in Chennai. The i
+  … [24501 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        (blank)
+  seniority_level  (blank)
+  location_detail  Toronto, Ontario
+  salary_text      (blank)
+  benefits         (blank)
+  responsibilities Design, develop, and implement Pega applications based on business requirements. Collaborate with
+                   cross-functional teams to gather and analyze requirements. Perform system testing and debugging to
+                   ensure optimal performance. Maintain and enhance existing Pega applications to improve functionality
+                   and user experience. Provide technical support and guidance to team members and stakeholders. Stay
+                   updated with the latest Pega technologies and best practices.
+  requirements     Strong expertise in Pega development and implementation. Proficient in Pega PRPC, Pega BPM, and Pega
+                   Case Management. Experience with Pega integration techniques and tools. Solid understanding of
+                   software development lifecycle (SDLC) methodologies. Excellent problem-solving and analytical
+                   skills. Bachelor's degree in Computer Science, Information Technology, or a related field. 5-7 years
+                   of experience in software development with a focus on Pega.
+  nice_to_have     Experience with Agile methodologies. Knowledge of Java, SQL, and web technologies. Familiarity with
+                   cloud-based Pega solutions. Strong communication and interpersonal skills.
+  tech_stack       (blank)
+  about_company    (blank)
+  instructions     (blank)
+
+
+########################################################################################################
+[17/20]  JOB 826  —  System Engineer  @  Compunnel Inc.
+         raw location: Toronto, Ontario
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  Get notified about new Information Technology Business Analyst jobs in  United States . 3,000+
+  Information Technology Business Analyst Jobs in United States  IT Business Analyst - Tools
+  Rationalization  IT Healthcare Consultant – Business Analyst (Advanced)  Technical Business Analyst
+  V (Job 2839 &amp; 2840)  IT Business Analyst (Full-Time Remote, North Carolina Based)  Business
+  Analyst - Infrastructure Technologies  Information Technology Business Analyst(only W2)  IT
+  Healthcare Consultant – Business Analyst – Consultant  IT Business Analyst – Corporate Finance,
+  Budgeting &amp; Reporting - Onsite  IT - Business Analyst – Senior ( Electric Generation
+  Interconnection )  Business Analyst, ERP/Business Applications  Technical Business Analyst with HR
+  background  IT Healthcare Consultant - Business Analyst - Advanced  IT Business Analyst / Project
+  Manager (GxP required)  IT Business Analyst I (must reside in Phoenix, AZ)  Business Analyst,
+  Manufacturing Technology
+  #J-18808-Ljbffr
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        (blank)
+  seniority_level  (blank)
+  location_detail  Toronto, Ontario
+  salary_text      (blank)
+  benefits         (blank)
+  responsibilities (blank)
+  requirements     (blank)
+  nice_to_have     (blank)
+  tech_stack       (blank)
+  about_company    (blank)
+  instructions     (blank)
+
+
+########################################################################################################
+[18/20]  JOB 713  —  EBX / Master Data Management (MDM) Developer  @  Maarut
+         raw location: Montréal East, Montréal
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  We are seeking a highly skilled EBX / MDM Developer to support the design, development, and
+  optimization of enterprise Master Data Management solutions. The ideal candidate will have strong
+  hands-on experience with TIBCO EBX, data quality, data governance processes, and match &amp; merge
+  techniques to ensure accurate, trusted, and standardized master data across business domains.   This
+  is a critical role focused on delivering scalable MDM solutions that improve data consistency,
+  quality, and business decision-making.       Key Responsibilities    Design, develop, configure, and
+  maintain TIBCO EBX MDM solutions.   Implement and manage master data models, workflows, and business
+  rules within EBX.   Develop and optimize match &amp; merge strategies to identify, deduplicate, and
+  consolidate master records.   Implement data normalization, standardization, and data quality
+  controls across multiple data domains.   Configure validation rules, data stewardship workflows, and
+  approval processes.   Perform data profiling, cleansing, enrichment, and reconciliation activities.
+  Develop custom EBX components using Java and related technologies.   Integrate EBX with enterprise
+  applications, databases, and external systems.   Collaborate with business stakeholders, data
+  governance teams, and solution architects to define MDM requirements.   Troubleshoot production
+  issues and optimize application performance.   Create technical design documentation and support
+  knowledge transfer activities.   Contribute to MDM best practices, governance standards, and data
+  quality initiatives.     Requirements     Required Qualifications    5+ years of experience in
+  Master Data Management (MDM).   3+ years of hands-on experience with TIBCO EBX.   Strong experience
+  designing and implementing MDM soluti
+  … [1263 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        (blank)
+  seniority_level  (blank)
+  location_detail  Montréal East, Montréal
+  salary_text      (blank)
+  benefits         (blank)
+  responsibilities Design, develop, configure, and maintain TIBCO EBX MDM solutions. Implement and manage master data
+                   models, workflows, and business rules within EBX. Develop and optimize match &amp; merge strategies
+                   to identify, deduplicate, and consolidate master records. Implement data normalization,
+                   standardization, and data quality controls across multiple data domains. Configure validation rules,
+                   data stewardship workflows, and approval processes. Perform data profiling, cleansing, enrichment,
+                   and reconciliation activities. Develop custom EBX components using Java and related technologies.
+                   Integrate EBX with enterprise applications, databases, and external systems. Collaborate with
+                   business stakeholders, data governance teams, and solution architects to define MDM requirements.
+                   Troubleshoot production issues and optimize application performance. Create technical design
+                   documentation and support knowledge transfer activities. Contribute to MDM best practices,
+                   governance standards, and data quality initiatives.
+  requirements     5+ years of experience in Master Data Management (MDM). 3+ years of hands-on experience with TIBCO
+                   EBX. Strong experience designing and implementing MDM solutions. Expertise in Match &amp; Merge,
+                   survivorship rules, and deduplication techniques. Strong understanding of data quality, data
+                   governance, and data stewardship principles. Experience with data normalization, cleansing,
+                   standardization, and enrichment processes. Strong Java development skills. Experience developing
+                   workflows, business rules, and customizations within EBX. Strong SQL and relational database
+                   knowledge. Experience integrating MDM platforms with enterprise systems using APIs and web services.
+                   Understanding of data modeling concepts and master data architecture.
+  nice_to_have     Experience with Customer, Product, Vendor, or Reference Data domains. Knowledge of Data Governance
+                   frameworks. Experience with cloud environments (AWS, Azure, or GCP). Experience with ETL and data
+                   integration tools. Familiarity with Agile development methodologies. MDM or Data Management
+                   certifications are considered an asset.
+  tech_stack       TIBCO EBX, Master Data Management (MDM), Match &amp; Merge, Data Quality, Java, SQL, REST APIs, ETL
+                   Tools, Data Governance, Azure / AWS, Workflow Development
+  about_company    (blank)
+  instructions     (blank)
+
+
+########################################################################################################
+[19/20]  JOB 669  —  AI and Automation Software Engineer  @  AMD
+         raw location: Markham, ON (Hybrid)
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  About the job
+  ADVANCE YOUR CAREER. ADVANCE THE WORLD.
+  
+  At AMD, we believe technology can change lives for the better. It can heal us, entertain us, and
+  make us more connected, productive, and understanding of the world around us. And we’re looking for
+  talent who feel the same: people who want to leave the planet better than they found it, those who
+  don’t shy away from humanity’s challenges but are determined to help solve them.
+  
+  AMD is powering the next generation of supercomputing, high-performance computing, cloud, and AI.
+  Whether you’re designing next-gen processors, enabling AI breakthroughs, or creating go-to-market
+  plans, every role at AMD contributes to something bigger — technology that moves the world forward.
+  
+  The Role
+  
+  The AMD NBIO Team is on the lookout for a seasoned Software Engineer to lead our AI and Automation
+  innovation. As a key contributor to the success of AMD’s IP, you will be leading the design,
+  development, deployment and maintenance of game-changing AI and automation tools that significantly
+  increase the post silicon team efficiency, accelerate engineering execution, and reduce repetitive
+  manual work across silicon verification, validation, debug, and program delivery workflows.
+  
+  The Person
+  
+  The ideal candidate has a proven track record of identifying high-impact productivity gaps,
+  designing scalable automation solutions, and delivering AI-enabled tools that are adopted by
+  engineering teams and produce measurable improvements in cycle time, quality, and execution
+  consistency. You are a team player who has excellent communication skills, demonstrated through
+  technical publications, presentations, trainings, executive briefings, etc. You are highly adept at
+  collaboration among top-thinkers and engineers alike, ready to mentor and guide, and help t
+  … [4164 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        hybrid
+  seniority_level  (blank)
+  location_detail  Markham, Vancouver, Ottawa
+  salary_text      (blank)
+  benefits         AMD benefits at a glance.
+  responsibilities Identify and prioritize opportunities where AI, automation, scripting, data processing, or workflow
+                   integration can materially improve engineering productivity and team efficiency. Develop game-
+                   changing AI and automation tools that streamline repetitive tasks such as log analysis,
+                   experiment/result summarization, debug triage, issue tracking, reporting, documentation, and cross-
+                   team status consolidation. Design, develop, test, and deploy automation solutions using Python and
+                   other relevant programming languages. Continuous Integration/Continuous Deployment (CI/CD):
+                   Implement and maintain CI/CD pipelines to automate software delivery processes and ensure efficient
+                   deployment. Collaborate with frontend and backend developers to create seamless user interfaces and
+                   robust backend systems. Implement AI/ML framework (i.e.: LangChain, LaMDA) and concepts into
+                   software applications to enhance functionality and user experience. Create and maintain technical
+                   documentation for software solutions, including code documentation (ie: Doxygen, Sphinx) and user
+                   guides. Partner with design, verification, validation, firmware and platform stakeholders to
+                   translate real engineering pain points into practical AI/automation solutions. Convert manual and
+                   fragmented engineering workflows into reusable, scalable, and well-documented automation assets that
+                   can be adopted across teams. Define measurable success criteria for automation initiatives,
+                   including hours saved, faster triage, reduced manual handoffs, improved reporting consistency, and
+                   shorter debug or execution cycles. Ensure AI-generated outputs are reviewable, traceable,
+                   technically grounded, and aligned with responsible AI, confidentiality, and data-handling
+                   expectations
+  requirements     Proven track record of identifying high-impact productivity gaps, designing scalable automation
+                   solutions, and delivering AI-enabled tools that are adopted by engineering teams and produce
+                   measurable improvements in cycle time, quality, and execution consistency. Excellent communication
+                   skills demonstrated through technical publications, presentations, trainings, executive briefings,
+                   etc. Highly adept at collaboration among top-thinkers and engineers alike, ready to mentor and
+                   guide, and help to elevate the knowledge and skills of the team around you Bachelor’s or Master’s
+                   degree majoring in EE, CS or related field.
+  nice_to_have     Experience working in semiconductor industry, familiar with post-silicon validation methodologies
+                   Background in PCIe, CXL, xGMI, UALink, SoC platform bring-up, firmware debug, silicon validation, or
+                   server platform execution. Familiar with AI/ML concepts and their practical applications in hardware
+                   and software development. Experience with cloud platforms (e.g., AWS, Azure, Google Cloud Platform).
+                   Knowledge of containerization and orchestration tools (e.g., Docker, Kubernetes). Certification in
+                   relevant technologies or frameworks (e.g., AWS Certified Developer, TensorFlow Developer
+                   Certificate). Proficiency with one or more of the following languages: Python, C, C++ programming,
+                   JavaScript. Experience with CI/CD tools (e.g., Jenkins, Github Actions) and version control systems
+                   (e.g., Git). Familiarity with testing frameworks (e.g., pytest) and automated testing practices.
+                   Familiarity with frontend technologies such as HTML, CSS, JavaScript, and frontend frameworks (e.g.,
+                   React, Angular). Experience with backend development using databases (e.g., SQL, NoSQL) and backend
+                   frameworks (e.g., Node.js). Excellent problem-solving skills and attention to detail.
+  tech_stack       (blank)
+  about_company    At AMD, we believe technology can change lives for the better. It can heal us, entertain us, and
+                   make us more connected, productive, and understanding of the world around us.  AMD is powering the
+                   next generation of supercomputing, high-performance computing, cloud, and AI. Whether you’re
+                   designing next-gen processors, enabling AI breakthroughs, or creating go-to-market plans, every role
+                   at AMD contributes to something bigger — technology that moves the world forward.
+  instructions     (blank)
+
+
+########################################################################################################
+[20/20]  JOB 630  —  Software Engineer II  @  Cadence Systems
+         raw location: Canada
+########################################################################################################
+
+── ORIGINAL DESCRIPTION ────────────────────────────────────────────────────────────────────────────────
+  At Cadence, we hire and develop leaders and innovators who want to make an impact on the world of
+  technology.
+  Overview
+  
+  We are seeking a highly motivated early-career engineer to support the development of an advanced
+  software platform focused on cost planning, simulation, and early feasibility evaluation of sheet
+  metal components.
+  
+  This role is ideally suited for candidates with a strong background in engineering, physics, applied
+  mathematics, or a related technical discipline who have some experience developing in C++ and
+  embrace AI as a core element of their software development practice.
+  
+  Successful candidates are expected to be AI-native developers, leveraging modern AI tools, coding
+  assistants, agent frameworks, and structured reasoning techniques throughout the software
+  lifecycle—from requirements analysis and system decomposition to implementation, testing, and
+  maintenance.
+  
+  The ideal candidate combines strong software engineering fundamentals with hands-on experience in
+  Python, RESTful APIs, distributed systems, and agent-based architectures. They are comfortable
+  breaking complex engineering problems into manageable components and designing robust solutions that
+  integrate AI capabilities into product workflows.
+  
+  Key Responsibilities
+  
+  Develop and implement new algorithms and methodologies to enhance simulation and cost estimation
+  capabilities
+  Translate engineering concepts into robust, production-ready software features
+  Conduct feasibility studies to evaluate new approaches and validate performance
+  Collaborate with cross-functional teams to integrate new capabilities into the software platform
+  Skills/Experience
+  
+  Strong programming skills in Python, QT, C++, VBA
+  Proficient experience in using VS Studio, VS code, git and azure DevOps as development environment a
+  … [1418 more chars truncated]
+
+── EXTRACTED FIELDS ────────────────────────────────────────────────────────────────────────────────────
+  work_mode        (blank)
+  seniority_level  (blank)
+  location_detail  Canada
+  salary_text      (blank)
+  benefits         (blank)
+  responsibilities Develop and implement new algorithms and methodologies to enhance simulation and cost estimation
+                   capabilities Translate engineering concepts into robust, production-ready software features Conduct
+                   feasibility studies to evaluate new approaches and validate performance Collaborate with cross-
+                   functional teams to integrate new capabilities into the software platform
+  requirements     Strong programming skills in Python, QT, C++, VBA  Proficient experience in using VS Studio, VS
+                   code, git and azure DevOps as development environment and debugging.  Hands on working experience in
+                   Agile development methodologies.  AI-native mindset with experience using modern AI tools and
+                   techniques in development workflows   Solid analytical and problem-solving capabilities  Self-
+                   driven, curious, and eager to explore new technologies and methodologies  Master’s degree in:
+                   Engineering (Mechanical, Industrial, or related), Applied Mathematics, Physics, Software Engineering
+                   or Computer Science
+  nice_to_have     Knowledge of metal forming processes Familiarity with finite element methods (FEM) and simulation
+                   techniques Experience with numerical methods or physics-based modeling
+  tech_stack       Python, QT, C++, VBA, VS Studio, VS Code, git, azure DevOps
+  about_company    At Cadence, we hire and develop leaders and innovators who want to make an impact on the world of
+                   technology.
+  instructions     (blank)
+
+========================================================================================================
+END. Check each field against the description above it: correct? honest (blank when the posting is silent, not guessed)?
+========================================================================================================

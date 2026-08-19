@@ -75,8 +75,15 @@ def _prompt(job: dict, body: str) -> str:
     return f"""From the JOB POSTING below, extract these fields. If the posting does
 not mention a field, return "" for it — do NOT guess or fill from the title alone.
 
-- work_mode: exactly one of "remote", "hybrid", "onsite", or "" if unclear.
+- work_mode: exactly one of "remote", "hybrid", "onsite", or "" if unclear. Do not
+  infer from the city alone — a location is not a work mode.
 - seniority_level: one of "intern", "junior", "mid", "senior", "lead", or "".
+  Read the posting's own signals: an internship, co-op, or "stage" (in ANY
+  language, e.g. French "stage"/"stagiaire") is "intern". A stated level word wins
+  ("Senior" -> senior, "Junior" -> junior, "Lead"/"Principal"/"Staff" -> lead).
+  Otherwise infer from the required YEARS of experience: 0-2 -> "junior",
+  3-5 -> "mid", 6-9 -> "senior", 10+ -> "lead". If the posting names no level and
+  no years, or spans several at once ("junior to senior"), return "".
 - location_detail: the city/region/country the role is based in, if named.
 - salary_text: the pay exactly as written ("$80,000–$100,000 + equity"), or "".
 - benefits: perks and benefits — health, PTO, remote stipend, etc. — as a short list.
@@ -84,7 +91,12 @@ not mention a field, return "" for it — do NOT guess or fill from the title al
 - requirements: the must-haves — required skills, YEARS OF EXPERIENCE, and EDUCATION
   all belong here, combined.
 - nice_to_have: preferred or bonus qualifications, kept separate from requirements.
-- tech_stack: the specific technologies named (languages, frameworks, tools), comma-separated.
+- tech_stack: the specific technologies named ANYWHERE in the posting — languages,
+  frameworks, libraries, databases, cloud services, tools — comma-separated, names
+  only. Collect them from a dedicated skills/tech list AND from names mentioned
+  inside the requirements, responsibilities, or nice-to-have text. Skip soft skills
+  and generic words ("APIs", "databases") unless a specific product is named
+  (e.g. "PostgreSQL", "REST", "Kubernetes").
 - about_company: the "about us" / company description, if present.
 - instructions: how to apply, if the posting spells out steps (email a portfolio, etc.).
 

@@ -8,11 +8,9 @@ each one reaching back into api.py — which would just move the tangle, not und
 Nothing here has behaviour of its own; it is the connection helpers, the column list,
 the tab-to-SQL map, and the settings accessor that the route modules import.
 """
-import sqlite3
 from contextlib import contextmanager
 
-from src.paths import DB_PATH as DB
-from src import store
+from src import db, store  # noqa: F401  (store re-exported for callers)
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -52,19 +50,11 @@ ALLOWED_STATUS = {"surfaced", "saved", "applied", "dismissed",
 
 
 def _conn():
-    """A tuned connection: WAL + busy_timeout, matching store.connect(), so the read
-    path and the write path share the file the same way.
+    """A Postgres connection with the SQLite-compatible surface (src.db).
 
-    check_same_thread=False because FastAPI runs a sync dependency across its
-    threadpool: the connection is created in one worker thread, the endpoint runs in
-    another, and the `finally: conn.close()` may run in a third. SQLite's default
-    refuses that with "objects created in a thread can only be used in that same
-    thread", which surfaced as a 500 on every endpoint under real uvicorn (but never
-    under the single-threaded test client). Each request still gets its own connection
-    and never shares it concurrently, so lifting the check is safe here."""
-    c = store._tune(sqlite3.connect(DB, check_same_thread=False))
-    c.row_factory = sqlite3.Row
-    return c
+    Each request/worker gets its own connection and never shares it concurrently,
+    matching the previous per-connection model."""
+    return db.connect()
 
 
 def _db_dep():
@@ -93,5 +83,5 @@ def _db():
 
 
 def _get_setting(conn, key, default=None):
-    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
     return row[0] if row else default

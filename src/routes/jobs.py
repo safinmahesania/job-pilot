@@ -11,14 +11,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from src.auth import current_user_id
-from src.deps import _db_dep, _get_setting, FEED_COLS, TAB_WHERE, ALLOWED_STATUS
+from src.deps import (_db_dep, _get_setting, _user_threshold, FEED_COLS,
+                      TAB_WHERE, ALLOWED_STATUS)
 
 router = APIRouter()
 
 
 @router.get("/api/counts")
 def counts(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
-    threshold = int(_get_setting(conn, "score_threshold", 70))
+    threshold = _user_threshold(conn, user_id)
 
     def n(where: str) -> int:
         return conn.execute(
@@ -48,7 +49,7 @@ def stats(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """
     from datetime import date, timedelta
 
-    threshold = int(_get_setting(conn, "score_threshold", 70))
+    threshold = _user_threshold(conn, user_id)
     base = "FROM jobs j JOIN user_jobs uj ON uj.job_id = j.id WHERE uj.user_id = ?"
 
     def scalar(select: str, extra: str = "", *a):
@@ -156,7 +157,7 @@ def stats(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
 @router.get("/api/jobs")
 def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all",
               user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
-    threshold = int(_get_setting(conn, "score_threshold", 70))
+    threshold = _user_threshold(conn, user_id)
     scoring_on = _get_setting(conn, "scoring_enabled", "1") == "1"
 
     # An unknown tab returns nothing — a visibly empty list is a clearer signal

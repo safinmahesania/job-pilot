@@ -10,7 +10,10 @@ the tab-to-SQL map, and the settings accessor that the route modules import.
 """
 from contextlib import contextmanager
 
+from fastapi import Depends, HTTPException
+
 from src import db, store  # noqa: F401  (store re-exported for callers)
+from src.auth import current_user_id
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -91,5 +94,38 @@ def _db():
 
 
 def _get_setting(conn, key, default=None):
+    """A GLOBAL/admin setting (app_settings)."""
     row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
     return row[0] if row else default
+
+
+def _get_user_setting(conn, user_id, key, default=None):
+    """A PER-USER setting (user_settings)."""
+    row = conn.execute(
+        "SELECT value FROM user_settings WHERE user_id=? AND key=?",
+        (user_id, key)).fetchone()
+    return row[0] if row else default
+
+
+def _set_user_setting(conn, user_id, key, value):
+    conn.execute(
+        "INSERT INTO user_settings (user_id, key, value) VALUES (?,?,?) "
+        "ON CONFLICT (user_id, key) DO UPDATE SET value=excluded.value",
+        (user_id, key, str(value)))
+    conn.commit()
+
+
+def _user_threshold(conn, user_id) -> int:
+    """This user's feed score cutoff: their own setting, else the global default."""
+    v = _get_user_setting(conn, user_id, "score_threshold")
+    if v is None:
+        v = _get_setting(conn, "default_score_threshold", 70)
+    return int(v)
+
+
+def require_admin(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)) -> str:
+    """Dependency for admin-only endpoints: 403 unless the caller's is_admin is set."""
+    row = conn.execute("SELECT is_admin FROM users WHERE id=?", (user_id,)).fetchone()
+    if not row or not row[0]:
+        raise HTTPException(403, "Admin only")
+    return user_id

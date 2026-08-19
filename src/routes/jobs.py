@@ -33,10 +33,8 @@ def counts(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
         "dismissed": n("uj.status='dismissed'"),
         "unscored": n("uj.score IS NULL AND uj.status='surfaced'"),
     }
-    # followups.summary still reads the old single-user shape and would error
-    # against the new schema — which, with autocommit off, poisons the whole
-    # transaction. Report 0 until followups.py is ported to user_jobs.
-    out["followups"] = 0
+    from src import followups
+    out["followups"] = followups.summary(conn, user_id)["total"]
     return out
 
 

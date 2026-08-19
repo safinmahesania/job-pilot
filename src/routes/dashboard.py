@@ -53,10 +53,9 @@ def user_dashboard(user_id: str = Depends(current_user_id), conn=Depends(_db_dep
         for s in ("surfaced", "saved", "applied", "interview", "offer")
     }
 
-    # follow-ups: followups.py still reads the old single-user shape; report empty
-    # until it's ported to user_jobs (avoids poisoning the transaction).
-    fu_items: list = []
-    fu_total = 0
+    from src import followups
+    fu_items = followups.due(conn, user_id)
+    fu_total = followups.summary(conn, user_id)["total"]
 
     # Recent activity: recently actioned jobs, newest first.
     activity = []

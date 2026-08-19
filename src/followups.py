@@ -43,17 +43,19 @@ def _snoozed(value: str | None) -> bool:
         return False
 
 
-def due(conn) -> list[dict]:
-    """Applications that need a nudge today.
+def due(conn, user_id) -> list[dict]:
+    """Applications that need a nudge today, for THIS user.
 
     Only status='applied' — once a job reaches interview, offer or rejected, the
     conversation is live or over and a reminder would be noise.
     """
     rows = conn.execute(
-        "SELECT id, title, company, apply_url, applied_on, followed_up_on, "
-        "followup_snooze, notes FROM jobs "
-        "WHERE status = 'applied' AND applied_on IS NOT NULL "
-        "ORDER BY applied_on ASC"
+        "SELECT j.id, j.title, j.company, j.apply_url, uj.applied_on, "
+        "uj.followed_up_on, uj.followup_snooze, uj.notes "
+        "FROM jobs j JOIN user_jobs uj ON uj.job_id = j.id "
+        "WHERE uj.user_id = ? AND uj.status = 'applied' "
+        "AND uj.applied_on IS NOT NULL ORDER BY uj.applied_on ASC",
+        (user_id,)
     ).fetchall()
 
     out = []
@@ -121,32 +123,32 @@ def due(conn) -> list[dict]:
     return out
 
 
-def mark_followed_up(conn, job_id: int, when: str | None = None) -> bool:
+def mark_followed_up(conn, user_id, job_id: int, when: str | None = None) -> bool:
     """You sent the nudge. Restart the clock."""
     stamp = when or date.today().isoformat()
     cur = conn.execute(
-        "UPDATE jobs SET followed_up_on = ?, followup_snooze = NULL "
-        "WHERE id = ? AND status = 'applied'",
-        (stamp, job_id),
+        "UPDATE user_jobs SET followed_up_on = ?, followup_snooze = NULL "
+        "WHERE user_id = ? AND job_id = ? AND status = 'applied'",
+        (stamp, user_id, job_id),
     )
     conn.commit()
     return cur.rowcount > 0
 
 
-def snooze(conn, job_id: int, days: int = 7) -> bool:
+def snooze(conn, user_id, job_id: int, days: int = 7) -> bool:
     """Not now. Don't mention it again until `days` from today."""
     until = (date.today() + timedelta(days=max(1, days))).isoformat()
     cur = conn.execute(
-        "UPDATE jobs SET followup_snooze = ? WHERE id = ?",
-        (until, job_id),
+        "UPDATE user_jobs SET followup_snooze = ? WHERE user_id = ? AND job_id = ?",
+        (until, user_id, job_id),
     )
     conn.commit()
     return cur.rowcount > 0
 
 
-def summary(conn) -> dict:
+def summary(conn, user_id) -> dict:
     """Counts for the badge in the UI."""
-    items = due(conn)
+    items = due(conn, user_id)
     return {
         "total": len(items),
         "first": sum(1 for i in items if i["stage"] == "first"),
@@ -155,12 +157,12 @@ def summary(conn) -> dict:
     }
 
 
-def notification(conn) -> str | None:
+def notification(conn, user_id) -> str | None:
     """A Telegram message, or None when nothing is due.
 
     Deliberately terse. A reminder that reads like a report gets ignored.
     """
-    items = due(conn)
+    items = due(conn, user_id)
     if not items:
         return None
 

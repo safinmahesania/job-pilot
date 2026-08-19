@@ -26,29 +26,28 @@ from src.paths import (
 )
 
 
-def _rows(conn, status: str, limit: int) -> list[dict]:
-    # store.connect() returns plain tuples, so name the columns here rather than
-    # relying on a row factory that may or may not be set.
+def _rows(conn, user_id, status: str, limit: int) -> list[dict]:
     rows = conn.execute(
-        "SELECT title, company, location, score FROM jobs "
-        "WHERE status = ? AND title IS NOT NULL "
-        "ORDER BY id DESC LIMIT ?",
-        (status, limit),
+        "SELECT j.title, j.company, j.location, uj.score "
+        "FROM jobs j JOIN user_jobs uj ON uj.job_id = j.id "
+        "WHERE uj.user_id = ? AND uj.status = ? AND j.title IS NOT NULL "
+        "ORDER BY j.id DESC LIMIT ?",
+        (user_id, status, limit),
     ).fetchall()
     return [{"title": r[0], "company": r[1], "location": r[2], "score": r[3]}
             for r in rows]
 
 
-def examples(conn) -> str:
+def examples(conn, user_id) -> str:
     """A calibration block for the scoring prompt, or "" when there isn't one.
 
     Returns text to be pasted into the prompt. Empty string means: not enough
     decisions yet — score exactly as before.
     """
-    saved = _rows(conn, "saved", FEEDBACK_SAVED_EXAMPLES)
+    saved = _rows(conn, user_id, "saved", FEEDBACK_SAVED_EXAMPLES)
     # Applied is a stronger signal than saved — someone bothered to apply.
-    applied = _rows(conn, "applied", FEEDBACK_SAVED_EXAMPLES)
-    dismissed = _rows(conn, "dismissed", FEEDBACK_DISMISSED_EXAMPLES)
+    applied = _rows(conn, user_id, "applied", FEEDBACK_SAVED_EXAMPLES)
+    dismissed = _rows(conn, user_id, "dismissed", FEEDBACK_DISMISSED_EXAMPLES)
 
     wanted = applied + [s for s in saved
                         if (s["title"], s["company"]) not in
@@ -93,17 +92,17 @@ def examples(conn) -> str:
     return "\n".join(parts)
 
 
-def stats(conn) -> dict:
+def stats(conn, user_id) -> dict:
     """What the feedback loop currently has to work with — shown in Settings."""
-    def count(sql, *args):
-        return conn.execute(sql, args).fetchone()[0]
+    def count(where, *args):
+        return conn.execute(
+            "SELECT COUNT(*) FROM user_jobs uj WHERE uj.user_id = ? " + where,
+            (user_id, *args)).fetchone()[0]
 
-    saved = count("SELECT COUNT(*) FROM jobs WHERE status='saved'")
-    applied = count("SELECT COUNT(*) FROM jobs WHERE status='applied'")
-    dismissed = count("SELECT COUNT(*) FROM jobs WHERE status='dismissed'")
-    mistakes = count(
-        "SELECT COUNT(*) FROM jobs WHERE status='dismissed' AND score >= 70"
-    )
+    saved = count("AND uj.status='saved'")
+    applied = count("AND uj.status='applied'")
+    dismissed = count("AND uj.status='dismissed'")
+    mistakes = count("AND uj.status='dismissed' AND uj.score >= 70")
     total = saved + applied + dismissed
 
     return {

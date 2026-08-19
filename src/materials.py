@@ -23,30 +23,30 @@ _FILE_LABEL = {"resume": "Resume", "cover": "Cover_Letter"}
 
 # ── Storage ─────────────────────────────────────────────────────────────────
 
-def save(job_id: int, kind: str, content: str, provider: str = "") -> dict:
-    """Store (or replace) a document for one job."""
+def save(user_id, job_id: int, kind: str, content: str, provider: str = "") -> dict:
+    """Store (or replace) a document for one job, owned by this user."""
     if kind not in KINDS:
         raise ValueError(f"unknown material kind: {kind}")
     conn = store.connect()
     conn.execute(
-        "INSERT INTO materials (job_id, kind, content, provider) VALUES (?,?,?,?) "
-        "ON CONFLICT(job_id, kind) DO UPDATE SET "
+        "INSERT INTO materials (user_id, job_id, kind, content, provider) "
+        "VALUES (?,?,?,?,?) "
+        "ON CONFLICT (user_id, job_id, kind) DO UPDATE SET "
         "content=excluded.content, provider=excluded.provider, "
-        "created_at=datetime('now')",
-        (job_id, kind, content, provider),
+        "created_at=now()",
+        (user_id, job_id, kind, content, provider),
     )
     conn.commit()
     conn.close()
     return {"job_id": job_id, "kind": kind, "saved": True}
 
 
-def get(job_id: int, kind: str) -> dict | None:
-    """The current document of this kind for this job, or None."""
+def get(user_id, job_id: int, kind: str) -> dict | None:
+    """The current document of this kind for this user's job, or None."""
     conn = store.connect()
-    conn.row_factory = None
     row = conn.execute(
         "SELECT content, provider, created_at FROM materials "
-        "WHERE job_id=? AND kind=?", (job_id, kind),
+        "WHERE user_id=? AND job_id=? AND kind=?", (user_id, job_id, kind),
     ).fetchone()
     conn.close()
     if not row:
@@ -54,23 +54,23 @@ def get(job_id: int, kind: str) -> dict | None:
     return {"kind": kind, "content": row[0], "provider": row[1], "created_at": row[2]}
 
 
-def list_for(job_id: int) -> list[dict]:
-    """What has been generated and saved for this job (without the bodies)."""
+def list_for(user_id, job_id: int) -> list[dict]:
+    """What this user has generated and saved for this job (without the bodies)."""
     conn = store.connect()
-    conn.row_factory = None
     rows = conn.execute(
         "SELECT kind, provider, created_at, LENGTH(content) FROM materials "
-        "WHERE job_id=? ORDER BY kind", (job_id,),
+        "WHERE user_id=? AND job_id=? ORDER BY kind", (user_id, job_id),
     ).fetchall()
     conn.close()
     return [{"kind": r[0], "provider": r[1], "created_at": r[2], "chars": r[3]}
             for r in rows]
 
 
-def delete(job_id: int, kind: str) -> bool:
+def delete(user_id, job_id: int, kind: str) -> bool:
     conn = store.connect()
-    cur = conn.execute("DELETE FROM materials WHERE job_id=? AND kind=?",
-                       (job_id, kind))
+    cur = conn.execute(
+        "DELETE FROM materials WHERE user_id=? AND job_id=? AND kind=?",
+        (user_id, job_id, kind))
     conn.commit()
     n = cur.rowcount
     conn.close()

@@ -10,6 +10,7 @@ than handed over.
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from src import resume_guard, resume_fit
+from src.auth import current_user_id
 from src.deps import _db_dep, _get_setting, limiter
 from src.paths import RATE_LIMIT_GENERATION
 
@@ -39,7 +40,7 @@ def _generation_http_error(e: Exception) -> HTTPException:
 @router.post("/api/jobs/{job_id}/cover-letter")
 @limiter.limit(RATE_LIMIT_GENERATION)
 def cover_letter(request: Request, job_id: int, fast: bool = False,
-                 conn=Depends(_db_dep)):
+                 _: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Generate a grounded cover letter for one job.
 
     `fast=true` skips the revise pass (one model call instead of two) — useful behind a
@@ -78,7 +79,8 @@ def cover_letter(request: Request, job_id: int, fast: bool = False,
 
 @router.post("/api/jobs/{job_id}/resume")
 @limiter.limit(RATE_LIMIT_GENERATION)
-def tailored_resume(request: Request, job_id: int, conn=Depends(_db_dep)):
+def tailored_resume(request: Request, job_id: int,
+                    _: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Tailor the resume template to one job."""
     if _get_setting(conn, "generation_enabled", "1") != "1":
         raise HTTPException(

@@ -62,14 +62,10 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
-from src import llm, store
+from src import extract, llm, store
 from src.logs import log
-from src.config import load_profile
 from src.normalize import normalize, clean_html
-from src.scoring.prefilter import passes
 from src.paths import MIN_DESCRIPTION_CHARS
-from src.scoring.rerank import score_job, build_calibration
-from src.paths import DEFAULT_SCORE_THRESHOLD
 
 
 # ── Column aliases for tabular imports ──────────────────────────────────────
@@ -547,28 +543,25 @@ def recover_description(url: str, timeout: int = 15) -> str:
 
 # ── The shared import path ──────────────────────────────────────────────────
 
-def import_jobs(raw_jobs: list[dict], *, source: str = "import",
+def import_jobs(raw_jobs: list[dict], user_id, *, source: str = "import",
                 fetch_missing: bool = True) -> dict:
-    """Normalise, dedupe, score where possible, and store.
+    """Normalise, dedupe, extract, and store — into the shared pool plus a
+    per-user row for the importer.
 
-    A job is scored only when it has a real description. Otherwise it is stored
-    unscored (score = NULL) and appears in the Unscored tab for manual triage.
+    A manually imported job is one the user explicitly chose, so it is never
+    dropped on a profile/location gate. It lands in the pool (extracted if there's
+    enough description) and a user_jobs row is created for this user. Scoring is
+    deferred to the per-user get-new-jobs flow (Stage 5) — imports arrive with a
+    NULL score, surfaced for review.
     """
-    profile = load_profile()
     conn = store.connect()
-    threshold = int(store.get_setting(conn, "score_threshold", DEFAULT_SCORE_THRESHOLD))
-    scoring_on = store.get_setting(conn, "scoring_enabled", "1") == "1"
-
-    # Imported jobs are scored against the same calibration as fetched ones.
-    calibration = build_calibration() if scoring_on else ""
+    extraction_on = store.get_setting(conn, "extraction_enabled", "1") == "1"
 
     stats = {"seen": 0, "imported": 0, "scored": 0, "unscored": 0,
              "duplicates": 0, "errors": 0, "dropped": 0}
 
     for raw in raw_jobs:
-        # One transaction per job — see the same block in src/run.py. Importing scores
-        # each job in turn, so a long import would otherwise hold the write lock for
-        # the whole pass and any other write would fail with "database is locked".
+        # One transaction per job — see the same block in src/run.py.
         with conn:
             stats["seen"] += 1
             raw.setdefault("source", source)
@@ -576,65 +569,51 @@ def import_jobs(raw_jobs: list[dict], *, source: str = "import",
             try:
                 job = normalize(raw)
 
-                if store.already_seen(conn, job["dedupe_hash"]):
+                # Already in the shared pool? Reuse it — this user just needs a row.
+                existing = conn.execute(
+                    "SELECT id FROM jobs WHERE dedupe_hash=?",
+                    (job["dedupe_hash"],)).fetchone()
+
+                if existing:
+                    job_id = existing[0]
+                else:
+                    # New to the pool: recover a description if we can, extract, store.
+                    if fetch_missing and not job.get("description"):
+                        recovered = recover_description(job.get("apply_url") or "")
+                        if recovered:
+                            job["description"] = recovered
+
+                    if (extraction_on and len((job.get("description") or "").strip())
+                            >= MIN_DESCRIPTION_CHARS):
+                        try:
+                            ex = extract.extract(job)
+                            if ex is not None:
+                                job.update(ex.model_dump())
+                        except Exception as e:
+                            store.record_error(conn, "extract:import", e)
+
+                    store.save_job(conn, job)
+                    store.mark_seen(conn, job["dedupe_hash"], "kept")
+                    row = conn.execute(
+                        "SELECT id FROM jobs WHERE dedupe_hash=?",
+                        (job["dedupe_hash"],)).fetchone()
+                    job_id = row[0] if row else None
+
+                if job_id is None:
+                    stats["errors"] += 1
+                    continue
+
+                # Per-user row. ON CONFLICT: this user already had the job → duplicate.
+                cur = conn.execute(
+                    "INSERT INTO user_jobs (user_id, job_id, status, served_at) "
+                    "VALUES (?,?, 'surfaced', now()) "
+                    "ON CONFLICT (user_id, job_id) DO NOTHING",
+                    (user_id, job_id))
+                if cur.rowcount > 0:
+                    stats["imported"] += 1
+                    stats["unscored"] += 1        # scored later, in Stage 5
+                else:
                     stats["duplicates"] += 1
-                    continue
-
-                # No description? Try to recover one from the link before giving up.
-                if fetch_missing and not job.get("description"):
-                    recovered = recover_description(job.get("apply_url") or "")
-                    if recovered:
-                        job["description"] = recovered
-
-                # Location gate — runs before scoring, and works without a description
-                # because alert emails carry a location. A job we can SEE is outside Canada
-                # and not remote is dropped now rather than parked in the unscored tab.
-                #
-                # It only fires on a location we actually have. Some employers' alerts
-                # (Deloitte's, for one) name no location at all, and those postings are on a
-                # Canadian careers site and perfectly relevant — dropping them for a missing
-                # field would silently throw away good jobs. Unknown location therefore means
-                # "keep and let scoring judge it", not "discard".
-                from src.scoring.prefilter import _check_locations
-                allowed_locations = (profile.get("constraints") or {}).get("locations")
-                loc_known = (job.get("location") or "").strip().lower() not in (
-                    "", "not specified", "unknown", "n/a", "-")
-                if (allowed_locations and loc_known
-                        and not _check_locations(job, allowed_locations)):
-                    store.mark_seen(conn, job["dedupe_hash"], "trashed")
-                    stats["dropped"] = stats.get("dropped", 0) + 1
-                    continue
-
-                # Same threshold scoring itself uses, so the two cannot disagree
-                # about what counts as a description.
-                has_jd = (len((job.get("description") or "").strip())
-                          >= MIN_DESCRIPTION_CHARS)
-
-                if has_jd and scoring_on and passes(job, profile):
-                    result = score_job(job, profile, calibration)
-                    if result is not None:
-                        job.update(score=result.overall,
-                                   skills_score=result.skills_score,
-                                   seniority_score=result.seniority_score,
-                                   domain_score=result.domain_score,
-                                   rationale=result.rationale, flags=None)
-                        store.save_job(conn, job)
-                        store.mark_seen(conn, job["dedupe_hash"],
-                                        "kept" if result.overall >= threshold else "trashed",
-                                        result.overall)
-                        stats["imported"] += 1
-                        stats["scored"] += 1
-                        continue
-
-                # Everything else lands unscored: no description, scoring off, or the
-                # model failed. The job is still yours to look at — it just doesn't
-                # pretend to have been judged.
-                job.update(score=None, skills_score=None, seniority_score=None,
-                           domain_score=None, rationale=None, flags=None)
-                store.save_job(conn, job)
-                store.mark_seen(conn, job["dedupe_hash"], "kept")
-                stats["imported"] += 1
-                stats["unscored"] += 1
 
             except Exception as e:
                 log.warning("[import] %s: %s", raw.get("title", "?"), e)

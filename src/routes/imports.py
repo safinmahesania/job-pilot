@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from src.auth import current_user_id
 from src.deps import _db_dep, _get_setting, limiter
 from src.paths import MAX_UPLOAD_BYTES, RATE_LIMIT_IMPORT
 
@@ -51,7 +52,8 @@ class ResolveRequest(BaseModel):
 
 
 @router.post("/api/autofill/resolve")
-def autofill_resolve(body: ResolveRequest, conn=Depends(_db_dep)):
+def autofill_resolve(body: ResolveRequest,
+                     user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """AI-map the fields local heuristics couldn't place. Blank if unknown."""
     if _get_setting(conn, "generation_enabled", "1") != "1":
         raise HTTPException(403, "On-demand AI is off — enable it in Settings.")
@@ -83,11 +85,11 @@ def autofill_resolve(body: ResolveRequest, conn=Depends(_db_dep)):
             if not question or not str(answer).strip():
                 continue
             conn.execute(
-                "INSERT INTO application_answers (job_id, question, answer) "
-                "VALUES (?, ?, ?) "
-                "ON CONFLICT(job_id, question) DO UPDATE SET "
-                "  answer = excluded.answer, created_at = datetime('now')",
-                (body.job_id, question[:500], str(answer)[:5000]),
+                "INSERT INTO application_answers (user_id, job_id, question, answer) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT (user_id, job_id, question) DO UPDATE SET "
+                "  answer = excluded.answer, created_at = now()",
+                (user_id, body.job_id, question[:500], str(answer)[:5000]),
             )
         conn.commit()
 
@@ -103,20 +105,22 @@ class MaterialSave(BaseModel):
 
 
 @router.post("/api/jobs/{job_id}/materials")
-def save_material(job_id: int, body: MaterialSave, conn=Depends(_db_dep)):
+def save_material(job_id: int, body: MaterialSave,
+                  user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Store a generated document against this job."""
     from src import materials
     exists = conn.execute("SELECT 1 FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not exists:
         raise HTTPException(404, "job not found")
     try:
-        return materials.save(job_id, body.kind, body.content, body.provider)
+        return materials.save(user_id, job_id, body.kind, body.content, body.provider)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
 
 @router.get("/api/jobs/{job_id}/application")
-def application_record(job_id: int, conn=Depends(_db_dep)):
+def application_record(job_id: int,
+                       user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Everything you sent for this job, in one place.
 
     Written for the moment the phone rings. The resume and cover letter are in one
@@ -127,15 +131,17 @@ def application_record(job_id: int, conn=Depends(_db_dep)):
     from src import materials
 
     row = conn.execute(
-        "SELECT id, title, company, apply_url, applied_on, status "
-        "FROM jobs WHERE id=?", (job_id,)
+        "SELECT j.id, j.title, j.company, j.apply_url, uj.applied_on, uj.status "
+        "FROM jobs j LEFT JOIN user_jobs uj "
+        "ON uj.job_id = j.id AND uj.user_id = ? "
+        "WHERE j.id = ?", (user_id, job_id)
     ).fetchone()
     if not row:
         raise HTTPException(404, "no such job")
 
     docs = {}
     for kind in ("resume", "cover"):
-        doc = materials.get(job_id, kind)
+        doc = materials.get(user_id, job_id, kind)
         if doc:
             docs[kind] = {"content": doc["content"],
                           "created_at": doc.get("created_at"),
@@ -143,27 +149,29 @@ def application_record(job_id: int, conn=Depends(_db_dep)):
 
     answers = [dict(r) for r in conn.execute(
         "SELECT question, answer, created_at FROM application_answers "
-        "WHERE job_id=? ORDER BY id", (job_id,)
+        "WHERE user_id=? AND job_id=? ORDER BY id", (user_id, job_id)
     ).fetchall()]
 
     return {"job": dict(row), "materials": docs, "answers": answers}
 
 
 @router.get("/api/jobs/{job_id}/materials")
-def list_materials(job_id: int):
+def list_materials(job_id: int, user_id: str = Depends(current_user_id)):
     """What has been saved for this job (kinds + timestamps, not the bodies)."""
     from src import materials
-    return {"job_id": job_id, "materials": materials.list_for(job_id)}
+    return {"job_id": job_id, "materials": materials.list_for(user_id, job_id)}
 
 
 @router.delete("/api/jobs/{job_id}/materials/{kind}")
-def delete_material(job_id: int, kind: str):
+def delete_material(job_id: int, kind: str,
+                    user_id: str = Depends(current_user_id)):
     from src import materials
-    return {"deleted": materials.delete(job_id, kind)}
+    return {"deleted": materials.delete(user_id, job_id, kind)}
 
 
 @router.get("/api/jobs/{job_id}/materials/{kind}/file")
-def material_file(job_id: int, kind: str, format: str = "pdf", conn=Depends(_db_dep)):
+def material_file(job_id: int, kind: str, format: str = "pdf",
+                  user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Download a saved document. This is what the extension attaches.
 
     The document is looked up by job_id, so the file returned always belongs to
@@ -178,7 +186,7 @@ def material_file(job_id: int, kind: str, format: str = "pdf", conn=Depends(_db_
     if not job:
         raise HTTPException(404, "job not found")
 
-    doc = materials.get(job_id, kind)
+    doc = materials.get(user_id, job_id, kind)
     if not doc:
         raise HTTPException(
             404, f"no {kind} saved for this job — generate and save it first"
@@ -242,7 +250,8 @@ async def _read_capped(file) -> bytes:
 
 @router.post("/api/import/file")
 @limiter.limit(RATE_LIMIT_IMPORT)
-async def import_file(request: Request, file: UploadFile = File(...)):
+async def import_file(request: Request, file: UploadFile = File(...),
+                      user_id: str = Depends(current_user_id)):
     """Import jobs from a CSV or Excel file."""
     from src import importers
     data = await _read_capped(file)
@@ -257,7 +266,7 @@ async def import_file(request: Request, file: UploadFile = File(...)):
         raise HTTPException(
             400, "no usable rows — the file needs at least a title and a company column"
         )
-    stats = importers.import_jobs(rows, source="import")
+    stats = importers.import_jobs(rows, user_id, source="import")
     return {"rows": len(rows), **stats}
 
 
@@ -267,7 +276,8 @@ class PastedJob(BaseModel):
 
 @router.post("/api/import/text")
 @limiter.limit(RATE_LIMIT_IMPORT)
-def import_text(request: Request, body: PastedJob, conn=Depends(_db_dep)):
+def import_text(request: Request, body: PastedJob,
+                user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Paste a whole job posting; the model pulls the fields out of it."""
     if _get_setting(conn, "generation_enabled", "1") != "1":
         raise HTTPException(403, "On-demand AI is off — enable it in Settings.")
@@ -282,13 +292,14 @@ def import_text(request: Request, body: PastedJob, conn=Depends(_db_dep)):
         traceback.print_exc()
         raise HTTPException(502, f"{type(e).__name__}: {e}")
 
-    stats = importers.import_jobs([job], source="pasted", fetch_missing=False)
+    stats = importers.import_jobs([job], user_id, source="pasted", fetch_missing=False)
     return {"job": {"title": job["title"], "company": job["company"]}, **stats}
 
 
 @router.post("/api/import/email-file")
 @limiter.limit(RATE_LIMIT_IMPORT)
-async def import_email_file(request: Request, file: UploadFile = File(...)):
+async def import_email_file(request: Request, file: UploadFile = File(...),
+                            user_id: str = Depends(current_user_id)):
     """Import jobs from a job-alert email you exported (.eml or .html).
 
     JobPilot has no mail credentials and no IMAP client. It reads the file you
@@ -305,12 +316,12 @@ async def import_email_file(request: Request, file: UploadFile = File(...)):
         raise HTTPException(
             400, "no job links found in that email — is it a job-alert email?"
         )
-    stats = importers.import_jobs(jobs)
+    stats = importers.import_jobs(jobs, user_id)
     return {"found": len(jobs), **stats}
 
 
 @router.post("/api/import/mail-drop")
-def import_mail_drop():
+def import_mail_drop(user_id: str = Depends(current_user_id)):
     """Ingest every alert email sitting in data/mail_drop/.
 
     Drag your exported emails in there and press the button. Files are read and
@@ -328,7 +339,7 @@ def import_mail_drop():
         return {"files": len(files), "found": 0, "seen": 0, "imported": 0,
                 "scored": 0, "unscored": 0, "duplicates": 0, "errors": 0}
 
-    stats = importers.import_jobs(jobs)
+    stats = importers.import_jobs(jobs, user_id)
     return {"files": len(files), "found": len(jobs), **stats}
 
 

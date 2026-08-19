@@ -10,26 +10,32 @@ import re
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from src.deps import _db_dep, _get_setting, COLS, TAB_WHERE, ALLOWED_STATUS
+from src.auth import current_user_id
+from src.deps import _db_dep, _get_setting, FEED_COLS, TAB_WHERE, ALLOWED_STATUS
 
 router = APIRouter()
 
 
 @router.get("/api/counts")
-def counts(conn=Depends(_db_dep)):
+def counts(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     threshold = int(_get_setting(conn, "score_threshold", 70))
+
+    def n(where: str) -> int:
+        return conn.execute(
+            f"SELECT COUNT(*) FROM user_jobs uj WHERE uj.user_id = ? AND {where}",
+            (user_id,)).fetchone()[0]
+
     out = {
-        "feed": conn.execute(f"SELECT COUNT(*) FROM jobs WHERE status='surfaced' AND score >= {threshold}").fetchone()[
-            0],
-        "saved": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='saved'").fetchone()[0],
-        "applied": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='applied'").fetchone()[0],
-        "dismissed": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='dismissed'").fetchone()[0],
-        "unscored": conn.execute(
-            "SELECT COUNT(*) FROM jobs WHERE score IS NULL AND status='surfaced'"
-        ).fetchone()[0],
+        "feed": n(f"uj.status='surfaced' AND uj.score >= {threshold}"),
+        "saved": n("uj.status='saved'"),
+        "applied": n("uj.status='applied'"),
+        "dismissed": n("uj.status='dismissed'"),
+        "unscored": n("uj.score IS NULL AND uj.status='surfaced'"),
     }
-    from src import followups
-    out["followups"] = followups.summary(conn)["total"]
+    # followups.summary still reads the old single-user shape and would error
+    # against the new schema — which, with autocommit off, poisons the whole
+    # transaction. Report 0 until followups.py is ported to user_jobs.
+    out["followups"] = 0
     return out
 
 
@@ -147,42 +153,40 @@ def stats(conn=Depends(_db_dep)):
 
 
 @router.get("/api/jobs")
-def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all", conn=Depends(_db_dep)):
+def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all",
+              user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     threshold = int(_get_setting(conn, "score_threshold", 70))
     scoring_on = _get_setting(conn, "scoring_enabled", "1") == "1"
 
-    # An unknown tab used to fall back to the feed, which quietly showed the wrong
-    # list instead of signalling the mistake. A tab the app does not define returns
-    # nothing — a visibly empty list is a clearer "that is not a real tab" than a
-    # screenful of feed under the wrong heading.
+    # An unknown tab returns nothing — a visibly empty list is a clearer signal
+    # than showing the feed under the wrong heading.
     if tab == "feed":
         if scoring_on:
-            # Normal case: the feed is the ranked shortlist — scored jobs at or above
-            # the threshold.
-            where = f"status='surfaced' AND score IS NOT NULL AND score >= {threshold}"
+            where = (f"uj.status='surfaced' AND uj.score IS NOT NULL "
+                     f"AND uj.score >= {threshold}")
         else:
-            # Scoring is turned off, so nothing gets a score and the threshold filter
-            # would hide every surfaced job — the feed would look empty even though the
-            # jobs are right there. With no scores to rank by, show all surfaced jobs
-            # instead of an empty page.
-            where = "status = 'surfaced'"
+            # No scores to rank by — show all surfaced jobs rather than an empty page.
+            where = "uj.status = 'surfaced'"
     elif tab in TAB_WHERE:
         where = TAB_WHERE[tab]
     else:
         where = "1 = 0"          # no such tab -> no rows
 
-    params = []
+    params: list = [user_id]
     if source and source != "all":
-        where += " AND source = ?"
+        where += " AND j.source = ?"
         params.append(source)
 
-    order = {"score": "score DESC", "newest": "posted_date DESC",
-             "company": "company ASC"}.get(sort, "score DESC")   # whitelist, safe
+    order = {"score": "uj.score DESC", "newest": "j.posted_date DESC",
+             "company": "j.company ASC"}.get(sort, "uj.score DESC")   # whitelist
     if sort == "score" and (tab == "unscored" or (tab == "feed" and not scoring_on)):
-        order = "id DESC"          # nothing to rank by; show the newest first
+        order = "j.id DESC"          # nothing to rank by; show the newest first
 
-    rows = conn.execute(f"SELECT {COLS} FROM jobs WHERE {where} ORDER BY {order}",
-                        params).fetchall()
+    rows = conn.execute(
+        f"SELECT {FEED_COLS} FROM jobs j "
+        f"JOIN user_jobs uj ON uj.job_id = j.id "
+        f"WHERE uj.user_id = ? AND {where} ORDER BY {order}",
+        params).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -191,20 +195,18 @@ class StatusUpdate(BaseModel):
 
 
 @router.post("/api/jobs/sweep-expired")
-def sweep_expired(conn=Depends(_db_dep)):
-    """Dismiss every live job whose application deadline has passed.
+def sweep_expired(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
+    """Dismiss every live job in THIS user's feed whose deadline has passed.
 
-    A posting that stopped accepting applications still sits in the feed looking open,
-    and reading it is time spent on a door already shut. This walks the live jobs, reads
-    each one's deadline — the stored field, or a date written into the description like
-    "apply by March 15" — and dismisses the ones now in the past. Only 'surfaced' jobs
-    are touched: something already saved or applied to is the user's business, not a
-    deadline's.
+    Only 'surfaced' rows are touched: something already saved or applied to is the
+    user's business, not a deadline's.
     """
     from src import expiry
 
     rows = conn.execute(
-        "SELECT id, deadline, description FROM jobs WHERE status='surfaced'"
+        "SELECT j.id, j.deadline, j.description FROM jobs j "
+        "JOIN user_jobs uj ON uj.job_id = j.id "
+        "WHERE uj.user_id = ? AND uj.status = 'surfaced'", (user_id,)
     ).fetchall()
 
     expired = [r[0] for r in rows
@@ -213,26 +215,30 @@ def sweep_expired(conn=Depends(_db_dep)):
     if expired:
         with conn:
             conn.executemany(
-                "UPDATE jobs SET status='dismissed' WHERE id=?",
-                [(i,) for i in expired])
+                "UPDATE user_jobs SET status='dismissed' "
+                "WHERE user_id=? AND job_id=?",
+                [(user_id, i) for i in expired])
 
     return {"checked": len(rows), "dismissed": len(expired)}
 
 
 @router.post("/api/jobs/{job_id}/status")
-def set_status(job_id: int, body: StatusUpdate, conn=Depends(_db_dep)):
+    def set_status(job_id: int, body: StatusUpdate,
+               user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     if body.status not in ALLOWED_STATUS:
         raise HTTPException(400, f"invalid status: {body.status}")
     if body.status == "applied":
         cur = conn.execute(
-            "UPDATE jobs SET status=?, applied_on=COALESCE(applied_on, date('now')) WHERE id=?",
-            (body.status, job_id),
+            "UPDATE user_jobs SET status=?, applied_on=COALESCE(applied_on, now()) "
+            "WHERE user_id=? AND job_id=?",
+            (body.status, user_id, job_id),
         )
     else:
-        cur = conn.execute("UPDATE jobs SET status=? WHERE id=?", (body.status, job_id))
+        cur = conn.execute(
+            "UPDATE user_jobs SET status=? WHERE user_id=? AND job_id=?",
+            (body.status, user_id, job_id))
     conn.commit()
-    changed = cur.rowcount
-    if not changed:
+    if not cur.rowcount:
         raise HTTPException(404, "job not found")
     return {"id": job_id, "status": body.status}
 
@@ -242,23 +248,22 @@ class NotesUpdate(BaseModel):
 
 
 @router.post("/api/jobs/{job_id}/notes")
-def set_notes(job_id: int, body: NotesUpdate, conn=Depends(_db_dep)):
-    conn.execute("UPDATE jobs SET notes=? WHERE id=?", (body.notes, job_id))
+def set_notes(job_id: int, body: NotesUpdate,
+              user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
+    conn.execute("UPDATE user_jobs SET notes=? WHERE user_id=? AND job_id=?",
+                 (body.notes, user_id, job_id))
     conn.commit()
     return {"ok": True}
 
 
 @router.post("/api/jobs/{job_id}/viewed")
-def mark_viewed(job_id: int, conn=Depends(_db_dep)):
-    """Stamp the moment a job's detail was opened, so its card can show 'last seen'.
-
-    Its own tiny write, fired when the detail panel opens — kept separate from anything
-    heavier so opening a job stays instant, and wrapped in its own transaction like every
-    other write here.
-    """
+def mark_viewed(job_id: int, user_id: str = Depends(current_user_id),
+                conn=Depends(_db_dep)):
+    """Stamp the moment a job's detail was opened, so its card can show 'last seen'."""
     with conn:
         conn.execute(
-            "UPDATE jobs SET last_viewed_at = datetime('now') WHERE id=?", (job_id,))
+            "UPDATE user_jobs SET last_viewed_at = now() "
+            "WHERE user_id=? AND job_id=?", (user_id, job_id))
     return {"ok": True}
 
 

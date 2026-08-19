@@ -23,26 +23,34 @@ from src.paths import RATE_LIMIT_DEFAULT
 limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT_DEFAULT])
 
 
-# The columns a job row returns to the frontend, in one place so the SELECTs agree.
-COLS = ("id, title, company, location, remote, job_type, source, source_url, "
-        "apply_url, description, posted_date, deadline, salary_min, salary_max, "
-        "score, skills_score, seniority_score, domain_score, rationale, status, "
-        "applied_on, notes, language, fetched_at, last_viewed_at, "
-        # Structured fields lifted from the description by src/extract.py.
-        "work_mode, seniority_level, location_detail, salary_text, benefits, "
-        "responsibilities, requirements, nice_to_have, tech_stack, "
-        "about_company, instructions, extracted_at")
+# The columns a feed row returns to the frontend, split by where they now live.
+# Posting + extracted fields belong to the shared jobs row (aliased j.); the
+# per-user judgement — score, status, notes — lives in user_jobs (aliased uj.).
+JOB_COLS = ("j.id, j.title, j.company, j.location, j.remote, j.job_type, j.source, "
+            "j.source_url, j.apply_url, j.description, j.posted_date, j.deadline, "
+            "j.salary_min, j.salary_max, j.language, j.fetched_at, "
+            # Structured fields lifted from the description by src/extract.py.
+            "j.work_mode, j.seniority_level, j.location_detail, j.salary_text, "
+            "j.benefits, j.responsibilities, j.requirements, j.nice_to_have, "
+            "j.tech_stack, j.about_company, j.instructions, j.extracted_at")
+
+USER_COLS = ("uj.score, uj.skills_score, uj.seniority_score, uj.domain_score, "
+             "uj.rationale, uj.status, uj.applied_on, uj.notes, uj.last_viewed_at, "
+             "uj.served_at")
+
+# What a feed SELECT returns: the posting joined to this user's judgement of it.
+FEED_COLS = JOB_COLS + ", " + USER_COLS
 
 # feed = new/undecided | saved | applied ; dismissed shows nowhere by default.
+# All reference uj.* because status/score are per-user now; the feed's threshold
+# filter is added in the route (it depends on the user's setting).
 TAB_WHERE = {
-    "feed": "status = 'surfaced'",
-    "saved": "status = 'saved'",
-    "applied": "status = 'applied'",
-    "dismissed": "status = 'dismissed'",
-    # Imported jobs whose description couldn't be recovered, so they were never
-    # scored. Shown here for manual triage rather than given a number the model had
-    # no basis for.
-    "unscored": "score IS NULL AND status = 'surfaced'",
+    "feed": "uj.status = 'surfaced'",
+    "saved": "uj.status = 'saved'",
+    "applied": "uj.status = 'applied'",
+    "dismissed": "uj.status = 'dismissed'",
+    # Imported/served jobs that were never scored — shown for manual triage.
+    "unscored": "uj.score IS NULL AND uj.status = 'surfaced'",
 }
 
 ALLOWED_STATUS = {"surfaced", "saved", "applied", "dismissed",

@@ -117,12 +117,29 @@ is a string; use "" for anything the posting does not state:
  "tech_stack": "", "about_company": "", "instructions": ""}"""
 
 
+def _flatten(v) -> str:
+    """One field's value as clean text.
+
+    The model is asked for a string per field and usually gives one, but it
+    sometimes returns a JSON array (a list of bullet points) — especially for
+    benefits, responsibilities and requirements. Left alone, str() would print a
+    Python list repr like ['a', 'b'], brackets and quotes and all, which then
+    lands in the DB and the UI. Join those into readable text instead.
+    """
+    if v is None:
+        return ""
+    if isinstance(v, list):
+        return "; ".join(p for p in (_flatten(x) for x in v) if p)
+    if isinstance(v, dict):
+        return "; ".join(p for p in (_flatten(x) for x in v.values()) if p)
+    return str(v).strip()
+
+
 def _coerce(data: dict) -> Extraction:
     """Trust the shape, not the values: clamp the two enums, stringify the rest."""
     clean: dict = {}
     for f in FIELDS:
-        v = data.get(f, "")
-        clean[f] = "" if v is None else str(v).strip()
+        clean[f] = _flatten(data.get(f, ""))
 
     if clean["work_mode"].lower() not in WORK_MODES:
         clean["work_mode"] = ""

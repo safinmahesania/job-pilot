@@ -1,6 +1,4 @@
 """Maintenance operations: rescore, cleanup, export, reset, etc."""
-import csv
-import io
 import os
 import shutil
 from datetime import datetime, timedelta
@@ -10,46 +8,21 @@ from src.config import load_companies, load_profile
 from src.paths import ROOT, BACKUP_DIR
 
 
+_STAGE5 = ("Per-user scoring isn't wired up yet — this returns once the "
+           "get-new-jobs / rescore flow lands (Stage 5).")
+
+
 def rescore_all():
-    """Re-run AI scoring on all stored jobs against the current profile."""
-    from src.scoring.rerank import score_job, build_calibration
-    profile = load_profile()
-    conn = store.connect()
-    rows = conn.execute("SELECT id, title, company, location, description, job_type FROM jobs").fetchall()
-
-    # Rescoring is where the feedback loop pays off: every job is re-judged
-    # against the decisions you have made since it was first scored.
-    calibration = build_calibration()
-
-    updated = 0
-    for jid, title, company, location, desc, jtype in rows:
-        job = {"title": title, "company": company, "location": location,
-               "description": desc, "job_type": jtype}
-        r = score_job(job, profile, calibration)
-        if r is None:
-            continue
-        conn.execute(
-            "UPDATE jobs SET score=?, skills_score=?, seniority_score=?, domain_score=?, rationale=? WHERE id=?",
-            (r.overall, r.skills_score, r.seniority_score, r.domain_score, r.rationale, jid),
-        )
-        updated += 1
-    conn.commit()
-    conn.close()
-    return {"rescored": updated}
+    """Re-run AI scoring on all stored jobs. PENDING: scoring is per-user now
+    (user_jobs), so a system-wide rescore no longer makes sense — this will be
+    rebuilt as a per-user rescore in the get-new-jobs flow."""
+    raise NotImplementedError(_STAGE5)
 
 
 def cleanup_below_threshold():
-    """Archive (dismiss) surfaced jobs scoring below current threshold."""
-    conn = store.connect()
-    threshold = int(store.get_setting(conn, "score_threshold", 70))
-    cur = conn.execute(
-        "UPDATE jobs SET status='dismissed' WHERE status='surfaced' AND score < ?",
-        (threshold,),
-    )
-    conn.commit()
-    n = cur.rowcount
-    conn.close()
-    return {"archived": n}
+    """Archive surfaced jobs below threshold. PENDING: status/score live in
+    user_jobs now, so cleanup is per-user."""
+    raise NotImplementedError(_STAGE5)
 
 
 def clear_old_jobs(days: int):
@@ -64,18 +37,9 @@ def clear_old_jobs(days: int):
 
 
 def export_csv() -> str:
-    """Return all jobs as a CSV string."""
-    conn = store.connect()
-    conn.row_factory = None
-    cols = ["id", "title", "company", "location", "job_type", "source",
-            "apply_url", "score", "status", "posted_date", "deadline", "rationale"]
-    rows = conn.execute(f"SELECT {','.join(cols)} FROM jobs ORDER BY score DESC").fetchall()
-    conn.close()
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow(cols)
-    w.writerows(rows)
-    return buf.getvalue()
+    """Return all jobs as a CSV string. PENDING: score/status are per-user now,
+    so a meaningful export is per-user (whose feed?) — rebuilt in Stage 5."""
+    raise NotImplementedError(_STAGE5)
 
 
 def reload_config():

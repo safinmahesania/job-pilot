@@ -6,17 +6,17 @@ and the two destructive resets. Plus the read-only views the admin panel shows �
 error log and the fetch-run history — and the button that kicks off a fetch by hand.
 """
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import Response
 from pydantic import BaseModel
 
 from src import configio, maintenance, scheduler, store
-from src.deps import _db_dep, _get_setting
+from src.auth import current_user_id
+from src.deps import _db_dep, require_admin
 
 router = APIRouter()
 
 
 @router.get("/api/setup-status")
-def setup_status(conn=Depends(_db_dep)):
+def setup_status(_: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Tell the UI how far along setup is, so a new user gets a checklist instead of a
     blank feed. Each step is a plain boolean plus a short label the frontend renders."""
     profile = configio.read_yaml("profile.yaml") or {}
@@ -65,8 +65,8 @@ def setup_status(conn=Depends(_db_dep)):
 # ── Maintenance ──
 
 @router.post("/api/maint/rescore")
-def maint_rescore():
-    return maintenance.rescore_all()
+def maint_rescore(_: str = Depends(require_admin)):
+    raise HTTPException(503, "Pending Stage 5: per-user scoring/enrichment rework")
 
 
 class ScoreRequest(BaseModel):
@@ -74,11 +74,12 @@ class ScoreRequest(BaseModel):
 
 
 @router.get("/api/notifications")
-def list_notifications(conn=Depends(_db_dep)):
+def list_notifications(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Recent notifications for the bell in the UI, newest first, with an unseen count."""
     rows = conn.execute(
         "SELECT id, text, created_at, seen FROM notifications "
-        "ORDER BY id DESC LIMIT 50"
+        "WHERE user_id = ? ORDER BY id DESC LIMIT 50",
+        (user_id,)
     ).fetchall()
     items = [{"id": r[0], "text": r[1], "created_at": r[2], "seen": bool(r[3])}
              for r in rows]
@@ -87,165 +88,33 @@ def list_notifications(conn=Depends(_db_dep)):
 
 
 @router.post("/api/notifications/seen")
-def mark_notifications_seen(conn=Depends(_db_dep)):
+def mark_notifications_seen(user_id: str = Depends(current_user_id),
+                            conn=Depends(_db_dep)):
     """Mark everything as seen — called when the user opens the notifications panel."""
     with conn:
-        conn.execute("UPDATE notifications SET seen = 1 WHERE seen = 0")
+        conn.execute("UPDATE notifications SET seen = true "
+                     "WHERE user_id = ? AND seen = false", (user_id,))
     return {"ok": True}
 
 
 @router.get("/api/jobs/enrich-diagnosis")
-def enrich_diagnosis(conn=Depends(_db_dep)):
-    """Where do the feed's Adzuna links actually point? No fetching — just a tally.
+def enrich_diagnosis(_: str = Depends(require_admin)):
+    """Where do the feed's Adzuna links point? PENDING: coupled to per-user status
+    and the enrichment path; rebuilt for the pool in Stage 5."""
+    raise HTTPException(503, "Pending Stage 5: per-user scoring/enrichment rework")
 
-    "Fetch full descriptions" can come back having enriched almost nothing, and the
-    reason is usually that the links don't go anywhere fetchable: an Adzuna job whose
-    redirect lands on Indeed or LinkedIn is left on its snippet by design. This counts
-    the short Adzuna jobs by destination so that's visible at a glance, and lists a few
-    example hosts that fell outside the allowlist — which is the real answer to "why are
-    descriptions still short".
-    """
-    from urllib.parse import urlparse
-
-    from src import enrich
-
-    rows = conn.execute(
-        "SELECT source_url, apply_url, description FROM jobs "
-        "WHERE source='adzuna' AND status='surfaced' "
-        "AND (description IS NULL OR length(description) < 400 "
-        "     OR trim(description) LIKE '%…' OR trim(description) LIKE '%...')"
-    ).fetchall()
-
-    by_strategy = {"adzuna": 0, "lever": 0, "greenhouse": 0, "not_fetchable": 0}
-    other_hosts: dict[str, int] = {}
-    for source_url, apply_url, _desc in rows:
-        url = source_url or apply_url or ""
-        strat = enrich._destination(url)
-        if strat:
-            by_strategy[strat] += 1
-        else:
-            by_strategy["not_fetchable"] += 1
-            host = (urlparse(url).hostname or "unknown").replace("www.", "")
-            other_hosts[host] = other_hosts.get(host, 0) + 1
-
-    # The handful of hosts most of the un-fetchable links go to.
-    top_other = sorted(other_hosts.items(), key=lambda kv: kv[1], reverse=True)[:8]
-
-    fetchable = {k: v for k, v in by_strategy.items() if k != "not_fetchable"}
-
-    # Also push it to Telegram, so the breakdown can be read on a phone rather than only
-    # in a browser alert — the same numbers, formatted for a message.
-    from src import notify
-    hosts_line = ", ".join(f"{h} ({n})" for h, n in top_other) or "none"
-    notify.send(
-        "<b>Adzuna enrichment — diagnosis</b>\n"
-        f"Short jobs: {len(rows)}\n"
-        f"Fetchable → Adzuna {fetchable.get('adzuna', 0)}, "
-        f"Lever {fetchable.get('lever', 0)}, "
-        f"Greenhouse {fetchable.get('greenhouse', 0)}\n"
-        f"Not fetchable: {by_strategy['not_fetchable']}\n"
-        f"Unfetchable hosts: {hosts_line}"
-    )
-
-    return {
-        "short_adzuna_jobs": len(rows),
-        "fetchable": fetchable,
-        "not_fetchable": by_strategy["not_fetchable"],
-        "top_unfetchable_hosts": [{"host": h, "count": n} for h, n in top_other],
-    }
 
 
 @router.post("/api/jobs/enrich-existing")
-def enrich_existing(conn=Depends(_db_dep)):
-    """Fetch full descriptions for Adzuna jobs already in the feed that only have a snippet.
+def enrich_existing(_: str = Depends(require_admin)):
+    """Fetch full descriptions for short feed jobs and rescore. PENDING: selects by
+    per-user status and calls per-user rescore; rebuilt for the pool in Stage 5."""
+    raise HTTPException(503, "Pending Stage 5: per-user scoring/enrichment rework")
 
-    Enrichment runs during a fetch, so jobs saved before it existed — or before their
-    link pointed somewhere fetchable — still carry Adzuna's truncated snippet. This walks
-    the live Adzuna jobs whose description is short, fetches the full posting for the ones
-    whose link is fetchable (Adzuna / Lever / Greenhouse), saves it, and re-scores them so
-    the new score reflects the whole posting rather than the teaser.
-
-    It only touches short Adzuna jobs, so running it twice is cheap — the second run finds
-    nothing left to do.
-    """
-    from src import enrich
-    from src.paths import MIN_DESCRIPTION_CHARS
-    from src.routes.jobs import _rescore_one
-    from src.scoring.rerank import build_calibration
-
-    scoring_on = _get_setting(conn, "scoring_enabled", "1") == "1"
-
-    # A breakdown, because "checked: 2" out of a feed full of Adzuna jobs is confusing
-    # without knowing where the rest went. Each number is how many Adzuna jobs fall in
-    # that bucket, so the totals explain themselves.
-    total_adzuna = conn.execute(
-        "SELECT count(*) FROM jobs WHERE source='adzuna'").fetchone()[0]
-    surfaced_adzuna = conn.execute(
-        "SELECT count(*) FROM jobs WHERE source='adzuna' AND status='surfaced'"
-    ).fetchone()[0]
-    already_full = conn.execute(
-        "SELECT count(*) FROM jobs WHERE source='adzuna' AND status='surfaced' "
-        "AND description IS NOT NULL AND length(description) >= 400 "
-        "AND trim(description) NOT LIKE '%…' AND trim(description) NOT LIKE '%...'"
-    ).fetchone()[0]
-
-    rows = conn.execute(
-        "SELECT id, source, source_url, apply_url, description "
-        "FROM jobs WHERE source='adzuna' AND status='surfaced' "
-        # Short, OR ends in an ellipsis — Adzuna truncates its snippet and leaves a "…"
-        # (or "...") behind, so a description can be over 400 characters and still be cut
-        # off mid-sentence. Length alone misses those; the trailing marker catches them.
-        "AND (description IS NULL OR length(description) < 400 "
-        "     OR trim(description) LIKE '%…' OR trim(description) LIKE '%...')"
-    ).fetchall()
-
-    calibration = build_calibration() if scoring_on else ""
-    enriched = 0
-    rescored = 0
-    not_fetchable = 0        # short, but the link isn't Adzuna/Lever/Greenhouse
-    fetch_failed = 0         # fetchable, but the page gave nothing usable
-    for row in rows[:150]:                  # cap one request; run again for the rest
-        job = {"source": row[1], "source_url": row[2], "apply_url": row[3],
-               "description": row[4]}
-        if not enrich.is_enrichable(job):
-            not_fetchable += 1
-            continue
-        full = enrich.full_description(job)
-        if not full or len(full) < MIN_DESCRIPTION_CHARS:
-            fetch_failed += 1
-            continue
-        with conn:
-            conn.execute("UPDATE jobs SET description=? WHERE id=?", (full, row[0]))
-        enriched += 1
-        if scoring_on and _rescore_one(conn, row[0], calibration) is not None:
-            rescored += 1
-
-    from src import notify
-    notify.send(
-        "<b>Adzuna enrichment — run</b>\n"
-        f"Checked: {len(rows)}\n"
-        f"Enriched: {enriched}   Rescored: {rescored}\n"
-        f"Already full: {already_full}\n"
-        f"Short but not fetchable: {not_fetchable}\n"
-        f"Fetch returned nothing: {fetch_failed}\n"
-        f"(of {total_adzuna} Adzuna jobs, {surfaced_adzuna} in feed)"
-    )
-
-    return {
-        "checked": len(rows),
-        "enriched": enriched,
-        "rescored": rescored,
-        # The breakdown that explains the numbers above.
-        "adzuna_total": total_adzuna,
-        "adzuna_surfaced": surfaced_adzuna,
-        "already_full": already_full,
-        "short_but_not_fetchable": not_fetchable,
-        "fetch_returned_nothing": fetch_failed,
-    }
 
 
 @router.post("/api/jobs/extract-existing")
-def extract_existing(conn=Depends(_db_dep)):
+def extract_existing(_: str = Depends(require_admin), conn=Depends(_db_dep)):
     """Backfill the structured fields for jobs that predate extraction.
 
     Extraction runs during a fetch, so every job saved before this feature existed
@@ -306,32 +175,15 @@ def extract_existing(conn=Depends(_db_dep)):
 
 
 @router.post("/api/jobs/score")
-def score_jobs(body: ScoreRequest, conn=Depends(_db_dep)):
-    """Score specific jobs on demand — for unscored imports, or to re-run a few.
-
-    Unlike 'rescore everything', this targets only the ids you pass, so you can score
-    one job from its card, or a selection, without churning the whole database. Returns
-    per-job results so the UI can update just those rows.
-    """
-    if _get_setting(conn, "scoring_enabled", "1") != "1":
-        raise HTTPException(403, "Scoring is off — enable it in Settings first.")
-
-    from src.routes.jobs import _rescore_one
-    from src.scoring.rerank import build_calibration
-
-    # Once for the batch, not once per job: building it reads the database, and doing
-    # that per job adds a query and a connection to every one of up to 200 jobs.
-    calibration = build_calibration()
-    results = {}
-    for jid in body.job_ids[:200]:          # cap a single request
-        results[jid] = _rescore_one(conn, jid, calibration)
-    scored = sum(1 for v in results.values() if v is not None)
-    return {"requested": len(body.job_ids), "scored": scored, "results": results}
+def score_jobs(_: str = Depends(require_admin)):
+    """Score specific jobs on demand. PENDING: scoring is per-user now (user_jobs);
+    rebuilt in the get-new-jobs flow (Stage 5)."""
+    raise HTTPException(503, "Pending Stage 5: per-user scoring/enrichment rework")
 
 
 @router.post("/api/maint/cleanup")
-def maint_cleanup():
-    return maintenance.cleanup_below_threshold()
+def maint_cleanup(_: str = Depends(require_admin)):
+    raise HTTPException(503, "Pending Stage 5: per-user scoring/enrichment rework")
 
 
 class DaysBody(BaseModel):
@@ -339,24 +191,22 @@ class DaysBody(BaseModel):
 
 
 @router.post("/api/maint/clear-old")
-def maint_clear_old(body: DaysBody):
+def maint_clear_old(body: DaysBody, _: str = Depends(require_admin)):
     return maintenance.clear_old_jobs(body.days)
 
 
 @router.get("/api/maint/export")
-def maint_export():
-    csv_data = maintenance.export_csv()
-    return Response(content=csv_data, media_type="text/csv",
-                    headers={"Content-Disposition": "attachment; filename=jobpilot_jobs.csv"})
+def maint_export(_: str = Depends(require_admin)):
+    raise HTTPException(503, "Pending Stage 5: per-user scoring/enrichment rework")
 
 
 @router.post("/api/maint/reload")
-def maint_reload():
+def maint_reload(_: str = Depends(require_admin)):
     return maintenance.reload_config()
 
 
 @router.post("/api/maint/restart")
-def maint_restart():
+def maint_restart(_: str = Depends(require_admin)):
     """Restart the server process.
 
     Config reload re-reads the YAML files but keeps the running code and any stuck
@@ -371,67 +221,48 @@ def maint_restart():
 
 
 @router.post("/api/maint/clean-cache")
-def maint_clean_cache():
+def maint_clean_cache(_: str = Depends(require_admin)):
     return maintenance.clean_cache()
 
 
 @router.post("/api/maint/reset")
-def maint_reset():
+def maint_reset(_: str = Depends(require_admin)):
     return maintenance.reset_all_jobs()
 
 
 @router.post("/api/maint/clear-runs")
-def maint_clear_runs():
+def maint_clear_runs(_: str = Depends(require_admin)):
     return maintenance.clear_run_history()
 
 
 @router.post("/api/maint/nuclear")
-def maint_nuclear():
+def maint_nuclear(_: str = Depends(require_admin)):
     return maintenance.nuclear_reset()
 
 
 @router.get("/api/maint/preview")
-def maint_preview(conn=Depends(_db_dep)):
+def maint_preview(_: str = Depends(require_admin), conn=Depends(_db_dep)):
     """Live counts of what each maintenance action would touch.
 
-    The Maintenance tab shows these next to each action — "142 jobs", "18 expired",
-    "0 below threshold" — so a run has a visible target and it's clear when there's
-    nothing to do. Computed in one request so the tab doesn't fan out a dozen calls.
+    Pool-wide metrics (total jobs, unextracted backfill target, cache size) are exact.
+    The per-user feed metrics (short snippets, expired, below-threshold) depend on
+    status/score, which moved to user_jobs — they read 0 until the per-user cleanup
+    lands in Stage 5, so the tab shows a clear target for the actions that do work now.
     """
     from pathlib import Path
-    from src import expiry
-    from src.paths import MIN_DESCRIPTION_CHARS
 
     def q(sql, *args):
         return conn.execute(sql, args).fetchone()[0]
 
     total = q("SELECT COUNT(*) FROM jobs")
-    threshold = int(_get_setting(conn, "score_threshold", 70))
 
-    # Feed jobs still carrying a short snippet (candidates for description enrichment).
-    snippets = q(
-        "SELECT COUNT(*) FROM jobs WHERE status='surfaced' "
-        "AND (description IS NULL OR LENGTH(description) < ?)",
-        MIN_DESCRIPTION_CHARS,
-    )
-
-    # Live jobs past their deadline — the same check sweep-expired uses.
-    rows = conn.execute(
-        "SELECT deadline, description FROM jobs WHERE status='surfaced'"
-    ).fetchall()
-    expired = sum(
-        1 for r in rows
-        if expiry.has_expired({"deadline": r[0], "description": r[1]})
-    )
-
-    # Feed jobs scoring under the threshold (cleanup candidates).
-    low = q(
-        "SELECT COUNT(*) FROM jobs WHERE status='surfaced' AND score IS NOT NULL AND score < ?",
-        threshold,
-    )
+    # Per-user feed metrics — pending Stage 5 (status/score live in user_jobs now).
+    snippets = 0
+    expired = 0
+    low = 0
 
     # Jobs with a real description that were never run through extraction — the
-    # backfill target. Uses the same minimum length the extractor itself skips at.
+    # backfill target for extract-existing. Pool-wide, exact.
     from src.extract import MIN_DESCRIPTION_CHARS as _MIN_EXTRACT
     unextracted = q(
         "SELECT COUNT(*) FROM jobs WHERE extracted_at IS NULL "
@@ -460,14 +291,14 @@ def maint_preview(conn=Depends(_db_dep)):
 # ── Error log ──
 
 @router.get("/api/errors")
-def errors_list(limit: int = 100, conn=Depends(_db_dep)):
+def errors_list(limit: int = 100, _: str = Depends(require_admin), conn=Depends(_db_dep)):
     """Everything that has gone wrong, newest first."""
     rows = store.recent_errors(conn, limit)
     return rows
 
 
 @router.post("/api/errors/clear")
-def errors_clear(conn=Depends(_db_dep)):
+def errors_clear(_: str = Depends(require_admin), conn=Depends(_db_dep)):
     n = store.clear_errors(conn)
     return {"cleared": n}
 
@@ -475,7 +306,7 @@ def errors_clear(conn=Depends(_db_dep)):
 # ── Run history ──
 
 @router.get("/api/runs")
-def runs_list(limit: int = 50, conn=Depends(_db_dep)):
+def runs_list(limit: int = 50, _: str = Depends(require_admin), conn=Depends(_db_dep)):
     """The fetch history — what each run pulled in and kept."""
     rows = store.recent_runs(conn, limit)
     return rows
@@ -490,7 +321,7 @@ class RunRequest(BaseModel):
 
 
 @router.post("/api/run")
-def trigger_run(body: RunRequest | None = None):
+def trigger_run(body: RunRequest | None = None, _: str = Depends(require_admin)):
     only = body.only if body else None
     if not scheduler.trigger_async(only=only):
         raise HTTPException(409, "pipeline already running")
@@ -498,7 +329,7 @@ def trigger_run(body: RunRequest | None = None):
 
 
 @router.get("/api/run/status")
-def run_status():
+def run_status(_: str = Depends(require_admin)):
     """Whether a run is going, and how far along it is.
 
     The UI polls this to show a run in progress. "Running" on its own is not much use

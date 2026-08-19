@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 import re
 
 from src import configio
-from src.deps import _db_dep
+from src.deps import _db_dep, require_admin
 from src.paths import COMPANIES_FILE
 
 router = APIRouter()
@@ -55,7 +55,7 @@ _DETECT_RULES = [
 
 
 @router.post("/api/sources/detect")
-def detect_source(body: DetectRequest):
+def detect_source(body: DetectRequest, _: str = Depends(require_admin)):
     """Guess the ats and identifier from a careers URL, to pre-fill the add-source form.
 
     A best-effort convenience: paste the link to a company's job board and the form is
@@ -97,7 +97,7 @@ def detect_source(body: DetectRequest):
 
 
 @router.post("/api/sources/test")
-def test_source(body: SourceProbe):
+def test_source(body: SourceProbe, _: str = Depends(require_admin)):
     """Fetch one source right now and return what it found — without saving anything,
     scoring anything, or running the rest of the pipeline. This is the fast way to check
     that a source is configured correctly (right ats, right identifier/URL) before
@@ -202,7 +202,7 @@ def sources_config(conn=Depends(_db_dep)):
 
 
 @router.post("/api/sources/{index}/toggle")
-def toggle_source(index: int):
+def toggle_source(index: int, _: str = Depends(require_admin)):
     data = configio.read_yaml(COMPANIES_FILE) or {}
     items = data.get("companies", [])
     if not 0 <= index < len(items):
@@ -213,7 +213,7 @@ def toggle_source(index: int):
 
 
 @router.post("/api/sources/prune-health")
-def prune_orphaned_health(conn=Depends(_db_dep)):
+def prune_orphaned_health(_: str = Depends(require_admin), conn=Depends(_db_dep)):
     """Delete source_health rows for boards that are no longer in the config.
 
     When a source is removed (or was removed before delete cleaned up health), its last
@@ -236,7 +236,7 @@ class WhyEmptyProbe(BaseModel):
 
 
 @router.post("/api/sources/why-empty")
-def why_empty(body: WhyEmptyProbe):
+def why_empty(body: WhyEmptyProbe, _: str = Depends(require_admin)):
     """Fetch one source now and report which prefilter rule drops each job, so you can see
     WHY good-looking jobs never reach the feed. Nothing is saved. Mirrors the
     scripts.why_empty breakdown, but for a single source and returned as JSON."""
@@ -336,7 +336,7 @@ class NewSource(BaseModel):
 
 
 @router.post("/api/sources")
-def add_source(body: NewSource):
+def add_source(body: NewSource, _: str = Depends(require_admin)):
     from src.adapters.base import KNOWN_ATS
 
     name = body.name.strip()
@@ -360,7 +360,7 @@ def add_source(body: NewSource):
 
 
 @router.delete("/api/sources/{index}")
-def delete_source(index: int, conn=Depends(_db_dep)):
+def delete_source(index: int, _: str = Depends(require_admin), conn=Depends(_db_dep)):
     data = configio.read_yaml(COMPANIES_FILE) or {}
     items = data.get("companies", [])
     if not 0 <= index < len(items):

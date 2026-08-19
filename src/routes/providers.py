@@ -8,7 +8,8 @@ buttons that send a tiny prompt or a test message through the real path.
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from src.deps import _db_dep, _get_setting
+from src import store
+from src.deps import _db_dep, _get_setting, require_admin
 
 router = APIRouter()
 
@@ -26,12 +27,11 @@ class ModelUpdate(BaseModel):
 
 
 @router.post("/api/model")
-def set_model(body: ModelUpdate, conn=Depends(_db_dep)):
+def set_model(body: ModelUpdate, _: str = Depends(require_admin),
+              conn=Depends(_db_dep)):
     from src.scoring.rerank import set_preferred, get_model_state
     set_preferred(body.model)
-    conn.execute("INSERT INTO settings (key,value) VALUES ('scoring_model',?) "
-                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (body.model,))
-    conn.commit()
+    store.set_setting(conn, "scoring_model", body.model)
     return get_model_state()
 
 
@@ -49,11 +49,9 @@ class NotifyUpdate(BaseModel):
 
 
 @router.post("/api/notify")
-def set_notify(body: NotifyUpdate, conn=Depends(_db_dep)):
-    conn.execute("INSERT INTO settings (key,value) VALUES ('notify_enabled',?) "
-                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                 ("1" if body.enabled else "0",))
-    conn.commit()
+def set_notify(body: NotifyUpdate, _: str = Depends(require_admin),
+               conn=Depends(_db_dep)):
+    store.set_setting(conn, "notify_enabled", "1" if body.enabled else "0")
     return {"enabled": body.enabled}
 
 
@@ -127,7 +125,8 @@ class ProviderToggle(BaseModel):
 
 
 @router.post("/api/llm/providers/{name}/toggle")
-def llm_provider_toggle(name: str, body: ProviderToggle):
+def llm_provider_toggle(name: str, body: ProviderToggle,
+                        _: str = Depends(require_admin)):
     from src import llm
     from src.paths import LLM_PROVIDERS
     if name not in LLM_PROVIDERS:
@@ -141,7 +140,7 @@ class ProviderOrder(BaseModel):
 
 
 @router.post("/api/llm/providers/order")
-def llm_provider_order(body: ProviderOrder):
+def llm_provider_order(body: ProviderOrder, _: str = Depends(require_admin)):
     """Reorder the fallback chain (first = tried first)."""
     from src import llm
     llm.set_order(body.order)

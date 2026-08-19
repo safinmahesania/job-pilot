@@ -5,10 +5,11 @@ are editable from the frontend. `last_run_ts` is also persisted, which is what
 makes catch-up work: if the machine was off past the due time, the next loop
 tick after startup fires the run.
 """
-import sqlite3
 import threading
 import time
 from datetime import datetime, timedelta
+
+import psycopg
 
 from src import store, notify
 from src.paths import DEFAULT_RUN_INTERVAL_HOURS as DEFAULT_HOURS, SCHEDULER_POLL_SECONDS as POLL_SECONDS
@@ -165,7 +166,7 @@ def _followup_check():
     try:
         if store.get_setting(conn, "followup_notified_on", None) == today:
             return
-        message = followups.notification(conn)
+        message = followups.notification_all(conn)
         store.set_setting(conn, "followup_notified_on", today)
     finally:
         conn.close()
@@ -208,7 +209,7 @@ def _loop():
             try:
                 _followup_check()
                 _weekly_digest()
-            except sqlite3.OperationalError as e:
+            except psycopg.OperationalError as e:
                 if "locked" in str(e).lower():
                     log.info("[scheduler] maintenance write deferred (db busy) — "
                              "will retry next poll")

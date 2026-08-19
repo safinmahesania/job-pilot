@@ -95,27 +95,40 @@ def summary(conn) -> dict:
 
 
 def week_stats(conn) -> dict:
-    """Everything the weekly digest needs, in one place."""
-    from src import followups
+    """Everything the weekly digest needs, in one place.
+
+    The digest goes to a single Telegram channel, so these are system-wide: jobs
+    fetched into the shared pool this week, and application activity summed across
+    every user's feed (user_jobs). Per-user digests would need per-user notification
+    routing, which isn't wired up yet.
+    """
+    from src.paths import FOLLOWUP_FIRST_DAYS
 
     def one(sql, *args):
         return conn.execute(sql, args).fetchone()[0]
 
-    week = "-7 days"
     return {
         "new_jobs": one(
-            "SELECT COUNT(*) FROM jobs WHERE fetched_at >= datetime('now', ?)",
-            week),
+            "SELECT COUNT(*) FROM jobs "
+            "WHERE fetched_at >= now() - interval '7 days'"),
         "applied": one(
-            "SELECT COUNT(*) FROM jobs WHERE status='applied' "
-            "AND applied_on >= date('now', ?)", week),
-        "saved": one("SELECT COUNT(*) FROM jobs WHERE status='saved'"),
-        "dismissed": one("SELECT COUNT(*) FROM jobs WHERE status='dismissed'"),
+            "SELECT COUNT(*) FROM user_jobs WHERE status='applied' "
+            "AND applied_on >= (CURRENT_DATE - 7)"),
+        "saved": one("SELECT COUNT(*) FROM user_jobs WHERE status='saved'"),
+        "dismissed": one("SELECT COUNT(*) FROM user_jobs WHERE status='dismissed'"),
         "runs": one(
-            "SELECT COUNT(*) FROM runs WHERE started_at >= datetime('now', ?)",
-            week),
+            "SELECT COUNT(*) FROM runs "
+            "WHERE started_at >= now() - interval '7 days'"),
         "unreviewed": one(
-            "SELECT COUNT(*) FROM jobs WHERE status='surfaced' AND score IS NOT NULL"),
-        "followups_due": followups.summary(conn)["total"],
+            "SELECT COUNT(*) FROM user_jobs "
+            "WHERE status='surfaced' AND score IS NOT NULL"),
+        # System-wide first-stage follow-ups due (approximation of the per-user rule).
+        "followups_due": one(
+            "SELECT COUNT(*) FROM user_jobs "
+            "WHERE status='applied' AND applied_on IS NOT NULL "
+            "AND followed_up_on IS NULL "
+            "AND (followup_snooze IS NULL OR followup_snooze < now()) "
+            "AND applied_on <= now() - (? || ' days')::interval",
+            FOLLOWUP_FIRST_DAYS),
         "broken_boards": summary(conn)["broken"],
     }

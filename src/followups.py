@@ -174,3 +174,18 @@ def notification(conn, user_id) -> str | None:
     if len(items) > 8:
         lines.append(f"…and {len(items) - 8} more")
     return "\n".join(lines)
+
+
+def notification_all(conn) -> str | None:
+    """System-wide daily follow-up ping for the single Telegram channel.
+
+    Per-user follow-up messages would need per-user notification routing; until
+    that exists, the scheduler sends one combined count across all users.
+    """
+    uids = [r[0] for r in conn.execute(
+        "SELECT DISTINCT user_id FROM user_jobs WHERE status='applied'"
+    ).fetchall()]
+    total = sum(summary(conn, uid)["total"] for uid in uids)
+    if not total:
+        return None
+    return f"📮 {total} follow-up{'s' if total != 1 else ''} due"

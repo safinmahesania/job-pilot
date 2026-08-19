@@ -8,7 +8,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from src import scheduler
 from src.deps import (_db_dep)
-from src.logs import log
 from src import __version__
 from src.env import load_env
 load_env()
@@ -170,28 +169,10 @@ def source_health(conn=Depends(_db_dep)):
 
 @app.on_event("startup")
 def _startup():
-    # Bring the database up to date before anything can query it.
-    #
-    # Every schema change used to need `python data/init_db.py` run by hand, and
-    # forgetting it did not produce a helpful message — it produced a 500 from
-    # deep inside a query, on whichever endpoint happened to touch the new column
-    # first. The app appeared to be broken rather than out of date.
-    #
-    # The migration is idempotent and takes milliseconds on an up-to-date
-    # database, so there is no reason not to simply do it. `init_db.py` still
-    # exists for a fresh clone.
-    try:
-        import sys
-        from pathlib import Path
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-        from data.init_db import main as migrate
-        migrate()
-    except Exception as e:
-        # Never take the server down over this — a failed migration should be
-        # loud, not fatal. The endpoints that need the new columns will fail
-        # clearly, and the reason is right here in the log.
-        log.error("[startup] schema migration failed: %s", e)
-
+    # Schema is managed in Supabase (Postgres) now, not by a local SQLite migration.
+    # The old startup step ran data/init_db.py to bring a SQLite file up to date;
+    # under Postgres the schema is applied once in the Supabase SQL editor, so there
+    # is nothing to migrate here on boot.
     scheduler.start()
 
 

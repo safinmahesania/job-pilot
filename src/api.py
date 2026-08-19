@@ -1,8 +1,7 @@
 """FastAPI backend for JobPilot — serves jobs, status updates, and the frontend."""
 from pathlib import Path
 import os
-import secrets
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
@@ -44,109 +43,27 @@ app.add_middleware(
     allow_origin_regex=r"chrome-extension://[a-p]{32}|moz-extension://[0-9a-f-]{36}",
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "x-jobpilot-key"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
-# ── A lock on the door ─────────────────────────────────────────────────────────
+# ── Public config for the browser client ──────────────────────────────────────
 #
-# This app has a person's phone number and home address in it, and a reset endpoint
-# that empties the database with no confirmation. On a public URL, the URL is not a
-# secret — bots sweep the whole internet — so "nobody knows the address" is not a
-# defence.
-#
-# Cloudflare Access sits in front of this and asks for a Google login before a
-# request ever reaches here. This is the second lock, in case Access is ever
-# misconfigured or the tunnel is pointed straight at the app: set JOBPILOT_PASSWORD
-# and every request must carry it.
-#
-# Unset, the gate is open — so local development, where the app is only ever on
-# localhost, is unchanged. It is the deploy step that sets the password.
-def _password() -> str:
-    """Read the password at request time, not import time.
+# Auth is Supabase now: every /api/* route verifies a Bearer JWT (see src/auth.py
+# and the current_user_id dependency), so there is no server-side password gate any
+# more. The frontend and the extension sign in with Supabase and send the token on
+# each call. Static files and this one endpoint answer without a token, so the login
+# screen can load and bootstrap the client.
+@app.get("/api/public-config")
+def public_config():
+    """The public Supabase settings the browser needs to start its auth client.
 
-    Bound at import, the gate would freeze whatever the environment held when
-    src.api was first imported — making it depend on import order and forcing a test
-    that sets the password to reload the whole module. Reading it per request costs
-    nothing and always reflects the environment as it is."""
-    return os.environ.get("JOBPILOT_PASSWORD", "").strip()
-
-# The extension calls the API from a chrome-extension:// origin and cannot carry a
-# cookie, so it authenticates with the same password as a header instead.
-_OPEN_PATHS = ("/api/health", "/healthz", "/api/version")
-
-
-@app.middleware("http")
-async def _gate(request: Request, call_next):
-    # The audit found the previous version of this backwards, and it is worth writing
-    # down so it does not come back.
-    #
-    # It trusted "the request arrived on localhost" as proof the request was local.
-    # But cloudflared connects to the app ON localhost: every tunnel request arrives
-    # from 127.0.0.1. So the rule was not "trust the extension", it was "trust
-    # anything coming through the tunnel" — the exact opposite of the point. Stripping
-    # one forwarded header opened the gate onto /api/maint/reset.
-    #
-    # There is no network fact that distinguishes the owner from an attacker here;
-    # both are on the far side of the same tunnel. Only the password does. So no IP is
-    # trusted. Proof is the cookie (a browser that logged in) or the header (the
-    # extension, carrying the key on every call). Nothing else gets in.
-    password = _password()
-    if not password:
-        return await call_next(request)
-
-    path = request.url.path
-
-    # A tiny, fixed set of endpoints that must answer before login: the health check
-    # a monitor hits, and the login form and its POST.
-    if path in _OPEN_PATHS or path in ("/login", "/api/login"):
-        return await call_next(request)
-
-    cookie = request.cookies.get("jp_auth", "")
-    header = request.headers.get("x-jobpilot-key", "")
-    if secrets.compare_digest(cookie, password) or \
-       secrets.compare_digest(header, password):
-        return await call_next(request)
-
-    # A browser asking for a page gets the login screen; anything else gets a 401.
-    if path.startswith("/api/"):
-        return Response('{"detail":"unauthorized"}', status_code=401,
-                        media_type="application/json")
-    return Response(_LOGIN_HTML, status_code=401, media_type="text/html")
-
-
-_LOGIN_HTML = """<!doctype html><html><head><meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1">
-<title>JobPilot</title>
-<style>body{font-family:system-ui;background:#0f1115;color:#e7e7e7;display:grid;
-place-items:center;height:100vh;margin:0}form{background:#1a1d24;padding:2rem;
-border-radius:12px;width:min(90vw,320px)}h1{font-size:1rem;margin:0 0 1rem}
-input{width:100%;box-sizing:border-box;padding:.7rem;border-radius:8px;border:1px
-solid #333;background:#0f1115;color:#e7e7e7;margin-bottom:.8rem}button{width:100%;
-padding:.7rem;border:0;border-radius:8px;background:#c9a227;color:#0f1115;
-font-weight:600;cursor:pointer}</style></head><body>
-<form method=post action=/api/login>
-<h1>JobPilot</h1>
-<input type=password name=password placeholder=Password autofocus>
-<button>Enter</button></form></body></html>"""
-
-
-@app.post("/api/login")
-async def _login(request: Request):
-    form = await request.form()
-    password = _password()
-    if password and secrets.compare_digest(str(form.get("password", "")), password):
-        r = Response(status_code=303)
-        r.headers["Location"] = "/"
-        # Session cookie, http-only, and marked secure so it only ever travels over
-        # HTTPS — which the tunnel always is.
-        r.set_cookie("jp_auth", password, httponly=True, secure=True,
-                     samesite="lax", max_age=60 * 60 * 24 * 30)
-        return r
-    r = Response(_LOGIN_HTML, status_code=401, media_type="text/html")
-    return r
-
-
+    Both values are public by design — the anon key is meant to ship to browsers;
+    row-level security and JWT verification are what actually protect the data."""
+    return {
+        "supabase_url": os.environ.get("SUPABASE_URL", ""),
+        "supabase_anon_key": os.environ.get("SUPABASE_ANON_KEY", ""),
+    }
 
 
 # ---- pipeline run state (in-memory) ----

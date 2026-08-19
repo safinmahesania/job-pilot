@@ -16,22 +16,32 @@ import jwt
 from fastapi import Header, HTTPException
 from jwt import PyJWKClient
 
-_SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
-_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET")
-_JWKS_URL = (f"{_SUPABASE_URL}/auth/v1/.well-known/jwks.json"
-             if _SUPABASE_URL else None)
-
+# Environment is read at request time, not import time: src.api imports this module
+# (via src.deps) BEFORE it calls load_env(), so anything bound at import would freeze
+# the empty pre-.env values and every asymmetric verify would fail with a missing URL.
 _jwks_client: PyJWKClient | None = None
+_jwks_client_url: str | None = None
+
+
+def _supabase_url() -> str:
+    return os.environ.get("SUPABASE_URL", "").rstrip("/")
+
+
+def _jwt_secret() -> str | None:
+    return os.environ.get("SUPABASE_JWT_SECRET")
 
 
 def _jwks() -> PyJWKClient:
-    """Lazily build the JWKS client. It caches keys in memory, so the Auth server
-    isn't in the hot path of every request."""
-    global _jwks_client
-    if _jwks_client is None:
-        if not _JWKS_URL:
-            raise RuntimeError("SUPABASE_URL is not set — cannot verify asymmetric JWTs.")
-        _jwks_client = PyJWKClient(_JWKS_URL)
+    """Lazily build (and cache) the JWKS client for the current SUPABASE_URL. Keys
+    are cached in memory, so the Auth server isn't in the hot path of every request."""
+    global _jwks_client, _jwks_client_url
+    url = _supabase_url()
+    if not url:
+        raise RuntimeError("SUPABASE_URL is not set — cannot verify asymmetric JWTs.")
+    jwks_url = f"{url}/auth/v1/.well-known/jwks.json"
+    if _jwks_client is None or _jwks_client_url != jwks_url:
+        _jwks_client = PyJWKClient(jwks_url)
+        _jwks_client_url = jwks_url
     return _jwks_client
 
 
@@ -43,9 +53,10 @@ def verify_token(token: str) -> dict:
     """
     alg = jwt.get_unverified_header(token).get("alg", "")
     if alg == "HS256":
-        if not _JWT_SECRET:
+        secret = _jwt_secret()
+        if not secret:
             raise RuntimeError("SUPABASE_JWT_SECRET is not set — cannot verify HS256 JWTs.")
-        return jwt.decode(token, _JWT_SECRET, algorithms=["HS256"],
+        return jwt.decode(token, secret, algorithms=["HS256"],
                           options={"verify_aud": False})
     # Asymmetric: fetch the matching public key from the project's JWKS.
     signing_key = _jwks().get_signing_key_from_jwt(token)

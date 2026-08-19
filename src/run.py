@@ -1,30 +1,29 @@
-"""The core pipeline: fetch -> normalise -> prefilter -> AI score -> store.
+"""The core pipeline: fetch -> normalise -> junk-check -> enrich -> extract -> pool.
 
 Run it directly with ``python -m src.run`` for a one-off pass, or let the
 in-app scheduler (``src.scheduler``) trigger it periodically. Each pass records
 a row in the ``runs`` table and, if configured, sends a Telegram summary.
 
-Boards are fetched in parallel and jobs are processed serially. That split is
-deliberate: fetching is 70-odd different hosts serving a JSON file, where waiting
-one at a time is minutes of pure network latency for nothing — while processing
-writes to SQLite, which has a single writer, and is bottlenecked on the model
-anyway.
+In the multi-user model this pipeline is ADMIN-side and populates the SHARED
+jobs pool only. It scores nothing and drops nothing but true junk — a posting
+that is useless to one person may be perfect for another, so per-user filtering
+and scoring happen later, when a user builds their feed. Extraction still runs
+here (once per posting, globally) so the structured fields are ready for that
+per-user filter; it can be turned off for a cheaper fetch and backfilled later.
+
+Boards are fetched in parallel and jobs are processed serially: fetching is 70-odd
+hosts serving a JSON file, where waiting one at a time is minutes of network
+latency for nothing.
 """
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src.config import load_companies, load_profile
+from src.config import load_companies
 from src.adapters.base import get_adapter
 from src.normalize import normalize, is_valid
-from src.scoring.prefilter import passes
-from src.scoring.rerank import (
-    score_job, reset_model_state, set_preferred, get_model_state,
-    build_calibration,
-)
 from src import store, notify, enrich, language, extract
-from src.paths import (DEFAULT_SCORE_THRESHOLD, NOTIFY_MIN_SCORE,
-                       FETCH_CONCURRENCY, MIN_DESCRIPTION_CHARS)
+from src.paths import FETCH_CONCURRENCY
 from src.logs import log
 from src.env import load_env
 
@@ -49,9 +48,7 @@ def _fetch_one(company: dict) -> tuple[dict, list[dict], dict]:
 
 
 #: What the run is doing right now, read by /api/run/status so the UI can say more
-#: than "running". Plain dict rather than a queue: there is one pipeline at a time, the
-#: writer is this module and the readers only read, so the worst a torn read can do is
-#: show a count one job out of date.
+#: than "running". Plain dict rather than a queue: there is one pipeline at a time.
 PROGRESS = {"active": False, "phase": "", "source": "",
             "done": 0, "total": 0, "started": 0.0}
 
@@ -68,13 +65,10 @@ def fetch_all(companies: list[dict],
               respect_active: bool = True) -> list[tuple[dict, list[dict], dict]]:
     """Fetch every active board at once.
 
-    Concurrency is capped (FETCH_CONCURRENCY) because a dozen of our companies
-    share a single ATS host — hammering it would be both rude and likely to earn
-    a rate limit. With the cap, a run takes about as long as the slowest board
-    rather than the sum of all of them.
-
-    respect_active=False is for a selective run, where the caller has already picked
-    the exact sources by name and wants them fetched even if their active flag is off.
+    Concurrency is capped (FETCH_CONCURRENCY) because a dozen companies share a
+    single ATS host — hammering it would be both rude and likely to earn a rate
+    limit. respect_active=False is for a selective run, where the caller picked the
+    exact sources by name and wants them fetched even if their active flag is off.
     """
     active = [c for c in companies if c.get("active")] if respect_active else companies
     if not active:
@@ -98,43 +92,26 @@ def fetch_all(companies: list[dict],
 def run(only: list[str] | None = None):
     load_env()
     start_ts = time.time()
-    new_scored = []                 # jobs worth surfacing in the run summary
 
-    profile = load_profile()
     companies = load_companies()
 
     # Selective run: if `only` is given, fetch just those sources (matched by name),
-    # ignoring their active flag — so you can pull from one or two boards on demand
-    # without disturbing the set that a full scheduled run uses. A full run passes
-    # only=None and behaves exactly as before (every active source).
+    # ignoring their active flag — so you can pull from one or two boards on demand.
     if only:
         wanted = {n.strip().lower() for n in only}
         companies = [c for c in companies
                      if (c.get("name") or "").strip().lower() in wanted]
     conn = store.connect()
 
-    # Scoring model: honour the saved preference, but always start the run on it
-    # (a per-job fallback may switch to the smaller model mid-run; reset undoes it).
-    saved_model = store.get_setting(conn, "scoring_model", None)
-    if saved_model:
-        set_preferred(saved_model)
-    reset_model_state()
-
-    # Scrape-time AI: when off, jobs are still fetched, filtered and stored — they
-    # just aren't scored (they land unscored instead of in the ranked feed).
-    scoring_on = store.get_setting(conn, "scoring_enabled", "1") == "1"
+    # Extraction runs inline unless an admin turns it off (then a backfill fills the
+    # structured fields later). It's independent of any per-user scoring.
+    extract_on = store.get_setting(conn, "extraction_enabled", "1") == "1"
 
     stats = {"fetched": 0, "seen": 0, "dropped": 0, "trashed": 0, "kept": 0,
-             "errors": 0, "no_description": 0, "enriched": 0, "enrich_missed": 0,
-             "french_only": 0}
+             "errors": 0, "enriched": 0, "enrich_missed": 0, "french_only": 0,
+             "extracted": 0}
     seen_this_run = set()           # guards against duplicates within one pass
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    # Your own past decisions, shown to the model as calibration. Built once for
-    # the run: it needs a database read, and it is identical for every job.
-    calibration = build_calibration() if scoring_on else ""
-    if calibration:
-        print("  scoring is calibrated against your saved/dismissed history")
 
     # ── Fetch every board in parallel ───────────────────────────────────────
     fetch_started = time.time()
@@ -144,179 +121,101 @@ def run(only: list[str] | None = None):
     print(f"  fetched {len(fetched)} sources in {time.time() - fetch_started:.1f}s")
 
     # ── Then process serially ───────────────────────────────────────────────
-    # Now the size of the work is known, so the UI can show a real proportion rather
-    # than a spinner that could mean thirty seconds or twenty minutes.
-    _progress(phase="Scoring", total=sum(len(r) for _, r, _ in fetched))
+    _progress(phase="Processing", total=sum(len(r) for _, r, _ in fetched))
 
     for company, raw_jobs, src_stat in fetched:
         _progress(source=company.get("name", ""))
         if src_stat["status"] == "error":
             stats["errors"] += 1
-            # Its own transaction, like everything else here. save_source_health and
-            # record_source_error write but do not commit, so left loose they open a
-            # write the run never closes until the very end — which is the whole
-            # "database is locked" problem this file already fixed for the job loop,
-            # reappearing on the path nobody retested.
             with conn:
                 store.save_source_health(conn, company["name"], company.get("ats"),
                                          src_stat, now)
-                # A board that failed to fetch is worth keeping too — not raised (the
-                # pool already swallowed it so one broken board cannot stop the run),
-                # but recorded, so "why did nothing come from talent.com last night"
-                # has an answer.
                 store.record_source_error(
                     conn, f"fetch:{company['name']}",
                     src_stat.get("error") or "fetch failed")
             continue
 
         for raw in raw_jobs:
-            # One transaction per job, not one for the whole run. Scoring calls a model
-            # per job and a full pass takes minutes; wrapped in a single transaction that
-            # is minutes during which SQLite's write lock is held and nothing else can
-            # write — saving an edit in the UI waits out busy_timeout and fails with
-            # "database is locked", which looks like a bug in the edit and is really the
-            # run next door.
-            #
-            # `with conn:` is the right shape rather than a bare commit: it commits when
-            # the block is left normally (including the `continue`s below) and rolls back
-            # if the body raises, so a job is never half-written. A run that dies partway
-            # now keeps the jobs it had already finished.
+            # One transaction per job (not one for the whole run): the run can take
+            # minutes and a single long-held write lock would block the UI. `with
+            # conn:` commits on a clean exit (including the `continue`s) and rolls
+            # back if the body raises, so a job is never half-written.
             with conn:
                 _progress(done=PROGRESS["done"] + 1)
                 stats["fetched"] += 1
                 job = normalize(raw)
                 h = job["dedupe_hash"]
 
-                # Skip anything already processed, this run or a previous one.
+                # Skip anything already in the pool, this run or a previous one.
                 if store.already_seen(conn, h) or h in seen_this_run:
                     stats["seen"] += 1
                     continue
                 seen_this_run.add(h)
 
-                # Cheap rule checks before spending a model call.
+                # Drop only true junk — no title / no apply link / no description.
+                # Everything else is kept: the pool is shared, and per-user filtering
+                # decides relevance later.
                 if not is_valid(job):
                     store.mark_seen(conn, h, "dropped")
                     stats["dropped"] += 1
                     continue
-                if not passes(job, profile):
-                    store.mark_seen(conn, h, "dropped")
-                    stats["dropped"] += 1
-                    continue
 
-                # The expensive step (skipped when scrape-time AI is off).
-                if not scoring_on:
-                    # No enrichment on this path, so the snippet is all there is — tag it
-                    # from that. Good enough to flag French-only in the feed.
-                    job["language"] = language.detect(job.get("description"))
-                    if job["language"] == "fr":
-                        stats["french_only"] += 1
-                    job.update(score=None, skills_score=None, seniority_score=None,
-                               domain_score=None, rationale=None, flags=None)
-                    store.save_job(conn, job)
-                    store.mark_seen(conn, h, "kept")
-                    stats["kept"] += 1
-                    src_stat["kept"] += 1
-                    continue
-
-                # The snippet Adzuna gave is half a description, and scoring half a
-                # description is scoring half a job. This job has passed the fit filter,
-                # so it is one of the few worth the fetch — the hundreds the filter just
-                # dropped never reach here. Only Adzuna jobs whose link points at Adzuna,
-                # Lever or Greenhouse are fetched; anything else keeps its snippet and is
-                # skipped below by the no-description rule rather than scored on half.
-                if scoring_on and enrich.is_enrichable(job):
+                # Pull the full description where the listing only gave a snippet
+                # (Adzuna/Lever/Greenhouse links). A complete description helps every
+                # user's filter and the extraction below.
+                if enrich.is_enrichable(job):
                     if enrich.enrich_if_needed(job):
                         stats["enriched"] += 1
                     else:
-                        # Followed the link but the full text wasn't there — a
-                        # JS-rendered page (Workday, LinkedIn) that serves an empty
-                        # shell to a plain fetch, or an expired stub. The job keeps its
-                        # snippet and is skipped just below by the no-description rule.
                         stats["enrich_missed"] += 1
 
-                # Now the description is as complete as it will get, tag its language.
-                # A French-only posting is kept and scored — the model reads French — but
-                # flagged, so the feed shows which jobs expect French.
+                # Tag the posting's language (feed can flag French-only roles).
                 job["language"] = language.detect(job.get("description"))
                 if job["language"] == "fr":
                     stats["french_only"] += 1
 
-                # Pull the structured fields out of the description (work mode,
-                # requirements, benefits…). Independent of scoring: a failure here
-                # must not lose the job, so it's caught and the fields stay NULL —
-                # a backfill can fill them in later.
-                if scoring_on:
+                # Structured fields out of the description (work mode, requirements,
+                # tech stack…). Independent of scoring; a failure must not lose the
+                # job, so it's caught and the fields stay NULL for a later backfill.
+                if extract_on:
                     try:
                         ex = extract.extract(job)
                         if ex is not None:
                             job.update(ex.model_dump())
                             job["extracted_at"] = datetime.now().strftime(
                                 "%Y-%m-%d %H:%M:%S")
-                            stats["extracted"] = stats.get("extracted", 0) + 1
+                            stats["extracted"] += 1
                     except Exception as e:
                         store.record_error(conn, f"extract:{company['name']}", e)
 
-                result = score_job(job, profile, calibration)
-                if result is None:
-                    # Two different things arrive here. A job with no description was
-                    # deliberately not scored, and counting that as an error would
-                    # report a working run as a broken one — and inflate a number
-                    # people read to decide whether the model is misbehaving. A job
-                    # that HAS a description and still came back None is a real failure.
-                    if (len((job.get("description") or "").strip())
-                            < MIN_DESCRIPTION_CHARS):
-                        stats["no_description"] += 1
-                    else:
-                        stats["errors"] += 1
-                    continue
-
-                # Persist every scored job; the feed filters by threshold at read time.
-                job.update(score=result.overall, skills_score=result.skills_score,
-                           seniority_score=result.seniority_score,
-                           domain_score=result.domain_score,
-                           rationale=result.rationale, flags=None)
+                # Into the shared pool. No score, no status — that's per-user.
                 store.save_job(conn, job)
-
-                threshold = int(store.get_setting(conn, "score_threshold",
-                                                  DEFAULT_SCORE_THRESHOLD))
-                if result.overall >= threshold:
-                    store.mark_seen(conn, h, "kept", result.overall)
-                    stats["kept"] += 1
-                    src_stat["kept"] += 1
-                    if result.overall >= NOTIFY_MIN_SCORE:
-                        new_scored.append({"score": result.overall,
-                                           "title": job.get("title"),
-                                           "company": job.get("company")})
-                else:
-                    store.mark_seen(conn, h, "trashed", result.overall)
-                    stats["trashed"] += 1
+                store.mark_seen(conn, h, "kept")
+                stats["kept"] += 1
+                src_stat["kept"] += 1
 
         with conn:
             store.save_source_health(conn, company["name"], company.get("ats"),
                                      src_stat, now)
 
-    # Record this run in history — its own transaction, closed before returning so the
-    # write lock is never left held for the next reader to trip over.
+    # Record this run in history. trashed is always 0 now (no scoring at fetch).
     with conn:
         conn.execute(
             "INSERT INTO runs (kind, fetched, seen, dropped, trashed, kept, errors) "
-            "VALUES ('fetch', ?, ?, ?, ?, ?, ?)",
+            "VALUES ('fetch', ?, ?, ?, 0, ?, ?)",
             (stats["fetched"], stats["seen"], stats["dropped"],
-             stats["trashed"], stats["kept"], stats["errors"]),
+             stats["kept"], stats["errors"]),
         )
     conn.close()
 
-    # Telegram summary (a no-op if not configured or disabled).
-    new_scored.sort(key=lambda x: -x["score"])
-    notify.send(notify.run_summary(stats, time.time() - start_ts,
-                                   get_model_state()["active"], new_scored))
-
-    reset_model_state()             # leave the UI showing the preferred model
+    # Telegram summary (a no-op if not configured or disabled). No scoring, so no
+    # model name and no ranked new-jobs list.
+    notify.send(notify.run_summary(stats, time.time() - start_ts, "", []))
 
     print("\n=== Run summary ===")
     for k, v in stats.items():
-        print(f"  {k:10} {v}")
-    print(f"  {'elapsed':10} {time.time() - start_ts:.1f}s")
+        print(f"  {k:12} {v}")
+    print(f"  {'elapsed':12} {time.time() - start_ts:.1f}s")
 
 
 if __name__ == "__main__":

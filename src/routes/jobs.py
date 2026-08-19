@@ -40,106 +40,107 @@ def counts(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
 
 
 @router.get("/api/stats")
-def stats(conn=Depends(_db_dep)):
+def stats(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
+    """A personal dashboard: every metric is over the jobs served to THIS user.
+
+    Posting facts come from jobs (j.), the judgement — score, status, applied_on —
+    from user_jobs (uj.). Everything joins the two, filtered to the caller.
+    """
+    from datetime import date, timedelta
+
     threshold = int(_get_setting(conn, "score_threshold", 70))
-    q = lambda sql, *a: conn.execute(sql, a).fetchone()[0]
+    base = "FROM jobs j JOIN user_jobs uj ON uj.job_id = j.id WHERE uj.user_id = ?"
 
-    # funnel (status counts)
-    statuses = ["surfaced", "saved", "applied", "interview", "offer", "rejected", "dismissed"]
-    funnel = {s: q("SELECT COUNT(*) FROM jobs WHERE status=?", s) for s in statuses}
+    def scalar(select: str, extra: str = "", *a):
+        return conn.execute(f"SELECT {select} {base} {extra}",
+                            (user_id, *a)).fetchone()[0]
 
-    # volume
-    total = q("SELECT COUNT(*) FROM jobs")
-    avg_score = q("SELECT ROUND(AVG(score),1) FROM jobs") or 0
-    feed_size = q("SELECT COUNT(*) FROM jobs WHERE status='surfaced' AND score>=?", threshold)
+    # funnel (per-user status counts)
+    statuses = ["surfaced", "saved", "applied", "interview", "offer",
+                "rejected", "dismissed"]
+    funnel = {s: scalar("COUNT(*)", "AND uj.status=?", s) for s in statuses}
 
-    # score distribution
+    total = scalar("COUNT(*)")
+    avg_score = scalar("ROUND(AVG(uj.score)::numeric,1)") or 0
+    feed_size = scalar("COUNT(*)",
+                       f"AND uj.status='surfaced' AND uj.score>={threshold}")
+
     dist = {
-        "80+": q("SELECT COUNT(*) FROM jobs WHERE score>=80"),
-        "70-79": q("SELECT COUNT(*) FROM jobs WHERE score>=70 AND score<80"),
-        "60-69": q("SELECT COUNT(*) FROM jobs WHERE score>=60 AND score<70"),
-        "<60": q("SELECT COUNT(*) FROM jobs WHERE score<60"),
+        "80+": scalar("COUNT(*)", "AND uj.score>=80"),
+        "70-79": scalar("COUNT(*)", "AND uj.score>=70 AND uj.score<80"),
+        "60-69": scalar("COUNT(*)", "AND uj.score>=60 AND uj.score<70"),
+        "<60": scalar("COUNT(*)", "AND uj.score<60"),
     }
 
-    # source breakdown (from the jobs table: avg score + count per source)
     src_rows = conn.execute(
-        "SELECT source, COUNT(*) c, ROUND(AVG(score),1) avg FROM jobs "
-        "GROUP BY source ORDER BY c DESC"
-    ).fetchall()
+        f"SELECT j.source, COUNT(*) c, ROUND(AVG(uj.score)::numeric,1) avg {base} "
+        "GROUP BY j.source ORDER BY c DESC", (user_id,)).fetchall()
     sources = [dict(r) for r in src_rows]
 
-    # deadlines — next 14 days / expired (deadline is text, so date-compare is best-effort)
     deadline_rows = conn.execute(
-        "SELECT title, company, deadline FROM jobs "
-        "WHERE deadline IS NOT NULL AND deadline != '' ORDER BY deadline ASC LIMIT 10"
-    ).fetchall()
+        f"SELECT j.title, j.company, j.deadline {base} "
+        "AND j.deadline IS NOT NULL AND j.deadline != '' "
+        "ORDER BY j.deadline ASC LIMIT 10", (user_id,)).fetchall()
     deadlines = [dict(r) for r in deadline_rows]
 
-    # conversion rates
     def pct(a, b): return round(100 * a / b, 1) if b else 0
 
-    applied = funnel["applied"] + funnel["interview"] + funnel["offer"]  # applied and beyond
+    applied = funnel["applied"] + funnel["interview"] + funnel["offer"]
     rates = {
         "applied_of_total": pct(applied, total),
         "interview_of_applied": pct(funnel["interview"] + funnel["offer"], applied),
-        "offer_of_interview": pct(funnel["offer"], funnel["interview"] + funnel["offer"]),
+        "offer_of_interview": pct(funnel["offer"],
+                                  funnel["interview"] + funnel["offer"]),
     }
 
-    # ── Activity over the last 14 days: jobs fetched vs applications sent per day.
-    # A quick pulse of "am I actually working the pipeline".
-    activity_rows = conn.execute(
-        "SELECT date(fetched_at) d, COUNT(*) c FROM jobs "
-        "WHERE fetched_at >= date('now','-13 days') GROUP BY d ORDER BY d"
-    ).fetchall()
-    fetched_by_day = {r["d"]: r["c"] for r in activity_rows}
+    # Activity over the last 14 days: jobs served to me vs applications I sent.
+    served_rows = conn.execute(
+        f"SELECT (uj.served_at::date)::text d, COUNT(*) c {base} "
+        "AND uj.served_at >= (CURRENT_DATE - 13) GROUP BY d", (user_id,)).fetchall()
+    served_by_day = {r["d"]: r["c"] for r in served_rows}
     applied_rows = conn.execute(
-        "SELECT date(applied_on) d, COUNT(*) c FROM jobs "
-        "WHERE applied_on IS NOT NULL AND applied_on >= date('now','-13 days') GROUP BY d ORDER BY d"
-    ).fetchall()
+        f"SELECT (uj.applied_on::date)::text d, COUNT(*) c {base} "
+        "AND uj.applied_on IS NOT NULL AND uj.applied_on >= (CURRENT_DATE - 13) "
+        "GROUP BY d", (user_id,)).fetchall()
     applied_by_day = {r["d"]: r["c"] for r in applied_rows}
     activity = []
     for i in range(13, -1, -1):
-        day = conn.execute("SELECT date('now', ?)", (f"-{i} days",)).fetchone()[0]
-        activity.append({"date": day, "fetched": fetched_by_day.get(day, 0),
+        day = (date.today() - timedelta(days=i)).isoformat()
+        activity.append({"date": day, "fetched": served_by_day.get(day, 0),
                          "applied": applied_by_day.get(day, 0)})
 
-    # ── Work arrangement + job type + language mix (Canada roles are often bilingual,
-    # so language is genuinely useful signal here).
-    remote_ct = q("SELECT COUNT(*) FROM jobs WHERE remote=1")
-    onsite_ct = total - remote_ct
-    work_mix = {"remote": remote_ct, "onsite": onsite_ct}
+    remote_ct = scalar("COUNT(*)", "AND j.remote")
+    work_mix = {"remote": remote_ct, "onsite": total - remote_ct}
     type_rows = conn.execute(
-        "SELECT COALESCE(NULLIF(job_type,''),'unknown') t, COUNT(*) c FROM jobs "
-        "GROUP BY t ORDER BY c DESC"
-    ).fetchall()
+        f"SELECT COALESCE(NULLIF(j.job_type,''),'unknown') t, COUNT(*) c {base} "
+        "GROUP BY t ORDER BY c DESC", (user_id,)).fetchall()
     job_types = [dict(r) for r in type_rows]
     lang_rows = conn.execute(
-        "SELECT COALESCE(NULLIF(language,''),'unknown') l, COUNT(*) c FROM jobs "
-        "GROUP BY l ORDER BY c DESC"
-    ).fetchall()
+        f"SELECT COALESCE(NULLIF(j.language,''),'unknown') l, COUNT(*) c {base} "
+        "GROUP BY l ORDER BY c DESC", (user_id,)).fetchall()
     languages = [dict(r) for r in lang_rows]
 
-    # ── Salary: how many postings even disclose one, and the median-ish range.
-    sal_count = q("SELECT COUNT(*) FROM jobs WHERE salary_min IS NOT NULL AND salary_min>0")
+    sal_count = scalar("COUNT(*)", "AND j.salary_min IS NOT NULL AND j.salary_min>0")
     salary = {
         "disclosed": sal_count,
         "disclosed_pct": pct(sal_count, total),
-        "avg_min": q("SELECT ROUND(AVG(salary_min)) FROM jobs WHERE salary_min>0") or 0,
-        "avg_max": q("SELECT ROUND(AVG(salary_max)) FROM jobs WHERE salary_max>0") or 0,
+        "avg_min": scalar("ROUND(AVG(j.salary_min)::numeric)", "AND j.salary_min>0") or 0,
+        "avg_max": scalar("ROUND(AVG(j.salary_max)::numeric)", "AND j.salary_max>0") or 0,
     }
 
-    # ── Top companies by how many roles they've surfaced.
     comp_rows = conn.execute(
-        "SELECT company, COUNT(*) c, ROUND(AVG(score),1) avg FROM jobs "
-        "WHERE company IS NOT NULL AND company != '' GROUP BY company ORDER BY c DESC LIMIT 8"
-    ).fetchall()
+        f"SELECT j.company, COUNT(*) c, ROUND(AVG(uj.score)::numeric,1) avg {base} "
+        "AND j.company IS NOT NULL AND j.company != '' "
+        "GROUP BY j.company ORDER BY c DESC LIMIT 8", (user_id,)).fetchall()
     companies = [dict(r) for r in comp_rows]
 
-    # ── Average of each score component, to see what's driving (or dragging) the match.
     score_parts = {
-        "skills": q("SELECT ROUND(AVG(skills_score),1) FROM jobs WHERE skills_score IS NOT NULL") or 0,
-        "seniority": q("SELECT ROUND(AVG(seniority_score),1) FROM jobs WHERE seniority_score IS NOT NULL") or 0,
-        "domain": q("SELECT ROUND(AVG(domain_score),1) FROM jobs WHERE domain_score IS NOT NULL") or 0,
+        "skills": scalar("ROUND(AVG(uj.skills_score)::numeric,1)",
+                         "AND uj.skills_score IS NOT NULL") or 0,
+        "seniority": scalar("ROUND(AVG(uj.seniority_score)::numeric,1)",
+                            "AND uj.seniority_score IS NOT NULL") or 0,
+        "domain": scalar("ROUND(AVG(uj.domain_score)::numeric,1)",
+                         "AND uj.domain_score IS NOT NULL") or 0,
     }
 
     return {
@@ -223,7 +224,7 @@ def sweep_expired(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)
 
 
 @router.post("/api/jobs/{job_id}/status")
-    def set_status(job_id: int, body: StatusUpdate,
+def set_status(job_id: int, body: StatusUpdate,
                user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     if body.status not in ALLOWED_STATUS:
         raise HTTPException(400, f"invalid status: {body.status}")
@@ -307,22 +308,27 @@ class JobEdit(BaseModel):
 
 @router.patch("/api/jobs/{job_id}")
 def edit_job(job_id: int, body: JobEdit, defer: bool = False,
-              conn=Depends(_db_dep)):
+             user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Correct a job's fields by hand — for when a fetch grabbed the wrong text or
-    only half a description. Only the fields you actually send are changed; anything
-    left out keeps its current value."""
+    only half a description. Only the fields you actually send are changed.
+
+    Note: jobs is the SHARED pool, so an edit here changes the posting for everyone.
+    (This may become admin-only.) Re-scoring is per-user and being reworked, so it's
+    not run here; needs_reprocess flags whether the edit touched something a future
+    re-score would care about.
+    """
     exists = conn.execute("SELECT 1 FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not exists:
         raise HTTPException(404, "job not found")
 
-    # Only the fields the caller explicitly set — model_dump(exclude_unset) keeps this
-    # a true partial edit, so sending {"title": "..."} touches the title and nothing
-    # else. Every key is checked against the whitelist, so the column list can never
-    # be steered from the request body.
     changes = body.model_dump(exclude_unset=True)
     changes = {k: v for k, v in changes.items() if k in EDITABLE_FIELDS}
     if not changes:
         raise HTTPException(400, "no editable fields provided")
+
+    # remote is a boolean column in Postgres; the API still takes 0/1.
+    if "remote" in changes:
+        changes["remote"] = bool(changes["remote"])
 
     assignments = ", ".join(f"{col}=?" for col in changes)   # col names from whitelist
     values = list(changes.values())
@@ -330,39 +336,28 @@ def edit_job(job_id: int, body: JobEdit, defer: bool = False,
     conn.execute(f"UPDATE jobs SET {assignments} WHERE id=?", values)
     conn.commit()
 
-    # Re-score right away if the edit touched something the score actually depends on.
-    # A fixed title or a description that was half-fetched changes the match; a
-    # corrected apply link or a date does not, so those don't trigger the model. This
-    # is best-effort: if scoring is off, or every provider is down, the edit still
-    # stands — the job just keeps its old score (or stays unscored) rather than the
-    # correction being lost because the model wasn't reachable.
-    #
-    # `defer=true` hands that job back to the caller. The UI uses it so it can run the
-    # steps one at a time and name each one while it happens — and so it can skip
-    # scoring entirely when the filters have already removed the job. Callers that
-    # don't ask for it keep the original behaviour.
-    rescored = None
-    deferred = False
+    # Flag (don't run) a re-score: title/company/description changes affect the match.
     SCORING_FIELDS = {"title", "company", "description"}
-    scoring_on = _get_setting(conn, "scoring_enabled", "1") == "1"
-    if scoring_on and (set(changes) & SCORING_FIELDS):
-        if defer:
-            deferred = True
-        else:
-            rescored = _rescore_one(conn, job_id)
+    needs_reprocess = bool(set(changes) & SCORING_FIELDS)
 
     row = conn.execute(
-        "SELECT id, title, company, location, description, apply_url, source_url, "
-        "job_type, posted_date, deadline, remote, salary_min, salary_max, score "
-        "FROM jobs WHERE id=?", (job_id,)
+        "SELECT j.id, j.title, j.company, j.location, j.description, j.apply_url, "
+        "j.source_url, j.job_type, j.posted_date, j.deadline, j.remote, "
+        "j.salary_min, j.salary_max, uj.score "
+        "FROM jobs j "
+        "LEFT JOIN user_jobs uj ON uj.job_id = j.id AND uj.user_id = ? "
+        "WHERE j.id=?", (user_id, job_id)
     ).fetchone()
-    return {"updated": list(changes), "rescored": rescored,
-            "needs_reprocess": deferred, "job": dict(row)}
+    return {"updated": list(changes), "rescored": None,
+            "needs_reprocess": needs_reprocess, "job": dict(row)}
 
 
 @router.post("/api/jobs/{job_id}/recheck")
 def recheck_job(job_id: int, conn=Depends(_db_dep)):
     """Put an edited job back through the filters a fetched job goes through.
+
+    NOTE: pending the Stage 5 per-user scoring/prefilter rework — the prefilter is
+    per-user now, and the dismiss writes to user_jobs. Left here until that lands.
 
     A job that arrived with half a description was judged on half a description. Once
     you paste the real posting, the things that were unknowable become knowable — that
@@ -469,21 +464,23 @@ def _normalize_url(url: str) -> str:
 
 
 @router.get("/api/jobs/match")
-def match_job(url: str, conn=Depends(_db_dep)):
+def match_job(url: str, user_id: str = Depends(current_user_id),
+              conn=Depends(_db_dep)):
     """Find the job this browser page belongs to.
 
-    Confidence is deliberately conservative: a wrong match would attach the wrong
-    company's cover letter, which is far worse than attaching nothing. Anything
-    below an exact host+path match is returned as a *suggestion* for the user to
-    confirm, never as an automatic binding.
+    Matches against the whole pool by URL; the status returned is THIS user's
+    status for the job (null if it isn't in their feed). Confidence is conservative:
+    anything below an exact host+path match is a suggestion, never an auto-binding.
     """
     target = _normalize_url(url)
     if not target:
         return {"match": None, "candidates": []}
 
     rows = conn.execute(
-        "SELECT id, title, company, apply_url, source_url, status FROM jobs "
-        "WHERE apply_url IS NOT NULL OR source_url IS NOT NULL"
+        "SELECT j.id, j.title, j.company, j.apply_url, j.source_url, uj.status "
+        "FROM jobs j "
+        "LEFT JOIN user_jobs uj ON uj.job_id = j.id AND uj.user_id = ? "
+        "WHERE j.apply_url IS NOT NULL OR j.source_url IS NOT NULL", (user_id,)
     ).fetchall()
 
     exact, partial = [], []
@@ -516,20 +513,20 @@ def match_job(url: str, conn=Depends(_db_dep)):
 
 
 @router.get("/api/jobs/search")
-def search_jobs(q: str = "", limit: int = 10, conn=Depends(_db_dep)):
+def search_jobs(q: str = "", limit: int = 10,
+                user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Free-text search over title/company, for the extension's manual picker.
 
-    Only jobs still in play — the feed (surfaced) or saved — are offered. A dismissed or
-    already-applied job isn't something you're about to fill an application for, so
-    surfacing it in the picker only adds noise and risks binding the tab to the wrong one.
+    Only jobs still in play in THIS user's feed — surfaced or saved — are offered.
     """
     like = f"%{q.strip()}%"
     rows = conn.execute(
-        "SELECT id, title, company, status FROM jobs "
-        "WHERE (title LIKE ? OR company LIKE ?) "
-        "AND status IN ('surfaced', 'saved') "
-        "ORDER BY CASE status WHEN 'saved' THEN 0 ELSE 1 END, "
-        "score DESC LIMIT ?",
-        (like, like, limit),
+        "SELECT j.id, j.title, j.company, uj.status FROM jobs j "
+        "JOIN user_jobs uj ON uj.job_id = j.id "
+        "WHERE uj.user_id = ? AND (j.title LIKE ? OR j.company LIKE ?) "
+        "AND uj.status IN ('surfaced', 'saved') "
+        "ORDER BY CASE uj.status WHEN 'saved' THEN 0 ELSE 1 END, "
+        "uj.score DESC LIMIT ?",
+        (user_id, like, like, limit),
     ).fetchall()
     return [dict(r) for r in rows]

@@ -108,6 +108,15 @@ def migrate(sqlite_path: str, dsn: str, email: str | None, user_id: str | None,
     pg = psycopg.connect(dsn)
     try:
         with pg.transaction():
+            # Free-tier Postgres caps how long a single statement may run, and this
+            # migration does one long transaction of hundreds of inserts. Disable the
+            # per-statement timeout for this transaction so it isn't cancelled midway,
+            # and set a short lock timeout so that if another connection (a running
+            # app, or a previous half-finished migration) is holding the jobs table,
+            # we fail fast with a clear lock error instead of a confusing timeout.
+            pg.execute("SET LOCAL statement_timeout = 0")
+            pg.execute("SET LOCAL lock_timeout = '15s'")
+
             admin = _resolve_admin(pg, email, user_id)
 
             # ── jobs → pool (ids preserved) ──

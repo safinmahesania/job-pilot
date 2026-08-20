@@ -18,31 +18,37 @@ from src.paths import (
     FOLLOWUP_FIRST_DAYS, FOLLOWUP_SECOND_DAYS, FOLLOWUP_STALE_DAYS,
 )
 
+USER = "00000000-0000-0000-0000-000000000001"
+
 
 def days_ago(n: int) -> str:
     return (date.today() - timedelta(days=n)).isoformat()
 
 
 def applied(conn, company, days, status="applied", followed_up=None, snooze=None):
+    """Seed a pool job plus this user's judgement (status/dates live in user_jobs)."""
     conn.execute(
-        "INSERT INTO jobs (dedupe_hash, source, title, company, apply_url, "
-        "status, applied_on, followed_up_on, followup_snooze) "
-        "VALUES (?,?,?,?,?,?,?,?,?)",
-        (company, "test", "Backend Dev", company,
-         f"https://x/{company}", status, days_ago(days), followed_up, snooze),
-    )
+        "INSERT INTO jobs (dedupe_hash, source, title, company, apply_url) "
+        "VALUES (?,?,?,?,?)",
+        (company, "test", "Backend Dev", company, f"https://x/{company}"))
+    jid = conn.execute("SELECT id FROM jobs WHERE dedupe_hash=?", (company,)).fetchone()[0]
+    conn.execute(
+        "INSERT INTO user_jobs (user_id, job_id, status, applied_on, "
+        "followed_up_on, followup_snooze, served_at) VALUES (?,?,?,?,?,?, now())",
+        (USER, jid, status, days_ago(days), followed_up, snooze))
     conn.commit()
+    return jid
 
 
 class TestWhenAFollowUpIsDue:
     def test_not_before_the_first_window(self, conn):
         applied(conn, "Shopify", FOLLOWUP_FIRST_DAYS - 1)
-        assert followups.due(conn) == []
+        assert followups.due(conn, USER) == []
 
     def test_due_once_the_window_passes(self, conn):
         applied(conn, "Shopify", FOLLOWUP_FIRST_DAYS)
 
-        items = followups.due(conn)
+        items = followups.due(conn, USER)
 
         assert len(items) == 1
         assert items[0]["stage"] == "first"
@@ -52,21 +58,21 @@ class TestWhenAFollowUpIsDue:
         applied(conn, "Shopify", FOLLOWUP_FIRST_DAYS + FOLLOWUP_SECOND_DAYS,
                 followed_up=days_ago(FOLLOWUP_SECOND_DAYS))
 
-        items = followups.due(conn)
+        items = followups.due(conn, USER)
 
         assert items[0]["stage"] == "second"
 
     def test_no_second_nudge_before_its_window(self, conn):
         applied(conn, "Shopify", FOLLOWUP_FIRST_DAYS + 1,
                 followed_up=days_ago(1))
-        assert followups.due(conn) == []
+        assert followups.due(conn, USER) == []
 
     def test_past_the_stale_mark_it_stops_chasing(self, conn):
         """A month of silence is an answer. Saying so is more useful than another
         reminder to chase."""
         applied(conn, "Shopify", FOLLOWUP_STALE_DAYS + 5)
 
-        items = followups.due(conn)
+        items = followups.due(conn, USER)
 
         assert items[0]["stage"] == "stale"
         assert "close it out" in items[0]["reason"]
@@ -79,52 +85,53 @@ class TestWhatItLeavesAlone:
         """An interview is a live conversation; a rejection is over. Neither wants
         a reminder."""
         applied(conn, "Shopify", 30, status=status)
-        assert followups.due(conn) == []
+        assert followups.due(conn, USER) == []
 
     def test_a_snoozed_job_stays_quiet(self, conn):
         applied(conn, "Shopify", FOLLOWUP_FIRST_DAYS + 5,
                 snooze=(date.today() + timedelta(days=3)).isoformat())
-        assert followups.due(conn) == []
+        assert followups.due(conn, USER) == []
 
     def test_but_it_comes_back_when_the_snooze_expires(self, conn):
         applied(conn, "Shopify", FOLLOWUP_FIRST_DAYS + 5,
                 snooze=days_ago(1))
-        assert len(followups.due(conn)) == 1
+        assert len(followups.due(conn, USER)) == 1
 
     def test_a_job_with_no_applied_date_is_skipped(self, conn):
-        conn.execute(
-            "INSERT INTO jobs (dedupe_hash, source, title, company, status) "
-            "VALUES ('x','test','Dev','Shopify','applied')"
-        )
+        conn.execute("INSERT INTO jobs (dedupe_hash, source, title, company) "
+                     "VALUES ('x','test','Dev','Shopify')")
+        jid = conn.execute("SELECT id FROM jobs WHERE dedupe_hash='x'").fetchone()[0]
+        conn.execute("INSERT INTO user_jobs (user_id, job_id, status, served_at) "
+                     "VALUES (?,?, 'applied', now())", (USER, jid))
         conn.commit()
-        assert followups.due(conn) == []
+        assert followups.due(conn, USER) == []
 
 
 class TestActions:
     def test_marking_it_done_restarts_the_clock(self, conn):
         applied(conn, "Shopify", FOLLOWUP_FIRST_DAYS)
-        job_id = followups.due(conn)[0]["id"]
+        job_id = followups.due(conn, USER)[0]["id"]
 
-        assert followups.mark_followed_up(conn, job_id)
+        assert followups.mark_followed_up(conn, USER, job_id)
 
-        assert followups.due(conn) == []          # not due again for a while
-        row = conn.execute("SELECT followed_up_on FROM jobs WHERE id=?",
-                           (job_id,)).fetchone()
-        assert row[0] == date.today().isoformat()
+        assert followups.due(conn, USER) == []          # not due again for a while
+        row = conn.execute("SELECT followed_up_on FROM user_jobs "
+                           "WHERE user_id=? AND job_id=?", (USER, job_id)).fetchone()
+        assert str(row[0])[:10] == date.today().isoformat()
 
     def test_snoozing_pushes_it_out(self, conn):
         applied(conn, "Shopify", FOLLOWUP_FIRST_DAYS)
-        job_id = followups.due(conn)[0]["id"]
+        job_id = followups.due(conn, USER)[0]["id"]
 
-        assert followups.snooze(conn, job_id, days=7)
+        assert followups.snooze(conn, USER, job_id, days=7)
 
-        assert followups.due(conn) == []
+        assert followups.due(conn, USER) == []
 
     def test_marking_a_job_that_is_not_applied_does_nothing(self, conn):
         applied(conn, "Shopify", 10, status="saved")
         job_id = conn.execute("SELECT id FROM jobs").fetchone()[0]
 
-        assert followups.mark_followed_up(conn, job_id) is False
+        assert followups.mark_followed_up(conn, USER, job_id) is False
 
 
 class TestOrderingAndSummary:
@@ -132,7 +139,7 @@ class TestOrderingAndSummary:
         applied(conn, "Recent", FOLLOWUP_FIRST_DAYS)
         applied(conn, "Ancient", FOLLOWUP_FIRST_DAYS + 20)
 
-        items = followups.due(conn)
+        items = followups.due(conn, USER)
 
         assert items[0]["company"] == "Ancient"
 
@@ -142,19 +149,19 @@ class TestOrderingAndSummary:
                 followed_up=days_ago(FOLLOWUP_SECOND_DAYS))
         applied(conn, "Stale", FOLLOWUP_STALE_DAYS + 5)
 
-        summary = followups.summary(conn)
+        summary = followups.summary(conn, USER)
 
         assert summary == {"total": 3, "first": 1, "second": 1, "stale": 1}
 
 
 class TestNotification:
     def test_nothing_due_means_no_message(self, conn):
-        assert followups.notification(conn) is None
+        assert followups.notification(conn, USER) is None
 
     def test_the_message_names_the_jobs(self, conn):
         applied(conn, "Shopify", FOLLOWUP_FIRST_DAYS)
 
-        message = followups.notification(conn)
+        message = followups.notification(conn, USER)
 
         assert "Shopify" in message
         assert "1 follow-up due" in message
@@ -164,7 +171,7 @@ class TestNotification:
         for i in range(12):
             applied(conn, f"Co{i}", FOLLOWUP_FIRST_DAYS + i)
 
-        message = followups.notification(conn)
+        message = followups.notification(conn, USER)
 
         assert "and 4 more" in message
         assert len(message.splitlines()) <= 10

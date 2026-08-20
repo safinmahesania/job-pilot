@@ -35,7 +35,11 @@
       <i class="ti ti-bell text-xl"></i>
       <span x-show="unseenCount > 0" x-cloak class="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center" x-text="unseenCount > 9 ? '9+' : unseenCount"></span>
     </button>
-    <button @click="runNow()" :disabled="running" class="h-8 px-3 rounded-md bg-brand text-white text-[13px] flex items-center gap-1 disabled:opacity-50">
+    <button @click="getNewJobs()" :disabled="gettingNew || running" class="h-8 px-3 rounded-md border border-brand text-brand text-[13px] flex items-center gap-1 disabled:opacity-50" title="Score the pool into your feed">
+      <i class="ti" :class="gettingNew ? 'ti-loader-2 animate-spin' : 'ti-sparkles'"></i>
+      <span x-text="gettingNew ? 'Getting…' : 'Get jobs'"></span>
+    </button>
+    <button @click="runNow()" :disabled="running" x-show="adminMode" class="h-8 px-3 rounded-md bg-brand text-white text-[13px] flex items-center gap-1 disabled:opacity-50">
       <i class="ti" :class="running ? 'ti-loader-2 animate-spin' : 'ti-player-play'"></i>
       <span x-text="running ? 'Running' : 'Run'"></span>
     </button>
@@ -137,9 +141,13 @@
         <span class="flex-1 text-left" x-text="adminMode ? 'Admin mode on' : 'Admin mode'"></span>
         <div class="sw shrink-0" :class="adminMode ? 'on' : 'off'" style="transform:scale(.8)"><span></span></div>
       </button>
-      <button @click="runNow()" :disabled="running" class="w-full h-9 rounded-lg bg-brand text-white text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
+      <button @click="getNewJobs()" :disabled="gettingNew || running" class="w-full h-9 rounded-lg bg-brand text-white text-sm flex items-center justify-center gap-1.5 disabled:opacity-50" title="Score the pool into your feed">
+        <i class="ti" :class="gettingNew ? 'ti-loader-2 animate-spin' : 'ti-sparkles'"></i>
+        <span x-text="gettingNew ? 'Getting new jobs…' : 'Get new jobs'"></span>
+      </button>
+      <button @click="runNow()" :disabled="running" x-show="adminMode" class="w-full h-9 mt-2 rounded-lg border border-brand text-brand text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
         <i class="ti" :class="running ? 'ti-loader-2 animate-spin' : 'ti-player-play'"></i>
-        <span x-text="running ? 'Running…' : 'Run now'"></span>
+        <span x-text="running ? 'Running…' : 'Run fetch'"></span>
       </button>
       <div class="text-[11px] text-gray-400 text-center mt-2 leading-relaxed">
         <div x-show="lastRun">Last: <span x-text="lastRun"></span></div>

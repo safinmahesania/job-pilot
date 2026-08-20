@@ -27,7 +27,7 @@ function jobpilot() {
     // The run panel starts collapsed. The phase and a percentage are what you check
     // in passing; the source, counts and model are what you open it for.
     runPanelOpen: false,
-    running: false, lastRun: null, nextRun: null, threshold: 70,
+    running: false, gettingNew: false, lastRun: null, nextRun: null, threshold: 70,
     sort: 'score', source: 'all', sources: [],
     // Extra feed filters. dateFilter: how recently the job was fetched. seenFilter:
     // whether you've opened it yet. Both default to no filtering.
@@ -1401,7 +1401,40 @@ function jobpilot() {
       this.poll();
     },
 
-    // ── Selective run: pick sources, fetch just those (active state untouched) ──
+    // ── Get new jobs: score the shared pool into THIS user's feed ──
+    // Distinct from Run (which is the admin fetch that fills the pool). This is the
+    // everyday action: it pulls the recent pool jobs you haven't seen, filters them
+    // against your profile, scores the survivors, and drops them into your feed.
+    async getNewJobs() {
+      if (this.gettingNew) return;
+      this.gettingNew = true;
+      this.blocking = { label: 'Finding and scoring new jobs for you…' };
+      try {
+        const r = await fetch('/api/jobs/get-new', { method: 'POST' });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { this.showSnack(d.detail || 'Could not get new jobs', 'error'); return; }
+        if (d.needs_profile) {
+          this.showSnack('Set up your profile first, then get new jobs', 'error');
+          this.go('profile');
+          return;
+        }
+        let msg;
+        if (d.scored) {
+          msg = `Added ${d.scored} job${d.scored !== 1 ? 's' : ''} to your feed`;
+          if (d.filtered) msg += ` · ${d.filtered} filtered out`;
+          if (d.remaining) msg += ` · ${d.remaining} more — tap again`;
+        } else {
+          msg = d.filtered ? `No new matches — ${d.filtered} filtered out` : 'No new jobs in the pool right now';
+        }
+        this.showSnack(msg, d.scored ? 'success' : undefined);
+        await this.load();       // refresh feed + counts with the new rows
+      } catch (e) {
+        this.showSnack('Could not get new jobs', 'error');
+      } finally {
+        this.gettingNew = false;
+        this.blocking = null;
+      }
+    },
     toggleSelected(name) {
       const i = this.selectedSources.indexOf(name);
       if (i === -1) this.selectedSources.push(name);

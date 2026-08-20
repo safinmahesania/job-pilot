@@ -17,7 +17,7 @@ router = APIRouter()
 # ── Scoring model ──
 
 @router.get("/api/model")
-def model_state():
+def model_state(_: str = Depends(require_admin)):
     from src.scoring.rerank import get_model_state
     return get_model_state()
 
@@ -38,7 +38,7 @@ def set_model(body: ModelUpdate, _: str = Depends(require_admin),
 # ── Notifications ──
 
 @router.get("/api/notify")
-def get_notify(conn=Depends(_db_dep)):
+def get_notify(_: str = Depends(require_admin), conn=Depends(_db_dep)):
     from src import notify
     enabled = _get_setting(conn, "notify_enabled", "1") == "1"
     return {"enabled": enabled, "configured": bool(notify._token() and notify._chat_id())}
@@ -56,14 +56,14 @@ def set_notify(body: NotifyUpdate, _: str = Depends(require_admin),
 
 
 @router.post("/api/notify/test")
-def test_notify():
+def test_notify(_: str = Depends(require_admin)):
     from src import notify
     ok = notify.send("JobPilot test — notifications working ✅")
     return {"sent": ok}
 
 
 @router.post("/api/notify/test-digest")
-def send_test_digest(conn=Depends(_db_dep)):
+def send_test_digest(_: str = Depends(require_admin), conn=Depends(_db_dep)):
     """Send this week's digest now, so you can see what it looks like."""
     from src import health, notify
     stats = health.week_stats(conn)
@@ -78,7 +78,7 @@ def send_test_digest(conn=Depends(_db_dep)):
 # ── Connection tests ──
 
 @router.post("/api/llm/test")
-def llm_test():
+def llm_test(_: str = Depends(require_admin)):
     """Send a tiny prompt through the provider chain to verify it works."""
     from src import llm
     try:
@@ -94,7 +94,7 @@ def llm_test():
 # ── Configuration files ──
 
 @router.get("/api/config/files")
-def config_files():
+def config_files(_: str = Depends(require_admin)):
     """Paths of the files the user edits, plus whether each one exists."""
     from src.paths import CONFIG_FILES, ROOT
     out = []
@@ -106,7 +106,7 @@ def config_files():
 # ── AI providers (status, enable/disable, reorder) ──
 
 @router.get("/api/llm/providers")
-def llm_providers():
+def llm_providers(_: str = Depends(require_admin)):
     """Status of every generation provider: config, quota usage, enabled."""
     from src import llm
     providers = llm.provider_status()

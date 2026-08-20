@@ -166,7 +166,7 @@ def sources_list(conn=Depends(_db_dep)):
 
 
 @router.get("/api/sources/config")
-def sources_config(conn=Depends(_db_dep)):
+def sources_config(_: str = Depends(require_admin), conn=Depends(_db_dep)):
     data = configio.read_yaml(COMPANIES_FILE) or {}
 
     # Pull the health verdict for every board once, keyed by name, so each configured

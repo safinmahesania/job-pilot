@@ -3,10 +3,31 @@
 Thin read-only helpers used by the pipeline. All file locations come from
 `src.paths`, so this module never hard-codes a directory.
 """
+import contextlib
+import contextvars
+
 import yaml
 
 from src.paths import CONFIG_DIR, COMPANIES_FILE, PROFILE_FILE
 from src.logs import log
+
+# The profile the current request should use. In the multi-user app a request sets
+# this to the signed-in user's profile (from the user_profiles table) for the length
+# of the request; load_profile() then returns that instead of the on-disk YAML. When
+# it is unset (CLI runs, tests, single-user tooling) load_profile() falls back to the
+# profile.yaml file, so nothing that doesn't opt in has to change.
+_profile_override: contextvars.ContextVar = contextvars.ContextVar(
+    "jobpilot_profile_override", default=None)
+
+
+@contextlib.contextmanager
+def profile_scope(raw: dict | None):
+    """Use `raw` as the profile for everything load_profile() reads in this block."""
+    token = _profile_override.set(raw or {})
+    try:
+        yield
+    finally:
+        _profile_override.reset(token)
 
 
 def load_yaml(name: str):
@@ -116,7 +137,9 @@ def normalise_profile(profile: dict) -> tuple[dict, list[str]]:
 
 def load_profile() -> dict:
     """Return the candidate profile the scorer matches jobs against."""
-    profile, warnings = normalise_profile(load_yaml(PROFILE_FILE) or {})
+    override = _profile_override.get()
+    raw = override if override is not None else (load_yaml(PROFILE_FILE) or {})
+    profile, warnings = normalise_profile(raw)
     for warning in warnings:
         log.warning("[profile] %s", warning)
     return profile

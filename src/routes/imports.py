@@ -20,7 +20,8 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from src.auth import current_user_id
-from src.deps import _db_dep, _get_setting, limiter
+from src import config
+from src.deps import _db_dep, _get_setting, _user_profile, limiter
 from src.paths import MAX_UPLOAD_BYTES, RATE_LIMIT_IMPORT
 
 router = APIRouter()
@@ -29,14 +30,15 @@ router = APIRouter()
 # ── Autofill (browser extension) ──
 
 @router.get("/api/autofill/data")
-def autofill_data():
+def autofill_data(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Canonical answers plus the user's own custom rules — no AI, instant."""
     from src import autofill
-    return {"answers": autofill.answers(),
-            "custom": autofill.custom_answers(),
-            # Lists, for forms that ask for your history more than once. Flat answers
-            # cannot fill a second "Job Title" box with a second job.
-            "repeated": autofill.repeated()}
+    with config.profile_scope(_user_profile(conn, user_id)):
+        return {"answers": autofill.answers(),
+                "custom": autofill.custom_answers(),
+                # Lists, for forms that ask for your history more than once. Flat
+                # answers cannot fill a second "Job Title" box with a second job.
+                "repeated": autofill.repeated()}
 
 
 class ResolveField(BaseModel):
@@ -67,7 +69,8 @@ def autofill_resolve(body: ResolveRequest,
 
     try:
         from src import autofill
-        mapped = autofill.resolve([f.model_dump() for f in body.fields], job)
+        with config.profile_scope(_user_profile(conn, user_id)):
+            mapped = autofill.resolve([f.model_dump() for f in body.fields], job)
     except Exception as e:
         import traceback
         traceback.print_exc()

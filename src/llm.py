@@ -45,7 +45,7 @@ def record_usage(provider: str, tokens: int):
     conn.execute(
         "INSERT INTO llm_usage (day, provider, tokens, requests) VALUES (?,?,?,1) "
         "ON CONFLICT(day, provider) DO UPDATE SET "
-        "tokens = tokens + excluded.tokens, requests = requests + 1",
+        "tokens = llm_usage.tokens + excluded.tokens, requests = llm_usage.requests + 1",
         (_utc_day(), provider, int(tokens or 0)),
     )
     conn.commit()

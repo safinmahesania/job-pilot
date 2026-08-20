@@ -11,7 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from src import resume_guard, resume_fit
 from src.auth import current_user_id
-from src.deps import _db_dep, _get_setting, limiter
+from src import config
+from src.deps import _db_dep, _get_setting, _user_profile, limiter
 from src.paths import RATE_LIMIT_GENERATION
 
 router = APIRouter()
@@ -40,7 +41,7 @@ def _generation_http_error(e: Exception) -> HTTPException:
 @router.post("/api/jobs/{job_id}/cover-letter")
 @limiter.limit(RATE_LIMIT_GENERATION)
 def cover_letter(request: Request, job_id: int, fast: bool = False,
-                 _: str = Depends(current_user_id), conn=Depends(_db_dep)):
+                 user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Generate a grounded cover letter for one job.
 
     `fast=true` skips the revise pass (one model call instead of two) — useful behind a
@@ -57,7 +58,8 @@ def cover_letter(request: Request, job_id: int, fast: bool = False,
         raise HTTPException(404, "job not found")
     try:
         from src import apply          # imported here so import errors surface
-        result = apply.generate_cover_letter(dict(row), fast=fast)
+        with config.profile_scope(_user_profile(conn, user_id)):
+            result = apply.generate_cover_letter(dict(row), fast=fast)
     except resume_guard.FabricationError as e:
         # The letter named something the profile does not contain. It was written and
         # then refused — the same fatal stance the resume takes. Do not hand it over.
@@ -80,7 +82,7 @@ def cover_letter(request: Request, job_id: int, fast: bool = False,
 @router.post("/api/jobs/{job_id}/resume")
 @limiter.limit(RATE_LIMIT_GENERATION)
 def tailored_resume(request: Request, job_id: int,
-                    _: str = Depends(current_user_id), conn=Depends(_db_dep)):
+                    user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Tailor the resume template to one job."""
     if _get_setting(conn, "generation_enabled", "1") != "1":
         raise HTTPException(
@@ -93,7 +95,8 @@ def tailored_resume(request: Request, job_id: int,
         raise HTTPException(404, "job not found")
     try:
         from src import apply
-        result = apply.generate_resume(dict(row))
+        with config.profile_scope(_user_profile(conn, user_id)):
+            result = apply.generate_resume(dict(row))
     except FileNotFoundError as e:
         raise HTTPException(400, str(e))
     except resume_fit.JobDoesNotFitError as e:

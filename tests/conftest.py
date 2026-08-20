@@ -15,6 +15,7 @@ Two guarantees every test gets:
     real LLM must stub it explicitly (score_job, extract, etc.).
 """
 import os
+import re
 import sys
 import types
 from pathlib import Path
@@ -39,21 +40,38 @@ if "ollama" not in sys.modules:
 
 TEST_DB = os.environ.get("TEST_DATABASE_URL")
 
-# Hard safety guard: never let the test DB be the production database. If
-# TEST_DATABASE_URL is unset, or it matches DATABASE_URL, or it points at a
-# hosted Supabase host, refuse — because the fixtures TRUNCATE every data table
-# and would wipe real data. Use a local or throwaway Postgres for tests.
+# Hard safety guard against wiping the production database. The fixtures TRUNCATE
+# every data table, so the test DB must never be production. We refuse to run when
+# TEST_DATABASE_URL is unset, equals DATABASE_URL, or points at the SAME Supabase
+# project as DATABASE_URL. A DIFFERENT Supabase project (a scratch/test project) is
+# allowed — we compare the project ref, not just "is it Supabase". Set
+# JOBPILOT_ALLOW_TEST_DB=1 to override in the rare case you know what you're doing.
 _PROD_URL = os.environ.get("DATABASE_URL", "")
+
+
+def _supabase_ref(url: str) -> str | None:
+    """Extract a Supabase project ref (e.g. db.<ref>.supabase.co or
+    postgres.<ref>@...pooler.supabase.com). Returns None for non-Supabase URLs."""
+    if not url:
+        return None
+    m = re.search(r"(?:db|postgres)\.([a-z0-9]{16,})\.?", url.lower())
+    if m and "supabase" in url.lower():
+        return m.group(1)
+    m = re.search(r"postgres\.([a-z0-9]{16,})@", url.lower())
+    return m.group(1) if m else None
 
 
 def _looks_like_production(url: str) -> bool:
     if not url:
         return False
+    if os.environ.get("JOBPILOT_ALLOW_TEST_DB") == "1":
+        return False
     if _PROD_URL and url.strip() == _PROD_URL.strip():
         return True
-    lowered = url.lower()
-    # Supabase's own DB hosts; a scratch project should use a DB you created for tests.
-    return "supabase.co" in lowered or "supabase.com" in lowered or "pooler.supabase" in lowered
+    prod_ref = _supabase_ref(_PROD_URL)
+    test_ref = _supabase_ref(url)
+    # Same Supabase project as production -> refuse. Different project -> allow.
+    return bool(prod_ref and test_ref and prod_ref == test_ref)
 
 #: The canonical test user. A second one is available for isolation tests.
 USER = "00000000-0000-0000-0000-000000000001"

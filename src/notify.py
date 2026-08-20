@@ -45,17 +45,30 @@ def send(text: str) -> bool:
 
 
 def _record(text: str) -> None:
-    """Save a notification to the DB, trimming to the most recent 100."""
+    """Save a system notification for each admin, trimming each panel to the last 100.
+
+    A system notification — a finished run, a broken board, a pipeline error — isn't
+    tied to one person the way a per-user alert is. It goes to the admins, who run the
+    pipeline and act on these, one row each, so it surfaces in the same notification
+    panel a per-user message would. (The notifications table is per-user in the
+    multi-user schema, so a row must name a user.)
+    """
     try:
         from src import store
         conn = store.connect()
         with conn:
-            conn.execute("INSERT INTO notifications (text) VALUES (?)", (text,))
-            # Keep the table small — only the last 100 matter for a "recent" panel.
-            conn.execute(
-                "DELETE FROM notifications WHERE id NOT IN "
-                "(SELECT id FROM notifications ORDER BY id DESC LIMIT 100)"
-            )
+            admins = [r[0] for r in
+                      conn.execute("SELECT id FROM users WHERE is_admin").fetchall()]
+            for uid in admins:
+                conn.execute(
+                    "INSERT INTO notifications (user_id, text) VALUES (?, ?)",
+                    (uid, text))
+                # Keep each admin's panel small — only the last 100 matter.
+                conn.execute(
+                    "DELETE FROM notifications WHERE user_id = ? AND id NOT IN "
+                    "(SELECT id FROM notifications WHERE user_id = ? "
+                    "ORDER BY id DESC LIMIT 100)",
+                    (uid, uid))
     except Exception as e:
         log.warning("[notify] could not record notification: %s", e)
 

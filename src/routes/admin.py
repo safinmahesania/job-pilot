@@ -10,7 +10,9 @@ from pydantic import BaseModel
 
 from src import configio, maintenance, scheduler, store
 from src.auth import current_user_id
-from src.deps import _db_dep, require_admin
+from fastapi.responses import Response
+
+from src.deps import _db_dep, _get_setting, _user_threshold, require_admin
 
 router = APIRouter()
 
@@ -65,8 +67,22 @@ def setup_status(_: str = Depends(current_user_id), conn=Depends(_db_dep)):
 # ── Maintenance ──
 
 @router.post("/api/maint/rescore")
-def maint_rescore(_: str = Depends(require_admin)):
-    raise HTTPException(503, "Pending Stage 5: per-user scoring/enrichment rework")
+def maint_rescore(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
+    """Re-score all of your active jobs against your current profile — useful right
+    after editing the profile, so the whole feed reflects the new preferences."""
+    if _get_setting(conn, "scoring_enabled", "1") != "1":
+        raise HTTPException(403, "Scoring is off — enable it in Settings first.")
+    from src.routes.jobs import _rescore_one
+    from src.scoring.rerank import build_calibration
+    calibration = build_calibration(conn, user_id)
+    rows = conn.execute(
+        "SELECT job_id FROM user_jobs WHERE user_id=? AND status != 'dismissed'",
+        (user_id,)).fetchall()
+    updated = 0
+    for r in rows:
+        if _rescore_one(conn, user_id, r[0], calibration) is not None:
+            updated += 1
+    return {"rescored": updated}
 
 
 class ScoreRequest(BaseModel):
@@ -175,15 +191,32 @@ def extract_existing(_: str = Depends(require_admin), conn=Depends(_db_dep)):
 
 
 @router.post("/api/jobs/score")
-def score_jobs(_: str = Depends(require_admin)):
-    """Score specific jobs on demand. PENDING: scoring is per-user now (user_jobs);
-    rebuilt in the get-new-jobs flow (Stage 5)."""
-    raise HTTPException(503, "Pending Stage 5: per-user scoring/enrichment rework")
+def score_jobs(body: ScoreRequest, user_id: str = Depends(current_user_id),
+               conn=Depends(_db_dep)):
+    """Score specific jobs on demand for this user — an unscored import, or a few
+    you want re-run. Targets only the ids you pass and updates your user_jobs rows."""
+    if _get_setting(conn, "scoring_enabled", "1") != "1":
+        raise HTTPException(403, "Scoring is off — enable it in Settings first.")
+    from src.routes.jobs import _rescore_one
+    from src.scoring.rerank import build_calibration
+    calibration = build_calibration(conn, user_id)
+    results = {}
+    for jid in body.job_ids[:200]:
+        results[jid] = _rescore_one(conn, user_id, jid, calibration)
+    scored = sum(1 for v in results.values() if v is not None)
+    return {"requested": len(body.job_ids), "scored": scored, "results": results}
 
 
 @router.post("/api/maint/cleanup")
-def maint_cleanup(_: str = Depends(require_admin)):
-    raise HTTPException(503, "Pending Stage 5: per-user scoring/enrichment rework")
+def maint_cleanup(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
+    """Dismiss the surfaced jobs in your feed that score below your threshold."""
+    threshold = _user_threshold(conn, user_id)
+    cur = conn.execute(
+        "UPDATE user_jobs SET status='dismissed' "
+        "WHERE user_id=? AND status='surfaced' "
+        "AND score IS NOT NULL AND score < ?", (user_id, threshold))
+    conn.commit()
+    return {"archived": cur.rowcount}
 
 
 class DaysBody(BaseModel):
@@ -196,8 +229,24 @@ def maint_clear_old(body: DaysBody, _: str = Depends(require_admin)):
 
 
 @router.get("/api/maint/export")
-def maint_export(_: str = Depends(require_admin)):
-    raise HTTPException(503, "Pending Stage 5: per-user scoring/enrichment rework")
+def maint_export(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
+    """Export your jobs — the posting plus your own score/status — as a CSV."""
+    import csv
+    import io
+    cols = ["id", "title", "company", "location", "job_type", "source", "apply_url",
+            "score", "status", "posted_date", "deadline", "rationale"]
+    rows = conn.execute(
+        "SELECT j.id, j.title, j.company, j.location, j.job_type, j.source, "
+        "j.apply_url, uj.score, uj.status, j.posted_date, j.deadline, uj.rationale "
+        "FROM jobs j JOIN user_jobs uj ON uj.job_id = j.id "
+        "WHERE uj.user_id = ? ORDER BY uj.score DESC NULLS LAST", (user_id,)).fetchall()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(cols)
+    for r in rows:
+        w.writerow(list(r))
+    return Response(content=buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=jobpilot_jobs.csv"})
 
 
 @router.post("/api/maint/reload")

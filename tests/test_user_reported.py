@@ -3,7 +3,6 @@
 Each of these was a real papercut caught by clicking through every feature, not by a
 test — so each gets a test now, to keep it fixed.
 """
-import sqlite3
 
 
 
@@ -48,20 +47,16 @@ class TestGenerationWithoutAProviderIsFriendly:
     'all providers failed -> gemini: not configured | ...' is accurate and useless;
     the message now says what to do."""
 
-    def _a_job(self, client):
-        from src.paths import DB_PATH
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute(
-            "INSERT INTO jobs (dedupe_hash, title, company, description, status, score) "
-            "VALUES ('genjob', 'Dev', 'Acme', 'A Flutter role.', 'surfaced', 90)")
-        conn.commit()
+    def _a_job(self, conn):
         jid = conn.execute(
-            "SELECT id FROM jobs WHERE dedupe_hash='genjob'").fetchone()[0]
-        conn.close()
+            "INSERT INTO jobs (dedupe_hash, title, company, description) "
+            "VALUES ('genjob', 'Dev', 'Acme', 'A Flutter role.') "
+            "RETURNING id").fetchone()[0]
+        conn.commit()
         return jid
 
     def test_a_missing_provider_gives_503_and_actionable_text(
-            self, client, monkeypatch):
+            self, client, conn, monkeypatch):
         # The unit under test is the endpoint's error MAPPING, not the generator. Force
         # the generator to fail exactly the way a missing provider fails — an LLMError —
         # and assert the endpoint turns that into a friendly 503 rather than a raw 502.
@@ -77,7 +72,7 @@ class TestGenerationWithoutAProviderIsFriendly:
 
         monkeypatch.setattr("src.apply.generate_cover_letter", _no_provider)
 
-        jid = self._a_job(client)
+        jid = self._a_job(conn)
         r = client.post(f"/api/jobs/{jid}/cover-letter")
 
         assert r.status_code == 503
@@ -134,17 +129,12 @@ class TestExpensiveEndpointsAreRateLimited:
     public tunnel they are the expensive surface, so they carry per-route limits a real
     user never reaches and a bot does."""
 
-    def test_hammering_cover_letter_eventually_429s(self, client, written_profile,
-                                                    monkeypatch):
-        import sqlite3
-        from src.paths import DB_PATH
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute(
-            "INSERT INTO jobs (dedupe_hash, title, company, description, status, score) "
-            "VALUES ('rl', 'Dev', 'Acme', 'A Flutter role.', 'surfaced', 90)")
+    def test_hammering_cover_letter_eventually_429s(self, client, conn,
+                                                    written_profile, monkeypatch):
+        jid = conn.execute(
+            "INSERT INTO jobs (dedupe_hash, title, company, description) "
+            "VALUES ('rl', 'Dev', 'Acme', 'A Flutter role.') RETURNING id").fetchone()[0]
         conn.commit()
-        jid = conn.execute("SELECT id FROM jobs WHERE dedupe_hash='rl'").fetchone()[0]
-        conn.close()
 
         # This test is about the rate limiter, not the model — so the generation itself
         # must be instant and offline. On a machine with real provider keys in .env,

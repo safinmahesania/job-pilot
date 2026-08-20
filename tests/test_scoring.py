@@ -11,11 +11,12 @@ Two invariants worth guarding:
 """
 import json
 
-import pytest
 
-from src import store
 from src.scoring import feedback, rerank
 from src.scoring.rerank import ScoreResult, score_job
+
+USER = "00000000-0000-0000-0000-000000000001"
+
 from src.paths import (
     SCORE_WEIGHT_SKILLS, SCORE_WEIGHT_SENIORITY, SCORE_WEIGHT_DOMAIN,
     FEEDBACK_MIN_EXAMPLES,
@@ -113,11 +114,14 @@ class TestScoreJob:
 
 
 def _add(conn, title, company, status, score=None, location="Toronto"):
+    jid = conn.execute(
+        "INSERT INTO jobs (dedupe_hash, source, title, company, location) "
+        "VALUES (?,?,?,?,?) RETURNING id",
+        (f"{title}{company}", "test", title, company, location),
+    ).fetchone()[0]
     conn.execute(
-        "INSERT INTO jobs (dedupe_hash, source, title, company, location, "
-        "score, status) VALUES (?,?,?,?,?,?,?)",
-        (f"{title}{company}", "test", title, company, location, score, status),
-    )
+        "INSERT INTO user_jobs (user_id, job_id, status, score) VALUES (?,?,?,?)",
+        (USER, jid, status, score))
     conn.commit()
 
 
@@ -127,14 +131,14 @@ class TestFeedback:
         for i in range(FEEDBACK_MIN_EXAMPLES - 1):
             _add(conn, f"Job{i}", "Co", "dismissed", 60)
 
-        assert feedback.examples(conn) == ""
+        assert feedback.examples(conn, USER) == ""
 
     def test_it_shows_what_you_kept_and_what_you_threw_away(self, conn):
         _add(conn, "Backend Developer", "Shopify", "applied", 88)
         _add(conn, "Python Developer", "Wealthsimple", "saved", 82)
         _add(conn, "SAP Consultant", "Deloitte", "dismissed", 55)
 
-        block = feedback.examples(conn)
+        block = feedback.examples(conn, USER)
 
         assert "Backend Developer" in block
         assert "Python Developer" in block
@@ -147,7 +151,7 @@ class TestFeedback:
         _add(conn, "Senior Java Architect", "RBC", "dismissed", 84)
         _add(conn, "QA Analyst", "Geotab", "dismissed", 55)
 
-        block = feedback.examples(conn)
+        block = feedback.examples(conn, USER)
 
         assert "WRONG" in block
         assert "Senior Java Architect" in block.split("WRONG")[1]
@@ -159,7 +163,7 @@ class TestFeedback:
         _add(conn, "B", "Co", "saved", 80)
         _add(conn, "C", "Co", "dismissed", 84)
 
-        stats = feedback.stats(conn)
+        stats = feedback.stats(conn, USER)
 
         assert stats["applied"] == 1
         assert stats["saved"] == 1

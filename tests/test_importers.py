@@ -9,11 +9,13 @@ worthless.
 So: no description, no score. The job is stored unscored and shown in its own tab
 for you to judge. Every test below that mentions "unscored" is defending that.
 """
-import io
 
 import pytest
 
 from src import importers
+
+USER = "00000000-0000-0000-0000-000000000001"
+
 
 
 class TestCsv:
@@ -96,28 +98,22 @@ class TestScoringOnImport:
                             lambda url: description)
         return rows
 
-    def test_a_job_with_a_description_gets_scored(self, conn, monkeypatch,
-                                                  profile, capture_llm):
-        from src.scoring import rerank
-        monkeypatch.setattr(importers, "load_profile", lambda: profile)
-        monkeypatch.setattr(rerank, "scoring_via_chain", lambda: True)
-        capture_llm.reply = lambda s, u: (
-            '{"skills_score":90,"seniority_score":85,"domain_score":80,'
-            '"overall":70,"rationale":"fits"}', "cerebras")
-
+    def test_a_described_job_is_imported_unscored(self, conn, monkeypatch, profile):
+        """Imports defer scoring to the per-user get-new flow, so even a job with a
+        full description arrives unscored, surfaced for review — never scored inline."""
         result = importers.import_jobs([{
             "title": "Backend Developer", "company": "Shopify",
             "location": "Toronto", "apply_url": "https://boards.greenhouse.io/x/1",
             "description": "Python, FastAPI, PostgreSQL. New grads welcome.",
-        }])
+        }], USER)
 
-        assert result["scored"] == 1
-        assert result["unscored"] == 0
+        assert result["imported"] == 1
+        assert result["scored"] == 0
+        assert result["unscored"] == 1
 
     def test_a_job_with_no_description_is_stored_unscored(self, conn, monkeypatch,
-                                                          profile, capture_llm):
+                                                          profile):
         """The whole point. A title alone cannot be scored honestly."""
-        monkeypatch.setattr(importers, "load_profile", lambda: profile)
         monkeypatch.setattr(importers, "recover_description", lambda url: "")
 
         result = importers.import_jobs([{
@@ -125,26 +121,26 @@ class TestScoringOnImport:
             "location": "Toronto",
             "apply_url": "https://linkedin.com/comm/jobs/view/1",
             "description": "",
-        }])
+        }], USER)
 
         assert result["unscored"] == 1
         assert result["scored"] == 0
 
         row = conn.execute(
-            "SELECT score, status FROM jobs WHERE company='Shopify'").fetchone()
+            "SELECT uj.score FROM user_jobs uj JOIN jobs j ON j.id=uj.job_id "
+            "WHERE j.company='Shopify'").fetchone()
         assert row[0] is None, "an unscoreable job was given a score anyway"
 
     def test_importing_the_same_job_twice_is_a_duplicate_not_a_second_row(
             self, conn, monkeypatch, profile):
-        monkeypatch.setattr(importers, "load_profile", lambda: profile)
         monkeypatch.setattr(importers, "recover_description", lambda url: "")
 
         rows = [{"title": "Backend Developer", "company": "Shopify",
                  "location": "Toronto", "apply_url": "https://x/1",
                  "description": ""}]
 
-        importers.import_jobs(rows)
-        second = importers.import_jobs(rows)
+        importers.import_jobs(rows, USER)
+        second = importers.import_jobs(rows, USER)
 
         assert second["duplicates"] == 1
         assert second["imported"] == 0

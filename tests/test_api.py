@@ -17,10 +17,11 @@ import re
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parent.parent
 
+
+USER = "00000000-0000-0000-0000-000000000001"
 
 class TestStructure:
     def test_the_static_mount_is_last(self):
@@ -130,13 +131,14 @@ class TestFollowupEndpoints:
     def _applied_job(self, client):
         from src import store
         conn = store.connect()
+        job_id = conn.execute(
+            "INSERT INTO jobs (dedupe_hash, source, title, company, apply_url) "
+            "VALUES ('x','test','Dev','Shopify','https://x/1') RETURNING id"
+        ).fetchone()[0]
         conn.execute(
-            "INSERT INTO jobs (dedupe_hash, source, title, company, apply_url, "
-            "status, applied_on) VALUES "
-            "('x','test','Dev','Shopify','https://x/1','applied','2026-01-01')"
-        )
+            "INSERT INTO user_jobs (user_id, job_id, status, applied_on) "
+            "VALUES (?, ?, 'applied', '2026-01-01')", (USER, job_id))
         conn.commit()
-        job_id = conn.execute("SELECT id FROM jobs").fetchone()[0]
         conn.close()
         return job_id
 

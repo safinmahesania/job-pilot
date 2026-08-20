@@ -13,18 +13,21 @@ beats the wrong document every time.
 """
 import pytest
 
-from src import materials, store
+from src import materials
+
+USER = "00000000-0000-0000-0000-000000000001"
+
 
 
 def _job(conn, company, title="Backend Dev", url=None):
-    conn.execute(
-        "INSERT INTO jobs (dedupe_hash, source, title, company, apply_url, status) "
-        "VALUES (?,?,?,?,?,'saved')",
+    jid = conn.execute(
+        "INSERT INTO jobs (dedupe_hash, source, title, company, apply_url) "
+        "VALUES (?,?,?,?,?) RETURNING id",
         (company + title, "test", title, company,
          url or f"https://boards.greenhouse.io/{company.lower()}/jobs/1"),
-    )
+    ).fetchone()[0]
     conn.commit()
-    return conn.execute("SELECT id FROM jobs WHERE company=?", (company,)).fetchone()[0]
+    return jid
 
 
 class TestBinding:
@@ -32,10 +35,10 @@ class TestBinding:
         shopify = _job(conn, "Shopify")
         league = _job(conn, "League")
 
-        materials.save(shopify, "cover", "Dear Shopify...", "gemini")
+        materials.save(USER, shopify, "cover", "Dear Shopify...", "gemini")
 
-        assert "Shopify" in materials.get(shopify, "cover")["content"]
-        assert materials.get(league, "cover") is None, (
+        assert "Shopify" in materials.get(USER, shopify, "cover")["content"]
+        assert materials.get(USER, league, "cover") is None, (
             "League has no cover letter — nothing may be served for it"
         )
 
@@ -43,34 +46,33 @@ class TestBinding:
         """One current document per job. No pile, no wrong pick."""
         job = _job(conn, "Shopify")
 
-        materials.save(job, "cover", "First draft", "ollama")
-        materials.save(job, "cover", "Better draft", "gemini")
+        materials.save(USER, job, "cover", "First draft", "ollama")
+        materials.save(USER, job, "cover", "Better draft", "gemini")
 
-        assert materials.get(job, "cover")["content"] == "Better draft"
-        assert materials.get(job, "cover")["provider"] == "gemini"
-        assert len(materials.list_for(job)) == 1
+        assert materials.get(USER, job, "cover")["content"] == "Better draft"
+        assert materials.get(USER, job, "cover")["provider"] == "gemini"
+        assert len(materials.list_for(USER, job)) == 1
 
     def test_resume_and_cover_coexist(self, conn):
         job = _job(conn, "Shopify")
-        materials.save(job, "resume", "# Safin", "gemini")
-        materials.save(job, "cover", "Dear...", "gemini")
+        materials.save(USER, job, "resume", "# Safin", "gemini")
+        materials.save(USER, job, "cover", "Dear...", "gemini")
 
-        assert {m["kind"] for m in materials.list_for(job)} == {"resume", "cover"}
+        assert {m["kind"] for m in materials.list_for(USER, job)} == {"resume", "cover"}
 
     def test_an_unknown_kind_is_refused(self, conn):
         job = _job(conn, "Shopify")
         with pytest.raises(ValueError):
-            materials.save(job, "portfolio", "...", "gemini")
+            materials.save(USER, job, "portfolio", "...", "gemini")
 
     def test_deleting_a_job_takes_its_documents_with_it(self, conn):
         job = _job(conn, "Shopify")
-        materials.save(job, "cover", "Dear Shopify", "gemini")
+        materials.save(USER, job, "cover", "Dear Shopify", "gemini")
 
-        conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("DELETE FROM jobs WHERE id = ?", (job,))
         conn.commit()
 
-        assert materials.get(job, "cover") is None
+        assert materials.get(USER, job, "cover") is None
 
 
 class TestFilenames:

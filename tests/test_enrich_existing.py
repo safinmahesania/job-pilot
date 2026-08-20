@@ -11,8 +11,8 @@ class TestEnrichExisting:
     def _add(self, conn, jid, source, url, desc, status="surfaced"):
         conn.execute(
             "INSERT INTO jobs (id, dedupe_hash, title, company, source, source_url, "
-            "apply_url, description, status) VALUES (?,?,?,?,?,?,?,?,?)",
-            (jid, f"h{jid}", "Dev", "X", source, url, url, desc, status))
+            "apply_url, description) OVERRIDING SYSTEM VALUE VALUES (?,?,?,?,?,?,?,?)",
+            (jid, f"h{jid}", "Dev", "X", source, url, url, desc))
         conn.commit()
 
     def test_a_short_adzuna_job_gets_its_full_description(self, client, conn):
@@ -55,7 +55,8 @@ class TestEnrichDiagnosis:
     def _add(self, conn, jid, url, desc="short"):
         conn.execute(
             "INSERT INTO jobs (id, dedupe_hash, title, company, source, source_url, "
-            "apply_url, description, status) VALUES (?,?,?,?,'adzuna',?,?,?,'surfaced')",
+            "apply_url, description) OVERRIDING SYSTEM VALUE "
+            "VALUES (?,?,?,?,'adzuna',?,?,?)",
             (jid, f"h{jid}", "Dev", "X", url, url, desc))
         conn.commit()
 

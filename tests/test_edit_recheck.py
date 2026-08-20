@@ -8,6 +8,9 @@ in the feed with a fresh score and a constraint it plainly fails.
 """
 from unittest.mock import patch
 
+USER = "00000000-0000-0000-0000-000000000001"
+
+
 
 CANADIAN_JUNIOR = {
     "constraints": {"locations": ["remote", "toronto", "ontario", "canada"]},
@@ -17,45 +20,49 @@ CANADIAN_JUNIOR = {
 
 
 def _job(conn, **cols):
+    status = cols.pop("status", "surfaced")
     base = {"dedupe_hash": "r1", "title": "Developer", "company": "X",
-            "location": "Toronto, ON", "description": "Python work.", "status": "surfaced"}
+            "location": "Toronto, ON", "description": "Python work."}
     base.update(cols)
     keys = ", ".join(base)
     marks = ", ".join("?" * len(base))
-    conn.execute(f"INSERT INTO jobs ({keys}) VALUES ({marks})", list(base.values()))
+    jid = conn.execute(
+        f"INSERT INTO jobs ({keys}) VALUES ({marks}) RETURNING id",
+        list(base.values())).fetchone()[0]
+    conn.execute("INSERT INTO user_jobs (user_id, job_id, status) VALUES (?,?,?)",
+                 (USER, jid, status))
     conn.commit()
-    return conn.execute("SELECT id FROM jobs WHERE dedupe_hash=?",
-                        (base["dedupe_hash"],)).fetchone()[0]
+    return jid
 
 
 class TestRecheck:
     def test_a_job_that_still_fits_is_left_alone(self, client, conn):
         jid = _job(conn)
-        with patch("src.config.load_profile", return_value=CANADIAN_JUNIOR):
+        with patch("src.deps._user_profile", return_value=CANADIAN_JUNIOR):
             body = client.post(f"/api/jobs/{jid}/recheck").json()
         assert body["verdict"] == "ok"
-        status = conn.execute("SELECT status FROM jobs WHERE id=?", (jid,)).fetchone()[0]
+        status = conn.execute("SELECT status FROM user_jobs WHERE job_id=?", (jid,)).fetchone()[0]
         assert status == "surfaced"
 
     def test_a_job_outside_your_locations_is_dismissed(self, client, conn):
         jid = _job(conn, dedupe_hash="r2", location="Austin, TX")
-        with patch("src.config.load_profile", return_value=CANADIAN_JUNIOR):
+        with patch("src.deps._user_profile", return_value=CANADIAN_JUNIOR):
             body = client.post(f"/api/jobs/{jid}/recheck").json()
         assert body["verdict"] == "dismissed"
         assert "Austin" in body["reason"]          # says which rule, and with what value
-        status = conn.execute("SELECT status FROM jobs WHERE id=?", (jid,)).fetchone()[0]
+        status = conn.execute("SELECT status FROM user_jobs WHERE job_id=?", (jid,)).fetchone()[0]
         assert status == "dismissed"
 
     def test_the_reason_is_in_words_not_a_code(self, client, conn):
         jid = _job(conn, dedupe_hash="r3", location="Berlin, Germany")
-        with patch("src.config.load_profile", return_value=CANADIAN_JUNIOR):
+        with patch("src.deps._user_profile", return_value=CANADIAN_JUNIOR):
             reason = client.post(f"/api/jobs/{jid}/recheck").json()["reason"]
         assert "location" in reason and len(reason.split()) > 4
 
     def test_no_profile_means_unchecked_not_passed(self, client, conn):
         """Claiming a job passed filters that were never applied would be a lie."""
         jid = _job(conn, dedupe_hash="r4")
-        with patch("src.config.load_profile", return_value={}):
+        with patch("src.deps._user_profile", return_value={}):
             body = client.post(f"/api/jobs/{jid}/recheck").json()
         assert body["verdict"] == "unchecked"
 
@@ -73,14 +80,16 @@ class TestDeferredScoring:
         assert body["needs_reprocess"] is True
         assert body["rescored"] is None
 
-    def test_without_defer_the_old_behaviour_is_unchanged(self, client, conn):
+    def test_editing_a_scoring_field_never_inline_rescores(self, client, conn):
+        """Re-scoring is per-user and being reworked, so an edit only flags
+        needs_reprocess now — it never scores inline, with or without defer."""
         jid = _job(conn, dedupe_hash="r6")
-        with patch("src.routes.jobs._rescore_one", return_value=71) as rs:
+        with patch("src.routes.jobs._rescore_one") as rs:
             body = client.patch(f"/api/jobs/{jid}",
                                 json={"description": "A longer, real description."}).json()
-        rs.assert_called_once()
-        assert body["rescored"] == 71
-        assert body["needs_reprocess"] is False
+        rs.assert_not_called()
+        assert body["rescored"] is None
+        assert body["needs_reprocess"] is True
 
     def test_an_edit_that_cannot_change_the_score_needs_no_reprocess(self, client, conn):
         jid = _job(conn, dedupe_hash="r7")

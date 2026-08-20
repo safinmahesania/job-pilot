@@ -46,6 +46,7 @@ class TestCustomAnswers:
                                                                 profile,
                                                                 capture_llm):
         """You wrote it once; it should never be re-invented."""
+        profile["custom_answers"] = [{"match": ["criminal record"], "answer": "No"}]
         monkeypatch.setattr(autofill, "load_profile", lambda: profile)
         capture_llm.reply = lambda s, u: ('{"f0": "AI would say something else"}',
                                           "gemini")
@@ -60,6 +61,7 @@ class TestCustomAnswers:
 
     def test_the_model_is_not_even_asked_when_a_custom_answer_matches(
             self, conn, monkeypatch, profile, capture_llm):
+        profile["custom_answers"] = [{"match": ["criminal record"], "answer": "No"}]
         monkeypatch.setattr(autofill, "load_profile", lambda: profile)
 
         autofill.resolve([{"id": "f0", "label": "Any criminal record?",
@@ -77,6 +79,8 @@ class TestWorkArrangement:
         one slips through, the model must at least have the arrangement facts in
         front of it — otherwise it will guess, and a guess about your willingness
         to relocate is a lie on a real application."""
+        profile["application"]["work_arrangement"] = "remote"
+        profile["application"]["max_days_onsite_per_week"] = 2
         monkeypatch.setattr(autofill, "load_profile", lambda: profile)
         capture_llm.reply = lambda s, u: ('{"f0": "Yes"}', "gemini")
 

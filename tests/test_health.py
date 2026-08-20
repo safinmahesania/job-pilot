@@ -10,7 +10,6 @@ Everything else in this file exists to make sure the detection doesn't become
 noise: one quiet day is not a broken board, a recovery clears the record, and a
 board that has been dead for a month is not news every four hours.
 """
-import pytest
 
 from src import health, notify, store
 from src.paths import HEALTH_ZERO_STREAK, HEALTH_ERROR_STREAK

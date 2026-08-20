@@ -1,14 +1,17 @@
 """Scoring specific jobs on demand — for unscored imports, without rescoring everything."""
 from unittest.mock import patch
 
+USER = "00000000-0000-0000-0000-000000000001"
 
 class TestScoreOnDemand:
     def test_scores_only_requested_jobs(self, client, conn):
+        jid = conn.execute(
+            "INSERT INTO jobs (dedupe_hash, title, company, description) "
+            "VALUES ('h1', 'Dev', 'X', 'Python role') RETURNING id").fetchone()[0]
         conn.execute(
-            "INSERT INTO jobs (dedupe_hash, title, company, description, status, score) "
-            "VALUES ('h1', 'Dev', 'X', 'Python role', 'surfaced', NULL)")
+            "INSERT INTO user_jobs (user_id, job_id, status, score) "
+            "VALUES (?, ?, 'surfaced', NULL)", (USER, jid))
         conn.commit()
-        jid = conn.execute("SELECT id FROM jobs WHERE dedupe_hash='h1'").fetchone()[0]
 
         with patch("src.routes.jobs._rescore_one", return_value=82) as rs:
             r = client.post("/api/jobs/score", json={"job_ids": [jid]})

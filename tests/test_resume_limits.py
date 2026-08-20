@@ -11,15 +11,12 @@ wrong — that it never silently truncates. A resume bullet cut off mid-sentence
 worse than a bullet that runs long, so an overrun that survives a tightening pass
 is reported to you, not quietly amputated.
 """
-import pytest
 
 from src import resume_limits as limits
 from src.paths import (
     RESUME_SUMMARY_LINES,
     RESUME_EXPERIENCE_BULLET_LINES,
-    RESUME_PROJECT_BULLET_LINES,
     RESUME_VOLUNTEER_LINES,
-    RESUME_PROJECTS_USED,
 )
 
 

@@ -10,6 +10,9 @@ from datetime import date
 
 from src import expiry
 
+USER = "00000000-0000-0000-0000-000000000001"
+
+
 
 class TestReadingTheDeadline:
     def test_a_stored_iso_field_is_read(self):
@@ -63,16 +66,19 @@ class TestHasExpired:
 class TestTheSweepEndpoint:
     def _add(self, conn, jid, status, deadline=None, desc="a role"):
         conn.execute(
-            "INSERT INTO jobs (id, dedupe_hash, title, company, status, deadline, "
-            "description) VALUES (?, ?, 'Dev', 'X', ?, ?, ?)",
-            (jid, f"h{jid}", status, deadline, desc))
+            "INSERT INTO jobs (id, dedupe_hash, title, company, deadline, description) "
+            "OVERRIDING SYSTEM VALUE VALUES (?, ?, 'Dev', 'X', ?, ?)",
+            (jid, f"h{jid}", deadline, desc))
+        conn.execute(
+            "INSERT INTO user_jobs (user_id, job_id, status) VALUES (?, ?, ?)",
+            (USER, jid, status))
         conn.commit()
 
     def test_it_dismisses_a_surfaced_job_past_its_deadline(self, client, conn):
         self._add(conn, 1, "surfaced", deadline="2000-01-01")
         body = client.post("/api/jobs/sweep-expired").json()
         assert body["dismissed"] == 1
-        status = conn.execute("SELECT status FROM jobs WHERE id=1").fetchone()[0]
+        status = conn.execute("SELECT status FROM user_jobs WHERE job_id=1").fetchone()[0]
         assert status == "dismissed"
 
     def test_it_leaves_a_job_with_a_future_deadline(self, client, conn):
@@ -84,7 +90,7 @@ class TestTheSweepEndpoint:
         """Something already saved is the user's call, not a deadline's."""
         self._add(conn, 3, "saved", deadline="2000-01-01")
         client.post("/api/jobs/sweep-expired")
-        assert conn.execute("SELECT status FROM jobs WHERE id=3").fetchone()[0] == "saved"
+        assert conn.execute("SELECT status FROM user_jobs WHERE job_id=3").fetchone()[0] == "saved"
 
     def test_it_reads_a_deadline_out_of_the_description(self, client, conn):
         self._add(conn, 4, "surfaced", desc="Apply by 1 January 2000. Great team.")

@@ -66,13 +66,10 @@ class TestSourceTestEndpoint:
         r = client.post("/api/sources/test", json={})
         assert r.status_code == 400
 
-    def test_nothing_is_saved_to_the_database(self, client, db):
-        import sqlite3
+    def test_nothing_is_saved_to_the_database(self, client, conn):
         with patch("httpx.get", return_value=_greenhouse_page(5)):
             client.post("/api/sources/test", json={
                 "source": {"name": "Dry", "ats": "greenhouse", "identifier": "dry"}})
         # the preview must not create job rows
-        conn = sqlite3.connect(db)
         count = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
-        conn.close()
         assert count == 0

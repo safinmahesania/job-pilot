@@ -5,13 +5,17 @@ was never fetched — the count showed (e.g. 18) but the list was empty. This gu
 backend half: /api/jobs?tab=unscored returns the same jobs /api/counts counts.
 """
 
+USER = "00000000-0000-0000-0000-000000000001"
 
 class TestUnscoredTabReturnsJobs:
     def _add_unscored(self, conn, n):
         for i in range(n):
+            jid = conn.execute(
+                "INSERT INTO jobs (dedupe_hash, title, company, description) "
+                f"VALUES ('u{i}', 'Dev {i}', 'Co', 'desc') RETURNING id").fetchone()[0]
             conn.execute(
-                "INSERT INTO jobs (dedupe_hash, title, company, description, status, score) "
-                f"VALUES ('u{i}', 'Dev {i}', 'Co', 'desc', 'surfaced', NULL)")
+                "INSERT INTO user_jobs (user_id, job_id, status, score) "
+                "VALUES (?, ?, 'surfaced', NULL)", (USER, jid))
         conn.commit()
 
     def test_list_and_count_agree(self, client, conn):
@@ -23,9 +27,12 @@ class TestUnscoredTabReturnsJobs:
         assert all(j["score"] is None for j in jobs)
 
     def test_scored_jobs_do_not_appear_in_unscored(self, client, conn):
+        jid = conn.execute(
+            "INSERT INTO jobs (dedupe_hash, title, company, description) "
+            "VALUES ('scored', 'Dev', 'Co', 'desc') RETURNING id").fetchone()[0]
         conn.execute(
-            "INSERT INTO jobs (dedupe_hash, title, company, description, status, score) "
-            "VALUES ('scored', 'Dev', 'Co', 'desc', 'surfaced', 85)")
+            "INSERT INTO user_jobs (user_id, job_id, status, score) "
+            "VALUES (?, ?, 'surfaced', 85)", (USER, jid))
         conn.commit()
         jobs = client.get("/api/jobs?tab=unscored").json()
         assert all(j["score"] is None for j in jobs)

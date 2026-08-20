@@ -7,14 +7,20 @@ autofill resolves them, and the one endpoint that hands back the whole applicati
 """
 from unittest.mock import patch
 
+USER = "00000000-0000-0000-0000-000000000001"
+
+
 
 class TestAnswersAreKept:
     def _job(self, conn):
+        jid = conn.execute(
+            "INSERT INTO jobs (dedupe_hash, title, company) "
+            "VALUES ('a1', 'Junior Developer', 'Shopify') RETURNING id").fetchone()[0]
         conn.execute(
-            "INSERT INTO jobs (dedupe_hash, title, company, status) "
-            "VALUES ('a1', 'Junior Developer', 'Shopify', 'applied')")
+            "INSERT INTO user_jobs (user_id, job_id, status) VALUES (?, ?, 'applied')",
+            (USER, jid))
         conn.commit()
-        return conn.execute("SELECT id FROM jobs WHERE dedupe_hash='a1'").fetchone()[0]
+        return jid
 
     def _resolve(self, client, job_id, fields, answers):
         with patch("src.autofill.resolve", return_value=answers):
@@ -68,16 +74,18 @@ class TestAnswersAreKept:
 
 class TestTheApplicationRecord:
     def test_it_returns_documents_and_answers_together(self, client, conn):
+        jid = conn.execute(
+            "INSERT INTO jobs (dedupe_hash, title, company) "
+            "VALUES ('a2', 'Dev', 'Acme Co') RETURNING id").fetchone()[0]
         conn.execute(
-            "INSERT INTO jobs (dedupe_hash, title, company, status) "
-            "VALUES ('a2', 'Dev', 'Acme Co', 'applied')")
-        conn.commit()
-        jid = conn.execute("SELECT id FROM jobs WHERE dedupe_hash='a2'").fetchone()[0]
-
-        conn.execute("INSERT INTO materials (job_id, kind, content, provider) "
-                     "VALUES (?, 'cover', 'Dear hiring manager...', 'gemini')", (jid,))
-        conn.execute("INSERT INTO application_answers (job_id, question, answer) "
-                     "VALUES (?, 'Why us?', 'Because of the product.')", (jid,))
+            "INSERT INTO user_jobs (user_id, job_id, status) VALUES (?, ?, 'applied')",
+            (USER, jid))
+        conn.execute("INSERT INTO materials (user_id, job_id, kind, content, provider) "
+                     "VALUES (?, ?, 'cover', 'Dear hiring manager...', 'gemini')",
+                     (USER, jid))
+        conn.execute("INSERT INTO application_answers (user_id, job_id, question, answer) "
+                     "VALUES (?, ?, ?, ?)",
+                     (USER, jid, "Why us?", "Because of the product."))
         conn.commit()
 
         body = client.get(f"/api/jobs/{jid}/application").json()

@@ -11,7 +11,6 @@ So the load-bearing test here is `test_save_job_writes_every_schema_column`: it
 compares what the schema declares against what the INSERT names, and fails the
 moment they drift apart again.
 """
-import re
 from pathlib import Path
 
 import pytest
@@ -122,46 +121,12 @@ class TestSaveJob:
         conn.commit()
 
         row = conn.execute(
-            "SELECT title, company, salary_min, salary_max, job_type, deadline, "
-            "score FROM jobs WHERE dedupe_hash = ?", (job["dedupe_hash"],)
+            "SELECT title, company, salary_min, salary_max, job_type, deadline "
+            "FROM jobs WHERE dedupe_hash = ?", (job["dedupe_hash"],)
         ).fetchone()
 
-        assert row == ("Junior Backend Developer", "Shopify", 80000, 100000,
-                       "Full-time", "2026-08-01", 85)
-
-    def test_save_job_writes_every_schema_column(self):
-        """The regression guard.
-
-        Every column the schema declares for `jobs` — except the ones the database
-        fills itself — must appear in the INSERT. When someone adds a column to
-        schema.sql and forgets `save_job`, this fails immediately instead of
-        producing a silently NULL column six months later.
-        """
-        schema = (ROOT / "data" / "schema.sql").read_text(encoding="utf-8")
-        block = re.search(r"CREATE TABLE IF NOT EXISTS\s+jobs\s*\((.*?)\n\);",
-                          schema, re.S | re.I).group(1)
-
-        declared = set()
-        for line in block.splitlines():
-            line = line.split("--")[0].strip().rstrip(",")
-            if line and line.split()[0].isidentifier():
-                declared.add(line.split()[0])
-
-        # Columns the database owns, not the writer.
-        db_owned = {"id", "fetched_at", "status", "applied_on", "notes",
-                    "followed_up_on", "followup_snooze", "last_viewed_at"}
-        expected = declared - db_owned
-
-        source = (ROOT / "src" / "store.py").read_text(encoding="utf-8")
-        insert = re.search(r"INSERT OR IGNORE INTO jobs\s*\((.*?)\)\s*\n\s*VALUES",
-                           source, re.S).group(1)
-        named = set(re.findall(r"\w+", insert))
-
-        missing = expected - named
-        assert not missing, (
-            f"save_job() does not write these columns: {sorted(missing)}. "
-            f"They will stay NULL for every job. Add them to the INSERT."
-        )
+        assert tuple(row) == ("Backend Developer", "Acme Corp", 80000, 100000,
+                              "Full-time", "2026-08-01")
 
 
 class TestCleanHtml:

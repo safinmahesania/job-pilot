@@ -8,7 +8,7 @@ def _seed_health(conn, name, error_streak=30):
     conn.execute(
         "INSERT INTO source_health (name, ats, fetched, kept, status, error, "
         "last_run, zero_streak, error_streak, last_ok, alerted) "
-        "VALUES (?, 'greenhouse', 0, 0, 'error', '404', '2026-01-01', 0, ?, NULL, 0)",
+        "VALUES (?, 'greenhouse', 0, 0, 'error', '404', '2026-01-01', 0, ?, NULL, false)",
         (name, error_streak))
     conn.commit()
 

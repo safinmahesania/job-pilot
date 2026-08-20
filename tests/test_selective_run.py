@@ -34,7 +34,6 @@ def _run_capturing(only, companies):
     conn.get_setting = lambda *a, **k: None
 
     with patch.object(run_mod, "load_companies", return_value=companies), \
-         patch.object(run_mod, "load_profile", return_value={"skills": ["Python"]}), \
          patch.object(run_mod, "fetch_all", side_effect=fake_fetch_all), \
          patch.object(run_mod, "load_env"), \
          patch("src.store.connect", return_value=conn), \

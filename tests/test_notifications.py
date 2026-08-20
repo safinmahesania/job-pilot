@@ -1,6 +1,7 @@
 """Notifications: stored on send, listed newest-first, marked seen on open."""
 from unittest.mock import patch
 
+USER = "00000000-0000-0000-0000-000000000001"
 
 class TestNotificationRecording:
     def test_send_records_even_when_telegram_is_off(self, conn, monkeypatch):
@@ -30,7 +31,8 @@ class TestNotificationRecording:
 
 class TestNotificationEndpoints:
     def _add(self, conn, text, seen=0):
-        conn.execute("INSERT INTO notifications (text, seen) VALUES (?,?)", (text, seen))
+        conn.execute("INSERT INTO notifications (user_id, text, seen) VALUES (?,?,?)",
+                     (USER, text, bool(seen)))
         conn.commit()
 
     def test_list_returns_newest_first_with_unseen_count(self, client, conn):

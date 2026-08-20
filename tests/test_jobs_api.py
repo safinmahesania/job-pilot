@@ -1,4 +1,5 @@
 
+USER = "00000000-0000-0000-0000-000000000001"
 
 class TestSearchOnlyFeedAndSaved:
     """The extension picker should only offer jobs in play — surfaced or saved — never
@@ -6,8 +7,12 @@ class TestSearchOnlyFeedAndSaved:
 
     def _add(self, conn, jid, status, title="Dev Role"):
         conn.execute(
-            "INSERT INTO jobs (id, dedupe_hash, title, company, source, status) "
-            "VALUES (?,?,?,?,'adzuna',?)", (jid, f"h{jid}", title, "Acme", status))
+            "INSERT INTO jobs (id, dedupe_hash, title, company, source) "
+            "OVERRIDING SYSTEM VALUE VALUES (?,?,?,?,'adzuna')",
+            (jid, f"h{jid}", title, "Acme"))
+        conn.execute(
+            "INSERT INTO user_jobs (user_id, job_id, status) VALUES (?,?,?)",
+            (USER, jid, status))
         conn.commit()
 
     def test_dismissed_and_applied_are_excluded(self, client, conn):

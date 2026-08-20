@@ -20,7 +20,7 @@ import pytest
 
 from src import resume_guard
 from src.resume_guard import (
-    FabricationError, ProfileIncompleteError, check_grounding, validate_profile,
+    FabricationError, check_grounding, validate_profile,
 )
 
 

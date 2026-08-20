@@ -154,20 +154,25 @@ _SPA_PATHS = [
 ]
 
 
-@app.get("/{page}")
-def spa_page(page: str):
-    """Serve the SPA shell for a known client-side route; 404 otherwise so real
-    missing files still error normally."""
-    if page in _SPA_PATHS:
-        return FileResponse(_FRONTEND_DIR / "index.html")
-    # Not a known page — let it fall through to static files (or 404).
-    target = _FRONTEND_DIR / page
-    if target.is_file():
-        return FileResponse(target)
-    return Response(status_code=404)
+@app.get("/")
+def landing():
+    """Public marketing page for logged-out visitors."""
+    return FileResponse(_FRONTEND_DIR / "landing.html")
 
 
+@app.get("/app")
+@app.get("/app/{page}")
+def app_shell(page: str = ""):
+    """The signed-in single-page app. Every /app and /app/<route> path serves the
+    same shell; the frontend reads the URL to decide which page to show, so a direct
+    visit or reload to /app/profile etc. still works."""
+    return FileResponse(_FRONTEND_DIR / "index.html")
+
+
+# Static assets: auth.js, app.js, styles.css, landing.html, the extension, etc.
+# html=False so "/" is handled by the landing route above rather than auto-serving
+# index.html. Registered last so the explicit routes take priority.
 app.mount("/", StaticFiles(
     directory=str(Path(__file__).parent.parent / "frontend"),
-    html=True,
+    html=False,
 ), name="frontend")

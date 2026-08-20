@@ -114,9 +114,9 @@ function jobpilot() {
     // Map internal tab keys to clean URL paths. Feed is the home page ("/"). Two keys
     // carry a "Tab" suffix internally but get clean slugs in the URL.
     tabToPath: {
-      home: '/', feed: '/feed', unscored: '/unscored', saved: '/saved', applied: '/applied',
-      dismissed: '/dismissed', profile: '/profile', sourcesTab: '/sources',
-      stats: '/stats', importTab: '/import', settings: '/settings', admin: '/admin',
+      home: '/app', feed: '/app/feed', unscored: '/app/unscored', saved: '/app/saved', applied: '/app/applied',
+      dismissed: '/app/dismissed', profile: '/app/profile', sourcesTab: '/app/sources',
+      stats: '/app/stats', importTab: '/app/import', settings: '/app/settings', admin: '/app/admin',
     },
     // Resolve the current URL path back to a tab key (defaults to home).
     tabFromPath() {

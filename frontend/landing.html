@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JobPilot — jobs, scored for you</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;650&family=Fraunces:opsz,ital,wght@9..144,0,400;9..144,0,500;9..144,0,600;9..144,1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<style>
+:root{
+  --b:#A96D14; --bs:#7A4E0C; --bt:#F6EEDD; --bring:rgba(169,109,20,.20);
+  --paper:#FCF8F0; --card:#fff; --ink:#20201C; --i2:#52514E; --i3:#8A8985;
+  --ln:#EDE6D8; --navy:#26375C;
+  --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --serif:'Fraunces',Georgia,serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased;letter-spacing:-.006em;line-height:1.5}
+h1,h2,h3{margin:0;letter-spacing:-.022em}
+a{color:inherit;text-decoration:none}
+::selection{background:var(--bt);color:var(--bs)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 26px}
+
+/* nav */
+.nav{position:sticky;top:0;z-index:30;background:rgba(252,248,240,.86);backdrop-filter:blur(10px);border-bottom:.5px solid var(--ln)}
+.nav .in{display:flex;align-items:center;height:62px;gap:10px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:16px}
+.brand svg{width:30px;height:30px;border-radius:9px}
+.nav .links{margin-left:auto;display:flex;align-items:center;gap:26px}
+.nav .links a{font-size:14px;color:var(--i2);font-weight:500}
+.nav .links a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:7px;height:42px;padding:0 18px;border-radius:12px;font-weight:600;font-size:14px;cursor:pointer;border:0;font-family:inherit;transition:.14s}
+.btn-p{background:var(--b);color:#fff}.btn-p:hover{background:var(--bs)}
+.btn-g{background:transparent;color:var(--ink);border:1.5px solid var(--ln)}.btn-g:hover{background:#fff;border-color:#E0D7C4}
+.btn-lg{height:52px;padding:0 26px;font-size:15px;border-radius:14px}
+
+/* hero — editorial (B top) */
+.hero{text-align:center;padding:82px 0 52px}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--bs);background:var(--bt);padding:6px 13px;border-radius:20px;margin-bottom:24px}
+.hero h1{font-family:var(--serif);font-weight:500;font-size:64px;line-height:1.03;color:var(--ink)}
+.hero h1 em{font-style:italic;color:var(--b)}
+.lede{font-size:17px;color:var(--i2);line-height:1.6;max-width:560px;margin:22px auto 30px}
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.rule{max-width:560px;margin:44px auto 0;height:1px;background:var(--ln)}
+.stats{display:flex;justify-content:center;gap:56px;margin-top:26px}
+.stats b{font-family:var(--serif);font-size:30px;font-weight:500;display:block;color:var(--ink)}
+.stats span{font-size:12.5px;color:var(--i3)}
+
+/* sources strip */
+.sources{padding:30px 0;border-top:.5px solid var(--ln);border-bottom:.5px solid var(--ln)}
+.sources .lbl{text-align:center;font-size:12.5px;color:var(--i3);margin-bottom:16px}
+.sources .row{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 12px}
+.src{font-size:13px;font-weight:500;color:var(--i2);background:#fff;border:.5px solid var(--ln);border-radius:10px;padding:8px 14px}
+
+/* section shell */
+.sec{padding:72px 0}
+.sec-h{text-align:center;max-width:600px;margin:0 auto 44px}
+.sec-h .k{font-size:12.5px;font-weight:600;color:var(--b);letter-spacing:.02em;margin-bottom:10px}
+.sec-h h2{font-size:34px;font-weight:650;line-height:1.12}
+.sec-h p{font-size:16px;color:var(--i3);margin:12px 0 0;line-height:1.6}
+
+/* how it works */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.step{background:#fff;border:.5px solid var(--ln);border-radius:20px;padding:26px 24px}
+.step .n{font-family:var(--serif);font-size:15px;font-weight:500;color:var(--b)}
+.step h3{font-size:18px;font-weight:600;margin:8px 0 8px}
+.step p{font-size:14px;color:var(--i2);margin:0;line-height:1.6}
+
+/* features */
+.feat{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.fc{background:#fff;border:.5px solid var(--ln);border-radius:18px;padding:24px}
+.fc .i{width:42px;height:42px;border-radius:12px;background:var(--bt);color:var(--b);display:flex;align-items:center;justify-content:center;font-size:21px;margin-bottom:15px}
+.fc h3{font-size:16px;font-weight:600;margin:0 0 6px}
+.fc p{font-size:13.5px;color:var(--i2);margin:0;line-height:1.6}
+
+/* privacy callout */
+.privacy{background:var(--navy);color:#EBEEF5;border-radius:26px;padding:44px 46px;display:grid;grid-template-columns:1fr 1fr;gap:34px;align-items:center}
+.privacy .k{font-size:12.5px;font-weight:600;color:#C4B183;margin-bottom:10px}
+.privacy h2{font-size:28px;font-weight:600;line-height:1.15;color:#fff}
+.privacy p{font-size:15px;color:#C3CAD8;line-height:1.65;margin:14px 0 0}
+.privacy ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:14px}
+.privacy li{display:flex;gap:12px;font-size:14.5px;color:#DDE2EC;line-height:1.5}
+.privacy li i{color:#C4B183;font-size:19px;margin-top:1px}
+
+/* honest note */
+.note{text-align:center;max-width:680px;margin:0 auto}
+.note .q{font-family:var(--serif);font-size:26px;font-weight:500;line-height:1.35;color:var(--ink)}
+.note .q em{font-style:italic;color:var(--b)}
+.note .by{font-size:13px;color:var(--i3);margin-top:16px}
+
+/* final CTA */
+.final{text-align:center;background:linear-gradient(160deg,#FBF3E2,#F4EAD5);border:.5px solid var(--ln);border-radius:28px;padding:56px 30px;margin:0 0 72px}
+.final h2{font-size:34px;font-weight:650}
+.final p{font-size:16px;color:var(--i2);margin:12px 0 26px}
+.final .hero-actions{justify-content:center}
+
+/* footer */
+footer{border-top:.5px solid var(--ln);padding:34px 0 46px}
+footer .in{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+footer .muted{font-size:13px;color:var(--i3)}
+footer .fl{margin-left:auto;display:flex;gap:22px}
+footer .fl a{font-size:13px;color:var(--i2)}
+
+@media (max-width:860px){
+  .hero h1{font-size:44px}
+  .steps,.feat{grid-template-columns:1fr}
+  .privacy{grid-template-columns:1fr;padding:34px 28px}
+  .stats{gap:30px}
+  .nav .links a:not(.navcta){display:none}
+}
+</style>
+<script>try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&/^sb-.*-auth-token$/.test(k)){var v=localStorage.getItem(k);if(v&&v.indexOf("access_token")!==-1){location.replace("/app");break;}}}}catch(e){}</script>
+</head>
+<body>
+
+<!-- nav -->
+<div class="nav"><div class="wrap in">
+  <div class="brand">
+    <svg viewBox="0 0 48 48"><rect width="48" height="48" rx="12" fill="#A96D14"/><circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/><path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/><path d="M24 10 L24 24 L21.4 24 Z" fill="#F0DCB4"/><path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/><path d="M24 38 L24 24 L21.4 24 Z" fill="#1F2D4D"/><circle cx="24" cy="24" r="1.8" fill="#fff"/></svg>
+    JobPilot
+  </div>
+  <div class="links">
+    <a href="#how">How it works</a>
+    <a href="#features">Features</a>
+    <a href="/app#signin" class="navcta">Sign in</a>
+    <a href="/app#signup" class="btn btn-p navcta" style="height:38px">Get started</a>
+  </div>
+</div></div>
+
+<!-- ═════════ HERO · editorial (B top) ═════════ -->
+<section class="hero"><div class="wrap">
+  <span class="eyebrow"><i class="ti ti-plane-tilt" style="font-size:14px"></i> Your job search, on autopilot</span>
+  <h1>Every job,<br>read <em>for you.</em></h1>
+  <p class="lede">A shared pool of postings, filtered and scored against the profile you set — so you spend your time on the roles that fit, and none on the ones that don’t.</p>
+  <div class="hero-actions">
+    <a href="/app#signup" class="btn btn-p btn-lg">Create your account</a>
+    <a href="#how" class="btn btn-g btn-lg">See how it works</a>
+  </div>
+  <div class="rule"></div>
+  <div class="stats">
+    <div><b>30+</b><span>sources watched</span></div>
+    <div><b>0–100</b><span>score, with a reason</span></div>
+    <div><b>1</b><span>feed, only yours</span></div>
+  </div>
+</div></section>
+
+<!-- sources -->
+<div class="sources"><div class="wrap">
+  <div class="lbl">Watching the boards and ATS feeds you already check — in one place</div>
+  <div class="row">
+    <span class="src">Greenhouse</span><span class="src">Lever</span><span class="src">Ashby</span>
+    <span class="src">Workday</span><span class="src">Adzuna</span><span class="src">LinkedIn</span>
+    <span class="src">Indeed</span><span class="src">Talent.com</span><span class="src">+ 24 more</span>
+  </div>
+</div></div>
+
+<!-- how it works -->
+<section class="sec" id="how"><div class="wrap">
+  <div class="sec-h">
+    <div class="k">HOW IT WORKS</div>
+    <h2>Three steps, then it runs itself</h2>
+    <p>You set the rules once. From there, JobPilot reads every new posting so you don’t have to.</p>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <div class="n">Step one</div>
+      <h3>Tell it what you want</h3>
+      <p>Your locations, the levels you’re after, a salary floor, and the keywords to skip. Change any of it whenever your search shifts — nothing is set in stone.</p>
+    </div>
+    <div class="step">
+      <div class="n">Step two</div>
+      <h3>It reads and scores</h3>
+      <p>Across 30+ sources, every new job is filtered against your rules, then scored from 0 to 100 — with a short reason you can read, trust, or push back on.</p>
+    </div>
+    <div class="step">
+      <div class="n">Step three</div>
+      <h3>You apply to the good ones</h3>
+      <p>Open a ranked feed, generate a resume and cover letter matched to the posting, and let the extension fill the application. You review and submit.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- features -->
+<section class="sec" id="features" style="padding-top:0"><div class="wrap">
+  <div class="sec-h">
+    <div class="k">WHAT YOU GET</div>
+    <h2>Built to cut the noise, not add to it</h2>
+    <p>Every feature answers one question: is this job worth your next hour?</p>
+  </div>
+  <div class="feat">
+    <div class="fc"><div class="i"><i class="ti ti-star"></i></div><h3>Scored, with a reason</h3><p>Each match shows why it scored what it did — so you can trust the number, or disagree with it and move on.</p></div>
+    <div class="fc"><div class="i"><i class="ti ti-adjustments-alt"></i></div><h3>Your rules, enforced</h3><p>Only jobs that fit your constraints surface. Set nothing and everything comes through — you decide how tight the filter is.</p></div>
+    <div class="fc"><div class="i"><i class="ti ti-layout-grid"></i></div><h3>One feed, only yours</h3><p>A shared job pool, a private feed. What you’ve seen, saved, applied to, or dismissed is tracked per job, for you alone.</p></div>
+    <div class="fc"><div class="i"><i class="ti ti-file-text"></i></div><h3>Tailored in a click</h3><p>Generate a resume and cover letter matched to the posting — kept with the job, so you always have the copy you sent.</p></div>
+    <div class="fc"><div class="i"><i class="ti ti-forms"></i></div><h3>Autofill the application</h3><p>The Chrome extension maps your saved answers onto the form. You review every field — it never invents an answer.</p></div>
+    <div class="fc"><div class="i"><i class="ti ti-shield-lock"></i></div><h3>Private by design</h3><p>Your name, email, phone and address never go into an AI prompt. The model writes around placeholders; JobPilot fills them in.</p></div>
+  </div>
+</div></section>
+
+<!-- privacy callout -->
+<section class="sec" style="padding-top:0"><div class="wrap">
+  <div class="privacy">
+    <div>
+      <div class="k">YOUR DETAILS STAY YOURS</div>
+      <h2>The tool reads jobs. It doesn’t hand out your life.</h2>
+      <p>Scoring and writing need context about the work you’ve done — not who you are. So that’s the line JobPilot draws, and keeps.</p>
+    </div>
+    <ul>
+      <li><i class="ti ti-check"></i> Contact details are never placed in a prompt — the model works around placeholders.</li>
+      <li><i class="ti ti-check"></i> Voluntary questions on a form are left blank for you to answer, never guessed.</li>
+      <li><i class="ti ti-check"></i> If your profile doesn’t answer something, the field stays empty. A guess on an application is a liability.</li>
+    </ul>
+  </div>
+</div></section>
+
+<!-- honest note -->
+<section class="sec" style="padding-top:0"><div class="wrap">
+  <div class="note">
+    <p class="q">“Built for people who’d rather read <em>five good matches</em> than fifty listings — and want their evenings back.”</p>
+    <div class="by">Why JobPilot exists</div>
+  </div>
+</div></section>
+
+<!-- final CTA -->
+<div class="wrap"><div class="final">
+  <h2>Start reading better matches</h2>
+  <p>Set your profile in a minute. See your first scored feed today.</p>
+  <div class="hero-actions">
+    <a href="/app#signup" class="btn btn-p btn-lg">Create your account</a>
+    <a href="/app#signin" class="btn btn-g btn-lg">Sign in</a>
+  </div>
+</div></div>
+
+<!-- footer -->
+<footer><div class="wrap in">
+  <div class="brand" style="font-size:15px">
+    <svg viewBox="0 0 48 48" style="width:26px;height:26px"><rect width="48" height="48" rx="12" fill="#A96D14"/><circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.9"/><path d="M24 10 L26.6 24 L24 24 Z" fill="#fff"/><path d="M24 38 L26.6 24 L24 24 Z" fill="#26375C"/><circle cx="24" cy="24" r="1.8" fill="#fff"/></svg>
+    JobPilot
+  </div>
+  <span class="muted" style="margin-left:10px">Jobs, scored for you.</span>
+  <div class="fl"><a href="/app#signin">Sign in</a><a href="#">Terms</a><a href="#">Privacy</a></div>
+</div>
+<div class="wrap"><div class="muted" style="margin-top:18px;font-size:12px">© 2026 JobPilot</div></div>
+</footer>
+
+</body>
+</html>

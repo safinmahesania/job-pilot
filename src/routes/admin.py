@@ -114,18 +114,106 @@ def mark_notifications_seen(user_id: str = Depends(current_user_id),
 
 
 @router.get("/api/jobs/enrich-diagnosis")
-def enrich_diagnosis(_: str = Depends(require_admin)):
-    """Where do the feed's Adzuna links point? PENDING: coupled to per-user status
-    and the enrichment path; rebuilt for the pool in Stage 5."""
-    raise HTTPException(503, "Pending Stage 5: per-user scoring/enrichment rework")
+def enrich_diagnosis(_: str = Depends(require_admin), conn=Depends(_db_dep)):
+    """Where do the pool's short Adzuna links point? No fetching — just a tally.
+
+    "Enrich descriptions" can come back having enriched almost nothing, and the reason
+    is usually that the links don't go anywhere fetchable: an Adzuna job whose redirect
+    lands on Indeed or LinkedIn keeps its snippet by design. This counts the short
+    Adzuna pool jobs by destination so that's visible, and lists the hosts most of the
+    un-fetchable links go to — the real answer to "why are descriptions still short".
+    """
+    from urllib.parse import urlparse
+
+    from src import enrich
+
+    rows = conn.execute(
+        "SELECT source_url, apply_url, description FROM jobs "
+        "WHERE source='adzuna' AND (description IS NULL OR length(description) < 400 "
+        "     OR trim(description) LIKE '%…' OR trim(description) LIKE '%...')"
+    ).fetchall()
+
+    by_strategy = {"adzuna": 0, "lever": 0, "greenhouse": 0, "not_fetchable": 0}
+    other_hosts: dict[str, int] = {}
+    for source_url, apply_url, _desc in rows:
+        url = source_url or apply_url or ""
+        strat = enrich._destination(url)
+        if strat:
+            by_strategy[strat] += 1
+        else:
+            by_strategy["not_fetchable"] += 1
+            host = (urlparse(url).hostname or "unknown").replace("www.", "")
+            other_hosts[host] = other_hosts.get(host, 0) + 1
+
+    top_other = sorted(other_hosts.items(), key=lambda kv: kv[1], reverse=True)[:8]
+    fetchable = {k: v for k, v in by_strategy.items() if k != "not_fetchable"}
+    return {
+        "short_adzuna_jobs": len(rows),
+        "fetchable": fetchable,
+        "not_fetchable": by_strategy["not_fetchable"],
+        "top_unfetchable_hosts": [{"host": h, "count": n} for h, n in top_other],
+    }
 
 
 
 @router.post("/api/jobs/enrich-existing")
-def enrich_existing(_: str = Depends(require_admin)):
-    """Fetch full descriptions for short feed jobs and rescore. PENDING: selects by
-    per-user status and calls per-user rescore; rebuilt for the pool in Stage 5."""
-    raise HTTPException(503, "Pending Stage 5: per-user scoring/enrichment rework")
+def enrich_existing(_: str = Depends(require_admin), conn=Depends(_db_dep)):
+    """Backfill full descriptions for pool jobs still on an Adzuna snippet, then
+    re-extract them so their structured fields reflect the fuller text.
+
+    This is a pool operation: it enriches the shared postings, not any one user's feed.
+    Per-user scoring is separate — a user's get-new run scores whatever's in the pool.
+    Capped per request so one click can't run for an hour; run again for the rest.
+    """
+    from src import enrich, extract, notify
+    from src.paths import MIN_DESCRIPTION_CHARS
+
+    extraction_on = _get_setting(conn, "extraction_enabled", "1") == "1"
+
+    rows = conn.execute(
+        "SELECT id, title, company, location, source, source_url, apply_url, description "
+        "FROM jobs WHERE source='adzuna' "
+        "AND (description IS NULL OR length(description) < ? "
+        "     OR trim(description) LIKE '%…' OR trim(description) LIKE '%...')",
+        (MIN_DESCRIPTION_CHARS,)
+    ).fetchall()
+
+    remaining = len(rows)
+    enriched = reextracted = failed = 0
+    for row in rows[:100]:                      # cap one request; run again for the rest
+        job = dict(row)
+        try:
+            if not enrich.enrich_if_needed(job):
+                continue
+            conn.execute("UPDATE jobs SET description=? WHERE id=?",
+                         (job["description"], job["id"]))
+            enriched += 1
+            if extraction_on:
+                try:
+                    ex = extract.extract(job)
+                    if ex is not None:
+                        store.update_extraction(conn, job["id"], ex.model_dump())
+                        reextracted += 1
+                except Exception as e:
+                    store.record_error(conn, "extract:enrich", e)
+        except Exception as e:
+            failed += 1
+            store.record_error(conn, "enrich:existing", e)
+
+    conn.commit()
+
+    notify.send(
+        "<b>Description enrichment — backfill</b>\n"
+        f"Enriched: {enriched}   Re-extracted: {reextracted}   Failed: {failed}\n"
+        f"({remaining} were pending; run again for the rest)"
+    )
+    return {
+        "checked": min(remaining, 100),
+        "enriched": enriched,
+        "reextracted": reextracted,
+        "failed": failed,
+        "remaining": max(0, remaining - 100),
+    }
 
 
 

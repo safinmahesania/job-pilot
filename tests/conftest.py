@@ -1,18 +1,20 @@
-"""Shared fixtures.
+"""Shared fixtures for the Postgres-era test suite.
 
-Two things every test needs, and neither is optional:
+The app is multi-user Postgres now, so tests run against a REAL Postgres — never
+SQLite, and never your production database. Point TEST_DATABASE_URL at an empty
+throwaway database (a local Postgres, or a scratch Supabase project); if it isn't
+set, the database tests skip rather than touch anything real.
 
-  * A database of its own. `store.DB` is bound at import time, so pointing
-    `paths.DB_PATH` at a temp file after the fact would do nothing — the module
-    already holds the old value. We rebind `store.DB` directly, and build the
-    schema through the real `init_db`, so the tests exercise the same migration
-    path a user does.
+Two guarantees every test gets:
 
-  * A model that never runs. Every LLM call is stubbed. A test that quietly
-    reaches for Ollama passes on the author's machine and fails in CI, and a test
-    that reaches the network is not a test.
+  * A clean, isolated database. The schema is applied once per session; before each
+    test every data table is truncated and a canonical test user + profile are
+    re-seeded, so tests can't leak into one another.
+
+  * A model that never runs. Ollama is stubbed at import; anything that reaches for a
+    real LLM must stub it explicitly (score_job, extract, etc.).
 """
-import sqlite3
+import os
 import sys
 import types
 from pathlib import Path
@@ -22,277 +24,103 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import os as _os
-_os.environ.pop("JOBPILOT_PASSWORD", None)
+os.environ.pop("JOBPILOT_PASSWORD", None)
 
 # Ollama isn't installed in CI and must never be called from a test.
 if "ollama" not in sys.modules:
-    stub = types.ModuleType("ollama")
+    _stub = types.ModuleType("ollama")
 
-    def _refuse(*_args, **_kwargs):
+    def _refuse(*_a, **_k):
         raise AssertionError("a test tried to call Ollama — stub it")
 
-    stub.chat = _refuse
-    sys.modules["ollama"] = stub
+    _stub.chat = _refuse
+    sys.modules["ollama"] = _stub
 
 
-#: Every module that binds the database path at import time. `from src.paths
-#: import DB_PATH as DB` takes a copy — so patching `paths.DB_PATH` alone leaves
-#: these pointing at the real database, and a test would quietly read and write
-#: your actual jobs. Each of these must be patched too.
-_DB_BINDERS = ["src.store", "src.report", "src.deps"]
+TEST_DB = os.environ.get("TEST_DATABASE_URL")
 
+#: The canonical test user. A second one is available for isolation tests.
+USER = "00000000-0000-0000-0000-000000000001"
+USER2 = "00000000-0000-0000-0000-000000000002"
 
-@pytest.fixture
-def db(tmp_path, monkeypatch):
-    """A real, empty JobPilot database, built by the real schema."""
-    import importlib
-    from src import paths
-
-    path = tmp_path / "test.db"
-    monkeypatch.setattr(paths, "DB_PATH", str(path))
-    for name in _DB_BINDERS:
-        module = importlib.import_module(name)
-        monkeypatch.setattr(module, "DB", str(path))
-
-    schema = (ROOT / "data" / "schema.sql").read_text(encoding="utf-8")
-    conn = sqlite3.connect(path)
-    conn.executescript(schema)
-    conn.commit()
-    conn.close()
-
-    return str(path)
-
-
-@pytest.fixture
-def client(db):
-    """A TestClient against the app, bound to the per-test database. Shared here so
-    every test file can use it, not just test_api.py."""
-    from fastapi.testclient import TestClient
-    from src import api
-    return TestClient(api.app)
-
-
-@pytest.fixture
-def conn(db):
-    """An open connection to the test database, closed afterwards."""
-    from src import store
-    c = store.connect()
-    yield c
-    c.close()
-
-
-@pytest.fixture
-def profile():
-    """A realistic profile, with contact details — so redaction has something to
-    redact and a leak has something to leak."""
-    return {
-        "identity": {"name": "Safin Mahesania", "seniority": "junior",
-                     "first_name": "Safin", "last_name": "Mahesania"},
-        "contact": {
-            "email": "safin@example.com",
-            "phone": "+1 514 555 0123",
-            "address": "1200 Rue Sainte-Catherine",
-            "city": "Montreal",
-            "province": "Quebec",
-            "postal_code": "H3A 0G4",
-            "linkedin": "https://linkedin.com/in/safin",
-            "github": "https://github.com/safinmahesania",
-        },
-        "application": {
-            "work_authorized": True,
-            "needs_sponsorship": False,
-            "willing_to_relocate": True,
-            "work_arrangement": "hybrid",
-            "willing_to_work_onsite": True,
-            "max_days_onsite_per_week": 3,
-            "willing_to_commute": True,
-            "commute_locations": ["Montreal", "Toronto"],
-            "notice_period": "Immediately",
-            "years_of_experience": 1,
-            "gender": "",
-        },
-        "custom_answers": [
-            {"match": ["criminal", "record"], "answer": "No"},
-        ],
-        "summary": "MSc CS student building backend systems.",
-        "constraints": {"salary_floor": 60000},
-        "skills": {"expert": ["Python", "JavaScript"],
-                   "proficient": ["FastAPI"], "familiar": ["AWS"]},
-        "experience": [{
-            "role": "Software Developer Intern", "company": "Acme",
-            "start": "2024-05", "end": "2024-08",
-            "highlights": ["Cut API latency 40% with a Redis cache"],
-        }],
-        "projects": [
-            {"name": "JobPilot", "tech": ["Python", "FastAPI"],
-             "description": "Job automation tool"},
-            {"name": "SafeRoute", "tech": ["Python"],
-             "description": "Constrained shortest path"},
-        ],
-        "education": [{"degree": "MSc", "field": "Computer Science",
-                       "institution": "Concordia", "end": "2026"}],
-    }
-
-
-#: Every string that must never reach a hosted model in redacted mode.
-IDENTIFIERS = [
-    "Safin Mahesania",
-    "safin@example.com",
-    "+1 514 555 0123",
-    "1200 Rue Sainte-Catherine",
-    "linkedin.com/in/safin",
-    "github.com/safinmahesania",
+#: Tables cleared before every test (users/app_settings are kept and re-seeded).
+_DATA_TABLES = [
+    "user_jobs", "materials", "application_answers", "notifications",
+    "user_profiles", "user_settings", "jobs", "seen", "source_health",
+    "runs", "errors", "llm_usage",
 ]
 
-
-@pytest.fixture
-def identifiers():
-    return list(IDENTIFIERS)
-
-
-@pytest.fixture
-def capture_llm(monkeypatch):
-    """Replace llm.generate; record every prompt; return canned answers.
-
-    Usage:
-        capture_llm.reply = lambda system, user: ("...", "gemini")
-        ... run the code ...
-        assert capture_llm.personal_prompts == [...]
-    """
-    from src import llm
-
-    class Recorder:
-        def __init__(self):
-            self.calls = []          # (system, user, personal)
-            self.reply = lambda system, user: ("ok", "gemini")
-
-        def __call__(self, system, user, personal=False):
-            self.calls.append((system, user, personal))
-            return self.reply(system, user)
-
-        @property
-        def personal_prompts(self):
-            return [s + "\n" + u for s, u, personal in self.calls if personal]
-
-        @property
-        def all_prompts(self):
-            return [s + "\n" + u for s, u, _ in self.calls]
-
-    recorder = Recorder()
-    monkeypatch.setattr(llm, "generate", recorder)
-    return recorder
+_AUTH_SHIM = """
+create schema if not exists auth;
+create table if not exists auth.users (id uuid primary key default gen_random_uuid(), email text);
+create or replace function auth.uid() returns uuid language sql stable as
+  $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+do $$ begin create role authenticated; exception when duplicate_object then null; end $$;
+do $$ begin create role anon; exception when duplicate_object then null; end $$;
+"""
 
 
-@pytest.fixture
-def privacy_mode(conn):
-    """Set the privacy mode for a test."""
-    from src import store
-
-    def _set(mode):
-        store.set_setting(conn, "privacy_mode", mode)
-        conn.commit()
-
-    return _set
+def _apply_schema(conn):
+    """Bring the test database up to the current schema (idempotent)."""
+    conn.execute(_AUTH_SHIM)
+    schema = (ROOT / "data" / "jobpilot_schema_postgres.sql").read_text(encoding="utf-8")
+    conn.execute(schema)
+    conn.commit()
 
 
-def make_job(**overrides):
-    """A valid raw job, before normalisation."""
-    job = {
-        "source": "greenhouse:shopify",
-        "title": "Junior Backend Developer",
-        "company": "Shopify",
-        "location": "Toronto, Canada",
-        "apply_url": "https://boards.greenhouse.io/shopify/jobs/12345",
-        "description": "<p>Python, FastAPI, PostgreSQL. New grads welcome.</p>",
-        "job_type": "Full-time",
-    }
-    job.update(overrides)
-    return job
+def _seed_users(conn):
+    for uid, email in ((USER, "test1@example.com"), (USER2, "test2@example.com")):
+        conn.execute(
+            "INSERT INTO auth.users (id, email) VALUES (?, ?) ON CONFLICT DO NOTHING",
+            (uid, email))
+        conn.execute(
+            "INSERT INTO public.users (id, email, is_admin) VALUES (?, ?, ?) "
+            "ON CONFLICT (id) DO UPDATE SET is_admin=excluded.is_admin",
+            (uid, email, uid == USER))
+    conn.commit()
 
 
-@pytest.fixture(autouse=True)
-def _unlock_app(monkeypatch):
-    """Every test runs against an unlocked app; test_auth_gate opts back in.
-    src.notify/src.llm call load_dotenv() at import, so a developer's .env password
-    lands back in the environment; clear it before each test."""
-    monkeypatch.delenv("JOBPILOT_PASSWORD", raising=False)
-
-
-@pytest.fixture(autouse=True)
-def written_profile(tmp_path, monkeypatch):
-    """Write a minimal profile.yaml + companies.yaml and point the config loaders at a
-    temp directory — for EVERY test (autouse).
-
-    This is autouse on purpose. Some endpoints write to config: POST /api/sources
-    appends to companies.yaml. Without the redirect, running the suite would append
-    test fixtures ("Acme", "B", ...) to the developer's REAL config/companies.yaml —
-    which is exactly the bug that made those two placeholders reappear every time
-    `pytest` was run. Redirecting CONFIG_DIR to tmp_path for all tests makes it
-    impossible for any test to touch the real file.
-
-    Some endpoints (job import, generation) also call load_profile(), which reads a
-    real file that's gitignored and absent on a clean checkout, so this also removes
-    that environment coupling from CI.
-    """
-    import yaml as _yaml
-    (tmp_path / "profile.yaml").write_text(_yaml.safe_dump({
-        "identity": {"name": "Test User", "seniority": "junior"},
-        "contact": {"email": "t@example.com"},
-        "summary": "A junior developer.",
-        "skills": {"expert": ["Flutter", "Python"]},
-        "skill_categories": [],
-        "constraints": {"locations": ["Remote"]},
-        "search": {"role_levels": ["junior"]},
-    }), encoding="utf-8")
-    (tmp_path / "companies.yaml").write_text(
-        _yaml.safe_dump({"companies": []}), encoding="utf-8")
-
-    monkeypatch.setattr("src.paths.CONFIG_DIR", tmp_path)
-    monkeypatch.setattr("src.config.CONFIG_DIR", tmp_path)
-    monkeypatch.setattr("src.configio.CONFIG_DIR", tmp_path)
-    return tmp_path
-
-
-@pytest.fixture(autouse=True)
-def _no_live_scoring(monkeypatch):
-    """Never let a test score a job against a real model.
-
-    Scoring reaches for whatever provider is configured. On a machine with no API keys
-    that quietly fails and the suite is green; on a machine with a real .env the same
-    tests fire live requests — slow (a full run went from ~25s to ~75s), charged against
-    a real quota, and non-deterministic. One test asserted a job stayed in the feed after
-    an edit, which held only because scoring *hadn't* worked: with a live model the edit
-    rescored a fixture job ("T" at "X") below the threshold and it dropped out of the
-    feed. A test must not pass or fail depending on whose laptop it runs on.
-
-    `score_job` therefore returns None for every test — the documented "scoring couldn't
-    run" result, which leaves an existing score untouched. Any test that actually
-    exercises scoring patches it itself, and its patch wins.
-
-    The generate chain is deliberately left alone: the privacy tests drive it directly by
-    mocking the providers underneath, and stubbing it here would break that.
-    """
+@pytest.fixture(scope="session")
+def _session_conn():
+    if not TEST_DB:
+        pytest.skip("set TEST_DATABASE_URL to run the database tests")
+    os.environ["DATABASE_URL"] = TEST_DB          # app code connects here
+    from src import db
+    conn = db.connect()
     try:
-        monkeypatch.setattr("src.scoring.rerank.score_job", lambda *a, **kw: None)
-    except Exception:
-        pass
-    yield
+        # Is the schema there already? If not, apply it.
+        has = conn.execute(
+            "SELECT COUNT(*) FROM information_schema.tables "
+            "WHERE table_schema='public' AND table_name='user_jobs'").fetchone()[0]
+        if not has:
+            _apply_schema(conn)
+        yield conn
+    finally:
+        conn.close()
 
 
-@pytest.fixture(autouse=True)
-def _reset_rate_limiter():
-    """Clear the rate limiter before every test.
+@pytest.fixture
+def db(_session_conn):
+    """A clean, isolated database with the two test users + user1's profile seeded."""
+    conn = _session_conn
+    conn.execute("TRUNCATE " + ", ".join(_DATA_TABLES) + " RESTART IDENTITY CASCADE")
+    conn.commit()
+    _seed_users(conn)
+    # A basic profile for USER so prefilter/scoring paths have something to read.
+    conn.execute(
+        "INSERT INTO user_profiles (user_id, profile) VALUES (?, ?::jsonb) "
+        "ON CONFLICT (user_id) DO UPDATE SET profile=excluded.profile",
+        (USER, '{"search": {"titles": ["Backend Developer"]}, '
+               '"constraints": {"locations": ["Canada", "Remote"]}}'))
+    conn.commit()
+    yield conn
 
-    The limiter keeps its counters in process-global memory, so without this a test
-    that makes several generation/import calls would leave those counts sitting there
-    for whatever test ran next — and a later test making one more call could tip over a
-    limit it never set. That is exactly the kind of order- and timing-dependent failure
-    that passes locally and goes red on CI. Resetting per test makes each one start from
-    a clean count."""
-    try:
-        import src.api as api
-        api.limiter.reset()
-    except Exception:
-        pass
-    yield
+
+@pytest.fixture
+def user():
+    return USER
+
+
+@pytest.fixture
+def user2():
+    return USER2

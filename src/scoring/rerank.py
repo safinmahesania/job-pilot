@@ -281,12 +281,12 @@ def score_job(job: dict, profile: dict, calibration: str = "") -> ScoreResult | 
     return result
 
 
-def build_calibration() -> str:
-    """The feedback block for this run — built once, reused for every job."""
+def build_calibration(conn, user_id) -> str:
+    """The feedback block for THIS user — built once, reused for every job in a run.
+
+    Reads the user's own save/dismiss history (feedback.examples is per-user now),
+    so the calibration reflects what this person keeps and throws away."""
     try:
-        conn = store.connect()
-        block = feedback.examples(conn)
-        conn.close()
-        return block
+        return feedback.examples(conn, user_id)
     except Exception:
         return ""

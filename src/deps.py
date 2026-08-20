@@ -115,6 +115,20 @@ def _set_user_setting(conn, user_id, key, value):
     conn.commit()
 
 
+def _user_profile(conn, user_id) -> dict:
+    row = conn.execute("SELECT profile FROM user_profiles WHERE user_id=?", (user_id,)).fetchone()
+    if not row or not row[0]:
+        return {}
+    p = row[0]
+    if isinstance(p, dict):
+        return p
+    import json
+    try:
+        return json.loads(p)
+    except Exception:
+        return {}
+
+
 def _user_threshold(conn, user_id) -> int:
     """This user's feed score cutoff: their own setting, else the global default."""
     v = _get_user_setting(conn, user_id, "score_threshold")

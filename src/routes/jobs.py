@@ -352,66 +352,57 @@ def edit_job(job_id: int, body: JobEdit, defer: bool = False,
 
 
 @router.post("/api/jobs/{job_id}/recheck")
-def recheck_job(job_id: int, conn=Depends(_db_dep)):
-    """Put an edited job back through the filters a fetched job goes through.
+def recheck_job(job_id: int, user_id: str = Depends(current_user_id),
+                conn=Depends(_db_dep)):
+    """Put an edited job back through the filters, for THIS user.
 
-    NOTE: pending the Stage 5 per-user scoring/prefilter rework — the prefilter is
-    per-user now, and the dismiss writes to user_jobs. Left here until that lands.
-
-    A job that arrived with half a description was judged on half a description. Once
-    you paste the real posting, the things that were unknowable become knowable — that
-    it is in Austin, that it is a staff role, that it names a keyword you exclude — and
-    a job that looked fine on its title turns out not to be one you want.
-
-    A fetch run drops such a job without ceremony. This does the same, and says which
-    rule did it: you corrected this job by hand, so you should be told what happened to
-    it rather than watch it vanish.
-
-    Scoring is deliberately NOT done here. It is the slow half, and there is no point
-    paying for it on a job the filters just removed.
+    A job that arrived with half a description was judged on half a description.
+    Once you paste the real posting, the things that were unknowable become knowable
+    — that it is in Austin, that it names a keyword you exclude — and a job that
+    looked fine turns out not to be one you want. This re-runs the prefilter against
+    your profile and, if it now fails, dismisses it in your feed and says which rule
+    did it. Scoring is deliberately not done here — it's the slow half, and pointless
+    on a job the filters just removed.
     """
     row = conn.execute(
         "SELECT id, title, company, location, description, job_type, remote, "
-        "salary_min, salary_max, posted_date, source_url, apply_url, status "
+        "salary_min, salary_max, posted_date, source_url, apply_url "
         "FROM jobs WHERE id=?", (job_id,)
     ).fetchone()
     if not row:
         raise HTTPException(404, "job not found")
     job = dict(row)
 
-    from src.config import load_profile
+    from src.deps import _user_profile
     from src.scoring.prefilter import why_not
 
-    profile = load_profile() or {}
+    profile = _user_profile(conn, user_id)
     if not profile:
-        # No profile means no constraints to check against. Saying "passed" would be a
-        # lie; the honest answer is that nothing was checked.
         return {"verdict": "unchecked",
-                "reason": "no profile.yaml, so there were no filters to apply"}
+                "reason": "no profile set up, so there were no filters to apply"}
 
     reason = why_not(job, profile)
     if reason is None:
         return {"verdict": "ok", "reason": None}
 
-    conn.execute("UPDATE jobs SET status='dismissed' WHERE id=?", (job_id,))
+    conn.execute("UPDATE user_jobs SET status='dismissed' "
+                 "WHERE user_id=? AND job_id=?", (user_id, job_id))
     conn.commit()
     return {"verdict": "dismissed", "reason": reason}
 
 
-def _rescore_one(conn, job_id: int, calibration: str | None = None):
-    """Score a single job now, and persist the result. Returns the new score, or None if
-    scoring couldn't run (no model available, profile missing, etc.) — in which case the
-    job's existing score is left untouched and the edit is unaffected.
+def _rescore_one(conn, user_id, job_id: int, calibration: str | None = None):
+    """Score a single job for THIS user now, and persist to their user_jobs row.
+    Returns the new score, or None if scoring couldn't run (no model, no profile).
 
-    `calibration` may be passed in by a batch caller. Building it reads the database, so
-    doing it once for a whole rescore rather than once per job saves a query — and a
-    connection — on every job in the batch.
+    `calibration` may be passed by a batch caller; building it reads the database,
+    so doing it once for a whole rescore rather than once per job saves a query.
     """
     try:
-        from src import configio
+        from src.deps import _user_profile
         from src.scoring.rerank import score_job, build_calibration
 
-        profile = configio.read_yaml("profile.yaml") or {}
+        profile = _user_profile(conn, user_id)
         if not profile:
             return None
 
@@ -423,27 +414,116 @@ def _rescore_one(conn, job_id: int, calibration: str | None = None):
             return None
 
         if calibration is None:
-            calibration = build_calibration()
+            calibration = build_calibration(conn, user_id)
         result = score_job(dict(job), profile, calibration)
         if result is None:
             return None
 
         # `with conn:` so the row commits and the write lock releases the moment this
-        # job is done — not held across the next job's multi-second model call. Holding
-        # it across the batch is what let a rescore lock out the scheduler's own writes
-        # (the follow-up and digest stamps), which then failed with "database is locked".
+        # job is done — not held across the next job's multi-second model call.
         with conn:
             conn.execute(
-                "UPDATE jobs SET score=?, skills_score=?, seniority_score=?, "
-                "domain_score=?, rationale=? WHERE id=?",
+                "UPDATE user_jobs SET score=?, skills_score=?, seniority_score=?, "
+                "domain_score=?, rationale=? WHERE user_id=? AND job_id=?",
                 (result.overall, result.skills_score, result.seniority_score,
-                 result.domain_score, result.rationale, job_id),
+                 result.domain_score, result.rationale, user_id, job_id),
             )
         return round(result.overall)
     except Exception:
         import traceback
         traceback.print_exc()          # full trace to the console; the edit still stands
         return None
+
+
+# ── The "get new jobs" flow: score the shared pool for one user ───────────────
+#
+# The pool is filled by admin fetches (src/run.py) with no scoring. This is where a
+# user turns that pool into THEIR feed: it takes the recent pool jobs they haven't
+# seen, runs the cheap profile prefilter, scores the survivors against their profile
+# (capped so one click can't spend an hour of model time), and writes a user_jobs row
+# for each. Jobs that fail the prefilter get a dismissed row so they aren't re-checked
+# every time; jobs past the score cap are left unseen for the next "get more".
+
+_GET_NEW_CAP = 50               # max model scores per call
+
+
+@router.post("/api/jobs/get-new")
+def get_new_jobs(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
+    from src.deps import _user_profile
+    from src.scoring.prefilter import why_not
+    from src.scoring.rerank import build_calibration, score_job
+
+    profile = _user_profile(conn, user_id)
+    if not profile:
+        return {"needs_profile": True, "scored": 0, "filtered": 0,
+                "remaining": 0, "surfaced": []}
+
+    scoring_on = _get_setting(conn, "scoring_enabled", "1") == "1"
+    window = int(_get_setting(conn, "new_job_window_days", 5))
+
+    # Recent pool jobs with no row yet for this user, newest first.
+    rows = conn.execute(
+        "SELECT j.id, j.title, j.company, j.location, j.description, j.job_type, "
+        "j.remote, j.salary_min, j.salary_max, j.posted_date "
+        "FROM jobs j LEFT JOIN user_jobs uj "
+        "ON uj.job_id = j.id AND uj.user_id = ? "
+        "WHERE uj.job_id IS NULL "
+        "AND j.fetched_at >= now() - (? || ' days')::interval "
+        "ORDER BY j.fetched_at DESC",
+        (user_id, window)
+    ).fetchall()
+
+    calibration = build_calibration(conn, user_id) if scoring_on else ""
+    scored = filtered = remaining = 0
+    surfaced: list[dict] = []
+
+    for r in rows:
+        job = dict(r)
+
+        # Cheap gate first. A failure is recorded as a dismissed row so this job
+        # isn't re-evaluated on every future call.
+        reason = why_not(job, profile)
+        if reason is not None:
+            conn.execute(
+                "INSERT INTO user_jobs (user_id, job_id, status, rationale, served_at) "
+                "VALUES (?,?, 'dismissed', ?, now()) "
+                "ON CONFLICT (user_id, job_id) DO NOTHING",
+                (user_id, job["id"], f"filtered: {reason}"[:500]))
+            filtered += 1
+            continue
+
+        # Passed the gate. Beyond the cap, leave it unseen for the next call.
+        if scored >= _GET_NEW_CAP:
+            remaining += 1
+            continue
+
+        result = score_job(job, profile, calibration) if scoring_on else None
+        if result is not None:
+            conn.execute(
+                "INSERT INTO user_jobs (user_id, job_id, status, score, skills_score, "
+                "seniority_score, domain_score, rationale, served_at) "
+                "VALUES (?,?, 'surfaced', ?,?,?,?,?, now()) "
+                "ON CONFLICT (user_id, job_id) DO NOTHING",
+                (user_id, job["id"], result.overall, result.skills_score,
+                 result.seniority_score, result.domain_score, result.rationale))
+            surfaced.append({"id": job["id"], "title": job["title"],
+                             "company": job["company"], "score": result.overall})
+            scored += 1
+        else:
+            # Scoring off, or no usable description: surface unscored (NULL score),
+            # the same honest "not judged yet" the import path uses.
+            conn.execute(
+                "INSERT INTO user_jobs (user_id, job_id, status, served_at) "
+                "VALUES (?,?, 'surfaced', now()) "
+                "ON CONFLICT (user_id, job_id) DO NOTHING",
+                (user_id, job["id"]))
+            surfaced.append({"id": job["id"], "title": job["title"],
+                             "company": job["company"], "score": None})
+            scored += 1
+
+    conn.commit()
+    return {"scored": scored, "filtered": filtered, "remaining": remaining,
+            "surfaced": surfaced}
 
 
 # ── Matching a browser page to a stored job (used by the extension) ──

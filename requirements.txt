@@ -11,6 +11,9 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic>=2.7
 
+# ── Database (Postgres / Supabase) ──
+psycopg[binary]>=3.1   # psycopg3; [binary] ships prebuilt libpq so CI needs no system libpq
+
 # ── Config & HTTP ──
 pyyaml>=6.0
 httpx>=0.27

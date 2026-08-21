@@ -161,10 +161,6 @@ app.include_router(dashboard_routes.router)
 # /sources, etc. work on a direct visit or a reload (not just via in-app navigation).
 # Registered before the "/" mount below so they take priority over static serving.
 _FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
-_SPA_PATHS = [
-    "feed", "unscored", "saved", "applied", "dismissed", "profile",
-    "sources", "stats", "import", "settings", "admin",
-]
 
 
 @app.get("/")

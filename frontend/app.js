@@ -360,8 +360,8 @@ function jobpilot() {
       for (const k of ['expert','proficient','familiar']) p.skills[k] = p.skills[k] || [];
       this.profile = p;
       this.profileDirty = false;
-      // Welcome nudge for a brand-new, still-empty profile — shown in place, no redirect.
-      if (this.profileComplete().done === 0) this.showOnboard = true;
+      // Welcome nudge only while the profile is still empty; clears itself once filled.
+      this.showOnboard = this.profileComplete().done === 0;
       if (this.rawMode) await this.loadRaw();
     },
 

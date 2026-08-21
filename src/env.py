@@ -29,8 +29,13 @@ def load_env() -> None:
     if not _loaded:
         # Explicit path first (the repo's own .env), then fall back to the default
         # search so a .env placed somewhere unusual still works.
+        # override=True so the repo's .env wins over any stale value already sitting in
+        # the shell (e.g. a DATABASE_URL you exported earlier for a test). Without it,
+        # editing .env — say to a rotated DB password — would silently have no effect
+        # while the old exported value kept being used. Safe in production: .env is
+        # gitignored, so there is no .env there and the platform's env vars still win.
         if _ENV_PATH.exists():
-            load_dotenv(_ENV_PATH)
+            load_dotenv(_ENV_PATH, override=True)
         else:
-            load_dotenv()
+            load_dotenv(override=True)
         _loaded = True

@@ -7,6 +7,7 @@ function jobpilot() {
     // Off by default so the everyday view stays clean; remembered across reloads.
     adminMode: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_admin_mode') === '1'),
     isAdmin: false,   // real admin flag from /api/me; gates all admin controls
+    loadError: null,  // set when the server/DB can't be reached, so we show an error screen
     runDismissed: false,   // admin hid the run-in-progress toast
     adminSubtab: 'system',   // Admin page sub-tab: 'system' | 'operations' | 'maintenance'
     maintPreview: null,      // live counts for the Maintenance tab: {total, snippets, expired, low, cache_mb}
@@ -225,10 +226,25 @@ function jobpilot() {
     },
 
     async load() {
+      this.loading = true;
+      // Core reachability check. Every fetch below swallows errors into empty defaults,
+      // which would render a blank "no data" app when the real problem is that the server
+      // or database is down. Probe one authed endpoint first and, if it fails, show a
+      // clear error screen instead of a misleading empty one.
+      try {
+        const probe = await fetch('/api/counts');
+        if (!probe.ok) { this.loadError = { code: probe.status }; this.loading = false; return; }
+        this.loadError = null;
+      } catch (e) {
+        // auth.js throws "not authenticated" when there is no session — that path shows the
+        // sign-in screen itself, so don't cover it with a server-error screen.
+        if (!String((e && e.message) || '').includes('not authenticated')) this.loadError = { code: 0 };
+        this.loading = false;
+        return;
+      }
       // Whatever page we're on (including on a direct URL load or back/forward, where
       // go() never ran), make sure that page's own data is fetched.
       await this.loadTabData();
-      this.loading = true;
       const jobsP = this.isJobView()
         ? fetch(`/api/jobs?tab=${this.tab}&sort=${this.sort}&source=${this.source}`).then(r=>r.json()).catch(()=>[])
         : Promise.resolve(this.jobs);
@@ -1462,6 +1478,7 @@ function jobpilot() {
     async getNewJobs() {
       if (this.gettingNew) return;
       this.gettingNew = true;
+      const _t0 = Date.now();
       this.blocking = { label: 'Finding and scoring new jobs for you…', pipeline: true };
       try {
         const r = await fetch('/api/jobs/get-new', { method: 'POST' });
@@ -1485,6 +1502,8 @@ function jobpilot() {
       } catch (e) {
         this.showSnack('Could not get new jobs', 'error');
       } finally {
+        const _el = Date.now() - _t0;   // keep the loader up long enough to be seen
+        if (_el < 800) await new Promise(r => setTimeout(r, 800 - _el));
         this.gettingNew = false;
         this.blocking = null;
       }

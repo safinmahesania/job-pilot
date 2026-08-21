@@ -2649,6 +2649,23 @@
   </div>
   <style>@keyframes jp-slide { 0% { transform: translateX(-100%) } 100% { transform: translateX(300%) } }</style>
 
+  <!-- Full-screen error: server / database unreachable. Shown instead of a misleading
+       empty app when load() can't reach the backend. -->
+  <div x-show="loadError" x-cloak class="fixed inset-0 z-[85] flex items-center justify-center p-6" style="background:#FCF8F0">
+    <div class="text-center max-w-sm">
+      <div class="w-16 h-16 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-5"><i class="ti ti-plug-connected-x text-3xl"></i></div>
+      <h2 class="text-lg font-semibold text-gray-800">Can\'t reach JobPilot</h2>
+      <p class="text-sm text-gray-500 mt-2 leading-relaxed">
+        <span x-show="loadError && loadError.code === 0">Looks like a connection problem \u2014 check your internet and try again.</span>
+        <span x-show="loadError && loadError.code >= 500">The server hit a problem loading your data. It\'s usually temporary.</span>
+        <span x-show="loadError && loadError.code > 0 && loadError.code < 500">Something went wrong loading your data (error <span x-text="loadError.code"></span>).</span>
+      </p>
+      <button @click="loadError=null; load()" class="mt-6 h-11 px-6 rounded-xl bg-brand text-white text-sm font-semibold inline-flex items-center gap-2">
+        <i class="ti ti-refresh"></i> Try again
+      </button>
+    </div>
+  </div>
+
   <div x-show="blocking" x-cloak class="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
     <!-- Pipeline loader: get-new / run. Indeterminate on purpose — no timer, %, or ETA. -->
     <div x-show="blocking && blocking.pipeline" class="bg-white rounded-2xl px-8 py-8 flex flex-col items-center shadow-xl w-[340px] max-w-full text-center">

@@ -85,10 +85,14 @@
         <span class="flex-1 text-left" x-text="adminMode ? 'Admin mode on' : 'Admin mode'"></span>
         <div class="sw shrink-0" :class="adminMode ? 'on' : 'off'" style="transform:scale(.8)"><span></span></div>
       </button>
-      <div class="text-[11px] text-gray-400">
+      <div class="text-[11px] text-gray-400" x-show="isAdmin">
         <div x-show="lastRun">Last: <span x-text="lastRun"></span></div>
         <div x-show="nextRun && sched.enabled">Next: <span x-text="nextRun"></span></div>
       </div>
+      <button @click="signOut()"
+        class="w-full flex items-center gap-2 px-2.5 h-9 rounded-lg text-[13px] mt-3 text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors">
+        <i class="ti ti-logout"></i><span class="flex-1 text-left">Sign out</span>
+      </button>
     </div>
   </aside>
 

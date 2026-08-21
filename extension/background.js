@@ -61,25 +61,75 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   chrome.storage.session.remove(`bind_${tabId}`).catch(() => {});
 });
 
-// The app can be locked with a password (JOBPILOT_PASSWORD). When it is, every call
-// must carry the key as a header — the extension cannot log in through the browser
-// form, so it authenticates this way instead. Stored in the popup's settings; blank
-// when the app is running unlocked for local development.
+// Auth is Supabase now. The user signs in from the popup (email + password); that
+// stores an access token and a refresh token. Every call carries the access token as
+// a Bearer header, and a 401 triggers one silent refresh-and-retry before it's treated
+// as "signed out". The public Supabase settings come from the server's open
+// /api/public-config, so the extension needs no build-time config.
+let _sbConfig = null;
+
+async function supabaseConfig() {
+  if (_sbConfig) return _sbConfig;
+  try {
+    const r = await fetch(`${await apiBase()}/api/public-config`);
+    _sbConfig = await r.json();
+  } catch {
+    _sbConfig = {};
+  }
+  return _sbConfig;
+}
+
 async function authHeaders(extra = {}) {
-  const { apiKey } = await chrome.storage.local.get("apiKey");
-  return apiKey ? { ...extra, "x-jobpilot-key": apiKey } : extra;
+  const { sbAccessToken } = await chrome.storage.local.get("sbAccessToken");
+  return sbAccessToken ? { ...extra, Authorization: `Bearer ${sbAccessToken}` } : extra;
+}
+
+async function refreshAccessToken() {
+  const { sbRefreshToken } = await chrome.storage.local.get("sbRefreshToken");
+  if (!sbRefreshToken) return false;
+  const cfg = await supabaseConfig();
+  if (!cfg.supabase_url || !cfg.supabase_anon_key) return false;
+  try {
+    const r = await fetch(`${cfg.supabase_url}/auth/v1/token?grant_type=refresh_token`, {
+      method: "POST",
+      headers: { apikey: cfg.supabase_anon_key, "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: sbRefreshToken }),
+    });
+    if (!r.ok) {
+      await chrome.storage.local.remove(["sbAccessToken", "sbRefreshToken"]);
+      return false;
+    }
+    const d = await r.json();
+    await chrome.storage.local.set({
+      sbAccessToken: d.access_token, sbRefreshToken: d.refresh_token,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Central fetch: attach the Bearer token, and on a 401 refresh once and retry.
+async function apiFetch(path, opts = {}) {
+  const url = `${await apiBase()}${path}`;
+  const send = async () => fetch(url, { ...opts, headers: await authHeaders(opts.headers || {}) });
+  let r = await send();
+  if (r.status === 401 && await refreshAccessToken()) {
+    r = await send();
+  }
+  return r;
 }
 
 async function getJSON(path) {
-  const r = await fetch(`${await apiBase()}${path}`, { headers: await authHeaders() });
+  const r = await apiFetch(path);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
 
 async function postJSON(path, body) {
-  const r = await fetch(`${await apiBase()}${path}`, {
+  const r = await apiFetch(path, {
     method: "POST",
-    headers: await authHeaders({ "Content-Type": "application/json" }),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!r.ok) {
@@ -91,8 +141,7 @@ async function postJSON(path, body) {
 
 /** Fetch a saved document as base64 — extension messaging can't carry binary. */
 async function fetchFile(jobId, kind) {
-  const r = await fetch(`${await apiBase()}/api/jobs/${jobId}/materials/${kind}/file?format=pdf`,
-                        { headers: await authHeaders() });
+  const r = await apiFetch(`/api/jobs/${jobId}/materials/${kind}/file?format=pdf`);
   if (!r.ok) {
     const err = await r.json().catch(() => ({}));
     throw new Error(err.detail || `HTTP ${r.status}`);
@@ -162,14 +211,59 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
 
     try {
       switch (msg.type) {
+        case "signIn": {
+          // Sign in with a JobPilot (Supabase) account and stash the tokens. The
+          // popup collects the email/password; the exchange happens here so the
+          // Supabase config and token storage stay in one place.
+          try {
+            const cfg = await supabaseConfig();
+            if (!cfg.supabase_url || !cfg.supabase_anon_key) {
+              respond({ ok: false, error: "Server sign-in isn't configured." });
+              return;
+            }
+            const r = await fetch(`${cfg.supabase_url}/auth/v1/token?grant_type=password`, {
+              method: "POST",
+              headers: { apikey: cfg.supabase_anon_key, "Content-Type": "application/json" },
+              body: JSON.stringify({ email: msg.email, password: msg.password }),
+            });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok || !d.access_token) {
+              respond({ ok: false, error: d.error_description || d.msg || "Invalid email or password." });
+              return;
+            }
+            await chrome.storage.local.set({
+              sbAccessToken: d.access_token, sbRefreshToken: d.refresh_token,
+            });
+            respond({ ok: true });
+          } catch {
+            respond({ ok: false, error: "Sign-in failed — is the server reachable?" });
+          }
+          return;
+        }
+
+        case "syncSession": {
+          // The web app (any login method, including Google) hands us its Supabase
+          // session so the extension works without a separate sign-in. We just store
+          // the tokens the same way signIn does.
+          if (msg.access_token && msg.refresh_token) {
+            await chrome.storage.local.set({
+              sbAccessToken: msg.access_token, sbRefreshToken: msg.refresh_token,
+            });
+            respond({ ok: true });
+          } else {
+            respond({ ok: false });
+          }
+          return;
+        }
+
         case "health":
           try {
-            await getJSON("/api/autofill/data");
+            await getJSON("/api/counts");
             respond({ ok: true });
           } catch (e) {
-            // A 401/403 means the server is up but the password is missing or wrong —
-            // a completely different fix from "server not running". Tell them apart so
-            // the popup can show the right message.
+            // A 401/403 means the server is up but you're not signed in — a completely
+            // different fix from "server not running". Tell them apart so the popup can
+            // show the right message.
             const m = String(e && e.message || "");
             if (m.includes("401") || m.includes("403")) {
               respond({ ok: false, reason: "auth" });

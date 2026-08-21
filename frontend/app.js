@@ -358,6 +358,22 @@ function jobpilot() {
       for (const k of ['role_levels','exclude_levels','domains','exclude_keywords','job_types'])
         p.search[k] = p.search[k] || [];
       for (const k of ['expert','proficient','familiar']) p.skills[k] = p.skills[k] || [];
+      // If signed in (e.g. with Google) and the profile has no name yet, seed it from the
+      // account's metadata and save it quietly so it sticks even without an edit.
+      if (!p.identity.name && window.jobpilotAuth && window.jobpilotAuth.user) {
+        try {
+          const u = await window.jobpilotAuth.user();
+          const meta = (u && u.user_metadata) || {};
+          const name = meta.full_name || meta.name || '';
+          if (name) {
+            p.identity.name = name;
+            fetch('/api/profile', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ data: { identity: p.identity } }),
+            }).catch(() => {});
+          }
+        } catch (e) {}
+      }
       this.profile = p;
       this.profileDirty = false;
       // Welcome nudge only while the profile is still empty; clears itself once filled.

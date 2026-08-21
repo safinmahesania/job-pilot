@@ -1029,7 +1029,7 @@ async function fillPage({ silent = false } = {}) {
             if (answer && await applyValue(item.el, answer)) filled++;
           }
         } else if (res && res.reason === "auth") {
-          if (!silent) toast("JobPilot needs its password — set it in the extension popup", "error");
+          if (!silent) toast("Sign in to JobPilot from the extension popup", "error");
         }
       }
     }

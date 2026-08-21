@@ -252,7 +252,7 @@ if (askBtn) {
       askAnswer.value = res.answer;
       askResult.style.display = "block";
     } else if (res?.reason === "auth") {
-      foot.textContent = "JobPilot needs its password — enter it below.";
+      foot.textContent = "Sign in to JobPilot below.";
     } else if (res?.answer === "") {
       askAnswer.value = "(Your profile doesn't answer this one — add the detail to your profile and try again.)";
       askResult.style.display = "block";
@@ -302,18 +302,45 @@ if (askCopy) {
     });
   }
 
-  // The app password, if the app is locked. Saved as you type; sent by
-  // background.js as the x-jobpilot-key header on every call.
-  const keyInput = document.getElementById("apiKey");
-  if (keyInput) {
-    chrome.storage.local.get("apiKey", ({ apiKey }) => {
-      if (apiKey) keyInput.value = apiKey;
+  // Account sign-in. The popup collects email + password and hands them to
+  // background.js, which exchanges them with Supabase and stores the tokens it then
+  // sends as a Bearer header on every call.
+  const emailInput = document.getElementById("email");
+  const passInput = document.getElementById("password");
+  const signInBtn = document.getElementById("signInBtn");
+  const signOutBtn = document.getElementById("signOutBtn");
+
+  async function reflectAuthUI() {
+    const { sbAccessToken } = await chrome.storage.local.get("sbAccessToken");
+    const signedIn = !!sbAccessToken;
+    if (emailInput) emailInput.style.display = signedIn ? "none" : "";
+    if (passInput) passInput.style.display = signedIn ? "none" : "";
+    if (signInBtn) signInBtn.style.display = signedIn ? "none" : "";
+    if (signOutBtn) signOutBtn.style.display = signedIn ? "" : "none";
+  }
+  reflectAuthUI();
+
+  if (signInBtn) {
+    signInBtn.addEventListener("click", async () => {
+      const email = (emailInput.value || "").trim();
+      const password = passInput.value || "";
+      if (!email || !password) { emailInput.focus(); return; }
+      signInBtn.disabled = true;
+      signInBtn.textContent = "Signing in…";
+      const res = await send({ type: "signIn", email, password });
+      signInBtn.disabled = false;
+      signInBtn.textContent = "Sign in";
+      if (res?.ok) {
+        location.reload();                 // re-run the health check, now signed in
+      } else {
+        foot.textContent = res?.error || "Sign-in failed.";
+      }
     });
-    let keyTimer = null;
-    keyInput.addEventListener("input", () => {
-      chrome.storage.local.set({ apiKey: keyInput.value.trim() });
-      clearTimeout(keyTimer);
-      keyTimer = setTimeout(() => location.reload(), 600);   // re-check with new password
+  }
+  if (signOutBtn) {
+    signOutBtn.addEventListener("click", async () => {
+      await chrome.storage.local.remove(["sbAccessToken", "sbRefreshToken"]);
+      location.reload();
     });
   }
 
@@ -321,10 +348,10 @@ if (askCopy) {
   if (!health?.ok) {
     dot.classList.add("bad");
     if (health?.reason === "auth") {
-      statusText.textContent = "Password needed";
-      foot.textContent = "Your JobPilot is locked — enter its password below.";
+      statusText.textContent = "Sign in needed";
+      foot.textContent = "Sign in with your JobPilot account below.";
       jobTitle.textContent = "—";
-      jobWhy.textContent = "Enter the password (JOBPILOT_PASSWORD) below to connect.";
+      jobWhy.textContent = "Sign in with your account below to connect.";
     } else {
       const url = urlInput?.value || "http://localhost:8000";
       statusText.textContent = "Can't reach JobPilot";

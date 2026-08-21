@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "JobPilot Autofill",
-  "version": "1.9.24",
+  "version": "1.9.25",
   "description": "Fills job application forms from your JobPilot profile and attaches the documents written for that job. Runs only on the page you point it at.",
   "permissions": [
     "storage",
@@ -19,5 +19,17 @@
   },
   "background": {
     "service_worker": "background.js"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:8000/*",
+        "http://127.0.0.1:8000/*"
+      ],
+      "js": [
+        "sync.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }

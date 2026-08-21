@@ -1,0 +1,117 @@
+identity:
+  name: Alex Rivera
+  seniority: junior
+  titles:
+    - Backend Developer
+    - Software Engineer
+    - Full-Stack Developer
+  summary: >-
+    Junior software engineer with two years building Python and FastAPI services
+    backed by PostgreSQL. Comfortable across the stack, happiest on the backend,
+    and looking for a first or second full-time role on a product team.
+
+constraints:
+  locations:
+    - Remote
+    - Toronto, ON
+    - Ontario, Canada
+  salary_floor: 80000
+  currency: CAD
+  needs_sponsorship: false
+
+search:
+  role_levels:
+    - junior
+    - intermediate
+  exclude_levels:
+    - senior
+    - staff
+    - principal
+    - manager
+  domains:
+    - web
+    - fintech
+    - developer tools
+    - e-commerce
+  job_types:
+    - full-time
+  posted_within_days: 30
+  exclude_keywords:
+    - clearance
+    - unpaid
+    - commission only
+    - senior only
+
+skills:
+  expert:
+    - Python
+    - FastAPI
+    - PostgreSQL
+    - REST APIs
+  proficient:
+    - JavaScript
+    - React
+    - Docker
+    - Git
+    - SQL
+  familiar:
+    - TypeScript
+    - AWS
+    - Redis
+    - CI/CD
+
+experience:
+  - title: Backend Developer
+    company: Northwind Labs
+    start: "2023-06"
+    end: present
+    highlights:
+      - Built and shipped FastAPI microservices serving 20k+ daily requests.
+      - Designed PostgreSQL schemas and wrote the migrations behind two product launches.
+      - Added a test suite that took coverage from 40% to 85%.
+  - title: Software Engineering Intern
+    company: BrightByte
+    start: "2022-05"
+    end: "2022-12"
+    highlights:
+      - Automated a manual reporting flow with a Python + pandas pipeline.
+      - Fixed 30+ bugs across the React frontend and Flask backend.
+
+projects:
+  - name: JobPilot-style aggregator
+    description: >-
+      A personal job-search tool that scrapes multiple boards, scores postings
+      against a profile, and tracks applications. Python, FastAPI, PostgreSQL.
+    link: https://github.com/example/aggregator
+  - name: Recipe matcher
+    description: >-
+      A Flutter app that matches recipes to the ingredients you already have,
+      backed by Supabase with row-level security.
+    link: https://github.com/example/recipes
+
+education:
+  - school: University of Toronto
+    degree: BSc, Computer Science
+    start: "2019"
+    end: "2023"
+
+application:
+  work_arrangement: hybrid
+  max_days_onsite_per_week: 2
+  authorized_to_work: true
+  willing_to_relocate: false
+  gender: prefer not to say
+  pronouns: they/them
+
+custom_answers:
+  - match:
+      - criminal record
+    answer: "No"
+  - match:
+      - notice period
+    answer: Two weeks
+  - match:
+      - why do you want to work here
+    answer: >-
+      I'm drawn to teams that care about clean, well-tested backends and ship
+      real product — that's where I do my best work.

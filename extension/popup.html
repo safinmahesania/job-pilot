@@ -148,11 +148,16 @@
 
   <div class="row">
     <div style="flex:1">
-      <div class="label">App password</div>
-      <div class="hint">Only if you locked JobPilot with JOBPILOT_PASSWORD. Leave blank when running it unlocked.</div>
-      <input id="apiKey" type="password" placeholder="paste your JOBPILOT_PASSWORD"
-             autocomplete="off"
+      <div class="label">Account</div>
+      <div class="hint">Sign in with your JobPilot account — the same email and password as the web app.</div>
+      <input id="email" type="email" placeholder="email" autocomplete="username"
              style="width:100%;box-sizing:border-box;margin-top:6px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;font-size:12px">
+      <input id="password" type="password" placeholder="password" autocomplete="current-password"
+             style="width:100%;box-sizing:border-box;margin-top:6px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;font-size:12px">
+      <button id="signInBtn" type="button"
+              style="width:100%;box-sizing:border-box;margin-top:6px;padding:6px 8px;border:0;border-radius:6px;background:var(--brand,#A96D14);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Sign in</button>
+      <button id="signOutBtn" type="button"
+              style="width:100%;box-sizing:border-box;margin-top:6px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;font-size:12px;cursor:pointer;display:none">Sign out</button>
     </div>
   </div>
 

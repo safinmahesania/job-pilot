@@ -332,7 +332,7 @@ function jobpilot() {
       return [
         { key: 'identity', label: 'Identity', done: !!(p.identity?.titles?.length) },
         { key: 'constraints', label: 'Constraints', done: !!(p.constraints?.locations?.length) },
-        { key: 'skills', label: 'Skills', done: !!(p.skills?.length) },
+        { key: 'skills', label: 'Skills', done: !!(p.skills?.expert?.length || p.skills?.proficient?.length || p.skills?.familiar?.length) },
         { key: 'search', label: 'Search filters', done: !!(p.search?.role_levels?.length) },
         { key: 'experience', label: 'Experience', done: !!(p.experience?.length) },
       ];

@@ -364,18 +364,23 @@
     if (document.getElementById("jp-signout")) { return; }
     var b = document.createElement("button");
     b.id = "jp-signout";
-    b.textContent = "Sign out";
     b.title = "Sign out of JobPilot";
+    b.innerHTML = '<i class="ti ti-logout" style="font-size:15px;line-height:0"></i>' +
+                  '<span>Sign out</span>';
     b.setAttribute("style", [
-      "position:fixed", "bottom:12px", "left:12px", "z-index:9998",
-      "padding:.35rem .7rem", "font-size:.75rem",
-      "background:rgba(255,255,255,.92)", "color:#8A8985",
-      "border:1px solid #EAE8E3", "border-radius:9px", "cursor:pointer",
-      "font-family:'Inter',system-ui,sans-serif", "box-shadow:0 1px 3px rgba(24,24,22,.06)"
+      "position:fixed", "bottom:14px", "left:14px", "z-index:9998",
+      "display:inline-flex", "align-items:center", "gap:7px",
+      "padding:8px 13px", "font-size:12.5px", "font-weight:500",
+      "background:#fff", "color:#52514E",
+      "border:0.5px solid #EAE8E3", "border-radius:11px", "cursor:pointer",
+      "font-family:'Inter',system-ui,sans-serif",
+      "box-shadow:0 4px 16px rgba(24,24,22,.12)", "transition:background .14s, color .14s"
     ].join(";"));
+    b.addEventListener("mouseenter", function () { b.style.background = "#FAFAF9"; b.style.color = "#1A1A19"; });
+    b.addEventListener("mouseleave", function () { b.style.background = "#fff"; b.style.color = "#52514E"; });
     b.addEventListener("click", async function () {
       if (client) { await client.auth.signOut(); }
-      window.location.reload();
+      window.location.href = "/";   // back to the landing page after signing out
     });
     document.body.appendChild(b);
   }

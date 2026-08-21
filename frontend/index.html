@@ -2542,36 +2542,23 @@
       <div @click="runPanelOpen = !runPanelOpen"
         class="w-full flex items-center gap-2 px-3.5 py-2.5 text-left hover:bg-gray-50 cursor-pointer">
         <i class="ti ti-loader-2 animate-spin text-brand shrink-0"></i>
-        <span class="text-[13px] font-medium text-gray-800 truncate flex-1"
-          x-text="runProgress && runProgress.phase ? runProgress.phase : 'Run in progress'"></span>
-        <span class="text-[11px] text-gray-400 shrink-0 tabular-nums"
-          x-show="runProgress && runProgress.total"
-          x-text="runPercent() + '%'"></span>
+        <span class="text-[13px] font-medium text-gray-800 truncate flex-1">Working on it…</span>
         <i class="ti text-gray-300 shrink-0"
           :class="runPanelOpen ? 'ti-chevron-down' : 'ti-chevron-up'"></i>
         <button @click.stop="resetRun()" title="Stop this run"
           class="ti ti-x text-gray-300 hover:text-gray-500 shrink-0 leading-none"></button>
       </div>
 
-      <div class="h-0.5 bg-gray-100" x-show="runProgress && runProgress.total">
-        <div class="h-full bg-brand transition-all duration-500" :style="`width:${runPercent()}%`"></div>
+      <!-- Indeterminate: shows the run is active without revealing how long it takes. -->
+      <div class="h-0.5 bg-brand/25 overflow-hidden">
+        <div class="h-full bg-brand animate-pulse"></div>
       </div>
 
-      <!-- x-show, not x-collapse: only Alpine core is loaded, and the collapse plugin
-           is another CDN script for an animation nobody asked for. -->
       <div x-show="runPanelOpen" class="px-3.5 pt-2.5 pb-3 border-t border-gray-100">
         <div class="text-xs text-gray-500 truncate" x-show="runProgress && runProgress.source"
           x-text="runProgress ? runProgress.source : ''"></div>
-        <div class="flex items-center justify-between mt-1.5 text-[11px] text-gray-400">
-          <span x-show="runProgress && runProgress.total"
-            x-text="runProgress ? `${runProgress.done} of ${runProgress.total}` : ''"></span>
-          <span x-show="runEta()" x-text="runEta()"></span>
-        </div>
-        <div class="text-[11px] text-gray-400 mt-2 flex items-center gap-1" x-show="runWorker()">
-          <i class="ti ti-cpu"></i><span x-text="runWorker()"></span>
-        </div>
         <div class="text-[11px] text-gray-400 mt-2 leading-relaxed">
-          You can keep using the app — jobs are saved as they finish.
+          This runs in the background — keep using the app, and jobs are saved as they finish.
         </div>
       </div>
     </div>

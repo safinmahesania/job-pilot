@@ -317,6 +317,8 @@ if (askCopy) {
     if (passInput) passInput.style.display = signedIn ? "none" : "";
     if (signInBtn) signInBtn.style.display = signedIn ? "none" : "";
     if (signOutBtn) signOutBtn.style.display = signedIn ? "" : "none";
+    const gh = document.getElementById("googleHint");
+    if (gh) gh.style.display = signedIn ? "none" : "";
   }
   reflectAuthUI();
 

@@ -246,11 +246,15 @@ function jobpilot() {
       this.health = health.boards || [];
       this.runs = runs || [];
       this.errors = errors || [];
-      this.profile = (profileResp && profileResp.data) ? profileResp.data : this.profile;
-      // First run: an empty profile can't match anything, so guide new users to set it
-      // up. A partly-filled profile just gets the nudge banner, no redirect.
-      if (this.profile && this.profileComplete().done === 0 && this.tab !== 'profile' && !this._firstRun) {
-        this._firstRun = true; this.showOnboard = true; this.go('profile');
+      // Keep completeness fresh for the meter, but never clobber the structured profile
+      // the editor uses (loadProfile owns it on the profile tab) or any in-progress edit —
+      // otherwise a background load() (e.g. after a run finishes) wipes what you're typing.
+      if (this.tab !== 'profile' && !this.profileEdit && !this.profileDirty) {
+        this.profile = (profileResp && profileResp.data) ? profileResp.data : this.profile;
+        // First run: an empty profile can't match anything, so send new users to set it up.
+        if (this.profile && this.profileComplete().done === 0 && !this._firstRun) {
+          this._firstRun = true; this.showOnboard = true; this.go('profile');
+        }
       }
       this.threshold = settings.score_threshold ?? 70;
       this.stats = stats;

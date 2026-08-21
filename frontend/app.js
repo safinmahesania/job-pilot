@@ -275,7 +275,7 @@ function jobpilot() {
         this.running = sched.running;
         this.lastRun = sched.last_run;
         this.nextRun = sched.next_run;
-        if (sched.running) this.poll();
+        if (sched.running && this.isAdmin) this.poll();
       }
       this.loading = false;
       this.loadNotifications();     // fill the bell badge
@@ -1730,7 +1730,7 @@ function jobpilot() {
           clearInterval(this._pollIv); this._pollIv = null;
           this.blocking = null;
           fetch('/api/model').then(r=>r.json()).then(m => { if (m) this.modelState = m; }).catch(()=>{});
-          this.showSnack('Run complete');
+          if (this.isAdmin) this.showSnack('Run complete');
           this.load();
         }
       }, 3000);

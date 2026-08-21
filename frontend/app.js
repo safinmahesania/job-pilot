@@ -251,7 +251,9 @@ function jobpilot() {
       this.runs = runs || [];
       this.errors = errors || [];
       this.isAdmin = !!(meResp && meResp.is_admin);
-      if (!this.isAdmin && this.adminMode) {
+      if (!this.isAdmin) {
+        // Non-admins never have admin mode, and can't sit on a Manage page even via a
+        // direct URL like /app/admin — bounce them to the feed.
         this.adminMode = false;
         try { localStorage.removeItem('jp_admin_mode'); } catch (e) {}
         if (this.manageNav.map(n=>n.k).includes(this.tab)) this.go('feed');

@@ -609,7 +609,7 @@
     </div>
 
     <!-- ─── Stats ─── -->
-    <div x-show="tab==='stats'">
+    <div x-show="tab==='stats' && isAdmin">
       <div class="mb-4">
         <h2 class="text-lg font-semibold">Statistics</h2>
         <p class="text-[13px] text-gray-400 mt-0.5">How your pipeline is doing — from surfaced to offer.</p>
@@ -807,7 +807,7 @@
     </div>
 
     <!-- ─── Sources ─── -->
-    <div x-show="tab==='sourcesTab'">
+    <div x-show="tab==='sourcesTab' && isAdmin">
       <!-- Header with Add-source button -->
       <div class="flex items-start justify-between gap-3 mb-4">
         <div>
@@ -1304,7 +1304,7 @@
     </div>
 
     <!-- ─── Admin ─── -->
-    <div x-show="tab==='admin'">
+    <div x-show="tab==='admin' && isAdmin">
       <h2 class="text-lg font-semibold mb-1 hidden md:block">Admin</h2>
       <p class="text-[13px] text-gray-400 mb-4">System setup, how the app's doing, and database actions.</p>
 
@@ -1866,7 +1866,7 @@
     </div>
 
     <!-- ─── Settings ─── -->
-    <div x-show="tab==='settings'">
+    <div x-show="tab==='settings' && isAdmin">
       <div class="mb-4">
         <h2 class="text-lg font-semibold">Settings</h2>
         <p class="text-[13px] text-gray-400 mt-0.5">Tune how your feed and cover letters work for you. System and AI setup lives under Admin.</p>
@@ -1935,7 +1935,7 @@
         </div>
       </div>
     </div>
-    <div x-show="tab==='importTab'">
+    <div x-show="tab==='importTab' && isAdmin">
       <h2 class="text-lg font-semibold mb-4 hidden md:block">Import jobs</h2>
       <div class="text-sm text-gray-500 mb-4 max-w-2xl">Bring jobs in from a job-alert
         email, a posting you paste, or a spreadsheet. Everything lands in the same feed.</div>

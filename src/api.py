@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from src import scheduler
-from src.deps import (_db_dep)
+from src.deps import (_db_dep, current_user_id)
 from src import __version__
 from src.env import load_env
 load_env()
@@ -54,6 +54,19 @@ app.add_middleware(
 # more. The frontend and the extension sign in with Supabase and send the token on
 # each call. Static files and this one endpoint answer without a token, so the login
 # screen can load and bootstrap the client.
+@app.get("/api/me")
+def me(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
+    """Who the caller is, so the frontend can gate admin-only controls. The backend
+    still enforces admin on the actual endpoints; this only decides what UI to show."""
+    row = conn.execute(
+        "SELECT email, is_admin FROM users WHERE id=?", (user_id,)).fetchone()
+    return {
+        "id": user_id,
+        "email": row[0] if row else None,
+        "is_admin": bool(row[1]) if row else False,
+    }
+
+
 @app.get("/api/public-config")
 def public_config():
     """The public Supabase settings the browser needs to start its auth client.

@@ -78,7 +78,7 @@
       </div>
     </template>
     <div class="mt-auto pt-4 px-2">
-      <button @click="toggleAdminMode()"
+      <button @click="toggleAdminMode()" x-show="isAdmin" x-cloak
         class="w-full flex items-center gap-2 px-2.5 h-9 rounded-lg text-[13px] mb-3 transition-colors"
         :class="adminMode ? 'text-branddark bg-brandtint' : 'text-gray-400 hover:bg-gray-100'">
         <i class="ti ti-tool"></i>
@@ -132,8 +132,8 @@
       </template>
     </div>
     <div class="shrink-0 px-1 pt-3">
-      <!-- Admin-mode toggle: reveals the Manage pages -->
-      <button @click="toggleAdminMode()"
+      <!-- Admin-mode toggle: reveals the Manage pages (admins only) -->
+      <button @click="toggleAdminMode()" x-show="isAdmin" x-cloak
         class="w-full flex items-center gap-2 px-2.5 h-8 rounded-lg text-[12px] mb-2 transition-colors"
         :class="adminMode ? 'text-branddark bg-brandtint' : 'text-gray-400 hover:bg-gray-100'"
         :title="adminMode ? 'Hide setup &amp; maintenance pages' : 'Show setup &amp; maintenance pages'">

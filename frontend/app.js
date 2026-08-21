@@ -6,6 +6,7 @@ function jobpilot() {
     // Admin mode reveals the Manage pages (Sources, Stats, Import, Settings, Admin).
     // Off by default so the everyday view stays clean; remembered across reloads.
     adminMode: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_admin_mode') === '1'),
+    isAdmin: false,   // real admin flag from /api/me; gates all admin controls
     adminSubtab: 'system',   // Admin page sub-tab: 'system' | 'operations' | 'maintenance'
     maintPreview: null,      // live counts for the Maintenance tab: {total, snippets, expired, low, cache_mb}
     adminFocus: null,        // System sub-tab: which focus-tile panel is open (null = none)
@@ -209,6 +210,7 @@ function jobpilot() {
     // Flip admin mode. When turning it off while on a Manage page, fall back to Feed so
     // the user isn't stranded on a page that just disappeared from the nav.
     toggleAdminMode() {
+      if (!this.isAdmin) return;   // normal users never get admin mode
       this.adminMode = !this.adminMode;
       try { localStorage.setItem('jp_admin_mode', this.adminMode ? '1' : '0'); } catch (e) {}
       const manageKeys = this.manageNav.map(n => n.k);
@@ -225,7 +227,7 @@ function jobpilot() {
       const jobsP = this.isJobView()
         ? fetch(`/api/jobs?tab=${this.tab}&sort=${this.sort}&source=${this.source}`).then(r=>r.json()).catch(()=>[])
         : Promise.resolve(this.jobs);
-      const [jobs, counts, followups, health, runs, settings, stats, sources, sched, model, notifyState, errors, profileResp] = await Promise.all([
+      const [jobs, counts, followups, health, runs, settings, stats, sources, sched, model, notifyState, errors, profileResp, meResp] = await Promise.all([
         jobsP,
         fetch('/api/counts').then(r=>r.json()).catch(()=>({})),
         fetch('/api/followups').then(r=>r.json()).catch(()=>({items:[],total:0})),
@@ -239,6 +241,7 @@ function jobpilot() {
         fetch('/api/notify').then(r=>r.json()).catch(()=>null),
         fetch('/api/errors').then(r=>r.json()).catch(()=>[]),
         fetch('/api/profile').then(r=>r.json()).catch(()=>({data:null})),
+        fetch('/api/me').then(r=>r.json()).catch(()=>({is_admin:false})),
       ]);
       this.jobs = jobs;
       this.counts = { ...counts };
@@ -246,6 +249,12 @@ function jobpilot() {
       this.health = health.boards || [];
       this.runs = runs || [];
       this.errors = errors || [];
+      this.isAdmin = !!(meResp && meResp.is_admin);
+      if (!this.isAdmin && this.adminMode) {
+        this.adminMode = false;
+        try { localStorage.removeItem('jp_admin_mode'); } catch (e) {}
+        if (this.manageNav.map(n=>n.k).includes(this.tab)) this.go('feed');
+      }
       // Keep completeness fresh for the meter, but never clobber the structured profile
       // the editor uses (loadProfile owns it on the profile tab) or any in-progress edit —
       // otherwise a background load() (e.g. after a run finishes) wipes what you're typing.

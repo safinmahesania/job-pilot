@@ -20,6 +20,12 @@ router = APIRouter()
 def _save_profile(conn, user_id: str, profile: dict) -> None:
     """Persist the whole profile document for one user."""
     import json
+    # A brand-new Supabase signup exists in auth.users; the on_auth_user_created trigger
+    # is meant to mirror it into public.users. If that trigger isn't installed on the
+    # database, the row is missing and the profile insert FK-fails ("not saved"). Create
+    # the row defensively so a first-time user's very first save always works.
+    conn.execute(
+        "INSERT INTO users (id) VALUES (?) ON CONFLICT (id) DO NOTHING", (user_id,))
     conn.execute(
         "INSERT INTO user_profiles (user_id, profile, updated_at) "
         "VALUES (?, ?::jsonb, now()) "

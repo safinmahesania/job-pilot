@@ -378,14 +378,25 @@ function jobpilot() {
     async saveProfile() {
       const url  = this.rawMode ? '/api/profile/raw' : '/api/profile';
       const body = this.rawMode ? { text: this.profileRaw } : { data: this.profile };
-      const r = await fetch(url, {
-        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body),
-      });
-      const d = await r.json().catch(()=>({}));
-      if (!r.ok) { this.showSnack(d.detail || 'Not saved', 'error'); return; }
-      this.profileDirty = false;
-      this.profileEdit = false;
-      this.showSnack('Profile saved. Re-score to apply.');
+      try {
+        const r = await fetch(url, {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body),
+        });
+        let d = {}; try { d = await r.json(); } catch (e) {}
+        if (!r.ok) {
+          let msg = d && d.detail;
+          if (Array.isArray(msg)) msg = msg.map(x => x.msg || '').filter(Boolean).join(', ');
+          this.showSnack(msg || `Couldn't save profile (error ${r.status})`, 'error');
+          console.error('Profile save failed', r.status, d);
+          return;
+        }
+        this.profileDirty = false;
+        this.profileEdit = false;
+        this.showSnack('Profile saved. Re-score to apply.');
+      } catch (e) {
+        this.showSnack('Network error — profile not saved. Check your connection and try again.', 'error');
+        console.error('Profile save error', e);
+      }
     },
 
     addExp()  { this.profile.experience.push({ role:'', company:'', start:'', end:'', highlights:[] }); this.profileDirty = true; },

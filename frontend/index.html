@@ -22,6 +22,53 @@
   <script src="/auth.js"></script>
   <script src="/app.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<style id="plc-styles">
+@keyframes plc-spin{to{transform:rotate(360deg)}}
+.plc-reel{position:relative;height:150px;width:100%;margin-bottom:6px}
+.plc-scene{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  opacity:0;transform:scale(.68) rotate(-7deg);
+  transition:opacity .55s ease, transform .6s cubic-bezier(.34,1.2,.4,1);pointer-events:none}
+.plc-scene.plc-active{opacity:1;transform:scale(1) rotate(0)}
+.plc-scene.plc-exit{opacity:0;transform:scale(1.28) rotate(7deg)}
+.plc-phase{font-size:15px;font-weight:600;color:#20201C;min-height:1.3em;transition:opacity .35s}
+/* dealing */
+.plc-deal{position:relative;width:130px;height:96px}
+.plc-dcard{position:absolute;left:50%;top:16px;width:50px;height:64px;margin-left:-25px;border-radius:9px;background:#fff;border:.5px solid #EDE6D8;box-shadow:0 4px 12px rgba(0,0,0,.08);animation:plc-deal 2.2s ease-in-out infinite}
+.plc-dcard::after{content:"";position:absolute;left:8px;top:10px;right:8px;height:5px;border-radius:3px;background:#A96D14;opacity:.5}
+.plc-dcard:nth-child(1){--x:-56px;--r:-14deg;animation-delay:0s}.plc-dcard:nth-child(2){--x:-19px;--r:-5deg;animation-delay:.25s}
+.plc-dcard:nth-child(3){--x:19px;--r:5deg;animation-delay:.5s}.plc-dcard:nth-child(4){--x:56px;--r:14deg;animation-delay:.75s}
+@keyframes plc-deal{0%{transform:translate(0,0) rotate(0);opacity:0}25%{opacity:1}50%,85%{transform:translate(var(--x),0) rotate(var(--r));opacity:1}100%{transform:translate(0,0) rotate(0);opacity:0}}
+/* funnel */
+.plc-funnel{position:relative;width:110px;height:120px}.plc-funnel svg{position:absolute;inset:0;overflow:visible}
+.plc-fbody{fill:none;stroke:#F6EEDD;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.plc-fdrop{position:absolute;width:11px;height:11px;border-radius:3px;background:#A96D14;left:50%;margin-left:-5.5px;top:-4px;animation:plc-fall 1.5s linear infinite}
+.plc-fdrop:nth-child(2){animation-delay:.5s;background:#7A4E0C}.plc-fdrop:nth-child(3){animation-delay:1s}
+@keyframes plc-fall{0%{top:-6px;opacity:0;transform:scale(1) rotate(0)}15%{opacity:1}55%{top:48px;transform:rotate(90deg)}75%{top:72px;transform:scale(.5) rotate(120deg);opacity:1}100%{top:108px;transform:scale(.8) rotate(180deg);opacity:0}}
+/* sonar */
+.plc-sonar{position:relative;width:120px;height:120px;display:flex;align-items:center;justify-content:center}
+.plc-sonar .plc-c{width:16px;height:16px;border-radius:50%;background:#A96D14;box-shadow:0 0 10px rgba(169,109,20,.6);z-index:2}
+.plc-sonar span{position:absolute;border:2px solid #A96D14;border-radius:50%;width:16px;height:16px;opacity:0;animation:plc-sonar 2s ease-out infinite}
+.plc-sonar span:nth-child(2){animation-delay:.6s}.plc-sonar span:nth-child(3){animation-delay:1.2s}
+@keyframes plc-sonar{0%{opacity:.8;transform:scale(1)}100%{opacity:0;transform:scale(6.5)}}
+/* radar */
+.plc-radar{position:relative;width:120px;height:120px}
+.plc-radar .plc-rg{position:absolute;inset:0;border-radius:50%;border:1.5px solid #F6EEDD}
+.plc-radar .plc-rg:nth-child(2){inset:22px}.plc-radar .plc-rg:nth-child(3){inset:44px}
+.plc-radar .plc-sweep{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,transparent 0deg 300deg,rgba(169,109,20,.28) 355deg,rgba(169,109,20,.5) 360deg);animation:plc-spin 1.6s linear infinite}
+.plc-radar .plc-blip{position:absolute;width:9px;height:9px;border-radius:50%;background:#A96D14;opacity:0;box-shadow:0 0 8px rgba(169,109,20,.7)}
+.plc-radar .plc-blip:nth-child(4){top:26%;left:62%;animation:plc-blip 1.6s .4s infinite}
+.plc-radar .plc-blip:nth-child(5){top:60%;left:32%;animation:plc-blip 1.6s .9s infinite}
+.plc-radar .plc-blip:nth-child(6){top:70%;left:64%;animation:plc-blip 1.6s 1.3s infinite}
+.plc-radar .plc-rdot{position:absolute;top:50%;left:50%;width:8px;height:8px;border-radius:50%;background:#26375C;transform:translate(-50%,-50%)}
+@keyframes plc-blip{0%{opacity:0;transform:scale(.4)}15%{opacity:1;transform:scale(1)}60%{opacity:1}100%{opacity:0;transform:scale(.9)}}
+/* gauge */
+.plc-gauge{position:relative;width:150px;height:96px}.plc-gauge svg{position:absolute;inset:0;overflow:visible}
+.plc-track{fill:none;stroke:#F6EEDD;stroke-width:10;stroke-linecap:round}
+.plc-gfill{fill:none;stroke:#A96D14;stroke-width:10;stroke-linecap:round;stroke-dasharray:188;animation:plc-score 2.2s cubic-bezier(.5,0,.3,1) infinite}
+@keyframes plc-score{0%{stroke-dashoffset:188}55%{stroke-dashoffset:32}72%{stroke-dashoffset:55}88%{stroke-dashoffset:42}100%{stroke-dashoffset:188}}
+.plc-needle{transform-origin:75px 82px;animation:plc-swing 2.2s cubic-bezier(.5,0,.3,1) infinite}
+@keyframes plc-swing{0%{transform:rotate(-180deg)}55%{transform:rotate(-30deg)}72%{transform:rotate(-54deg)}88%{transform:rotate(-42deg)}100%{transform:rotate(-180deg)}}
+</style>
 </head>
 <body class="text-gray-800">
 <div x-data="jobpilot()" x-init="tab = tabFromPath(); if (manageNav.map(n=>n.k).includes(tab)) adminMode = true; window.addEventListener('popstate', () => { tab = tabFromPath(); if (manageNav.map(n=>n.k).includes(tab)) adminMode = true; load(); }); load()" x-cloak class="md:flex md:min-h-screen md:max-w-6xl xl:max-w-7xl md:mx-auto">
@@ -2603,16 +2650,22 @@
   <style>@keyframes jp-slide { 0% { transform: translateX(-100%) } 100% { transform: translateX(300%) } }</style>
 
   <div x-show="blocking" x-cloak class="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl px-8 py-7 flex flex-col items-center gap-3 shadow-xl max-w-xs text-center">
+    <!-- Pipeline loader: get-new / run. Indeterminate on purpose — no timer, %, or ETA. -->
+    <div x-show="blocking && blocking.pipeline" class="bg-white rounded-2xl px-8 py-8 flex flex-col items-center shadow-xl w-[340px] max-w-full text-center">
+      <div class="plc-reel">
+        <div class="plc-scene plc-active"><div class="plc-deal"><div class="plc-dcard"></div><div class="plc-dcard"></div><div class="plc-dcard"></div><div class="plc-dcard"></div></div></div>
+        <div class="plc-scene"><div class="plc-funnel"><svg viewBox="0 0 110 120"><path class="plc-fbody" d="M 12 12 L 98 12 L 62 56 L 62 108 L 48 108 L 48 56 Z"/></svg><div class="plc-fdrop"></div><div class="plc-fdrop"></div><div class="plc-fdrop"></div></div></div>
+        <div class="plc-scene"><div class="plc-sonar"><span></span><span></span><span></span><div class="plc-c"></div></div></div>
+        <div class="plc-scene"><div class="plc-radar"><div class="plc-rg"></div><div class="plc-rg"></div><div class="plc-rg"></div><div class="plc-sweep"></div><div class="plc-blip"></div><div class="plc-blip"></div><div class="plc-blip"></div><div class="plc-rdot"></div></div></div>
+        <div class="plc-scene"><div class="plc-gauge"><svg viewBox="0 0 150 96"><path class="plc-track" d="M 15 82 A 60 60 0 0 1 135 82"/><path class="plc-gfill" d="M 15 82 A 60 60 0 0 1 135 82"/><g class="plc-needle"><line x1="75" y1="82" x2="128" y2="82" stroke="#26375C" stroke-width="3.5" stroke-linecap="round"/></g><circle cx="75" cy="82" r="6" fill="#26375C"/></svg></div></div>
+      </div>
+      <div class="plc-phase" id="plcPhase">Gathering fresh roles…</div>
+      <div class="text-xs text-gray-400 mt-1.5">JobPilot is working — keep this open.</div>
+    </div>
+    <!-- Generic loader: imports and other heavy actions -->
+    <div x-show="blocking && !blocking.pipeline" class="bg-white rounded-2xl px-8 py-7 flex flex-col items-center gap-3 shadow-xl max-w-xs text-center">
       <i class="ti ti-loader-2 animate-spin text-brand text-4xl"></i>
       <div class="text-sm font-medium text-gray-700" x-text="blocking ? blocking.label : ''"></div>
-      <div class="text-xs" x-show="modelState.fallback_active" style="color:#A96D14;">
-        <i class="ti ti-arrow-down-circle"></i> Fell back to 7b for speed
-      </div>
-      <div class="text-xs text-gray-400" x-show="!modelState.fallback_active">
-        Scoring on <span x-text="modelShort(modelState.active)"></span>
-      </div>
-      <div class="text-xs text-gray-400">Please wait — don't close this tab.</div>
     </div>
   </div>
 
@@ -2643,5 +2696,23 @@
   </div>
 
 </div>
+<script>
+(function () {
+  var PHASES = ["Gathering fresh roles\u2026","Filtering out the noise\u2026","Scanning the whole pool\u2026","Locating your matches\u2026","Scoring the best fits\u2026"];
+  var cur = 0;
+  setInterval(function () {
+    var scenes = document.querySelectorAll('.plc-scene');
+    if (!scenes.length) return;
+    var phaseEl = document.getElementById('plcPhase');
+    var next = (cur + 1) % scenes.length;
+    scenes[cur].classList.remove('plc-active');
+    scenes[cur].classList.add('plc-exit');
+    (function (leaving) { setTimeout(function () { leaving.classList.remove('plc-exit'); }, 650); })(scenes[cur]);
+    scenes[next].classList.add('plc-active');
+    cur = next;
+    if (phaseEl) { phaseEl.style.opacity = 0; setTimeout(function () { phaseEl.textContent = PHASES[cur]; phaseEl.style.opacity = 1; }, 200); }
+  }, 2600);
+})();
+</script>
 </body>
 </html>

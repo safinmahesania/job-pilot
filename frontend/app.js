@@ -1447,6 +1447,7 @@ function jobpilot() {
       if (r.status === 409) { this.showSnack('Already running', 'error'); return; }
       this.running = true; this.runDismissed = false;
       this.blocking = {
+        pipeline: true,
         label: only && only.length
           ? `Fetching ${only.length} selected source${only.length > 1 ? 's' : ''}…`
           : 'Fetching and scoring jobs…',
@@ -1461,7 +1462,7 @@ function jobpilot() {
     async getNewJobs() {
       if (this.gettingNew) return;
       this.gettingNew = true;
-      this.blocking = { label: 'Finding and scoring new jobs for you…' };
+      this.blocking = { label: 'Finding and scoring new jobs for you…', pipeline: true };
       try {
         const r = await fetch('/api/jobs/get-new', { method: 'POST' });
         const d = await r.json().catch(() => ({}));

@@ -2537,10 +2537,10 @@
 
     <!-- Run in progress. Collapsed by default: the line that matters is which phase
          and how long left. The rest is there when you want it, not in your way. -->
-    <div x-show="running && isAdmin" x-cloak
+    <div x-show="running && isAdmin && !runDismissed" x-cloak
       class="rounded-lg bg-white shadow-xl border border-brand/30 overflow-hidden">
-      <button @click="runPanelOpen = !runPanelOpen"
-        class="w-full flex items-center gap-2 px-3.5 py-2.5 text-left hover:bg-gray-50">
+      <div @click="runPanelOpen = !runPanelOpen"
+        class="w-full flex items-center gap-2 px-3.5 py-2.5 text-left hover:bg-gray-50 cursor-pointer">
         <i class="ti ti-loader-2 animate-spin text-brand shrink-0"></i>
         <span class="text-[13px] font-medium text-gray-800 truncate flex-1"
           x-text="runProgress && runProgress.phase ? runProgress.phase : 'Run in progress'"></span>
@@ -2549,7 +2549,9 @@
           x-text="runPercent() + '%'"></span>
         <i class="ti text-gray-300 shrink-0"
           :class="runPanelOpen ? 'ti-chevron-down' : 'ti-chevron-up'"></i>
-      </button>
+        <button @click.stop="runDismissed = true" title="Hide"
+          class="ti ti-x text-gray-300 hover:text-gray-500 shrink-0 leading-none"></button>
+      </div>
 
       <div class="h-0.5 bg-gray-100" x-show="runProgress && runProgress.total">
         <div class="h-full bg-brand transition-all duration-500" :style="`width:${runPercent()}%`"></div>

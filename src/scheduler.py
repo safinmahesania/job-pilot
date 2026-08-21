@@ -16,12 +16,21 @@ from src.paths import DEFAULT_RUN_INTERVAL_HOURS as DEFAULT_HOURS, SCHEDULER_POL
 from src.logs import log
 from src.env import load_env
 
-_state = {"running": False, "last_run": None, "last_summary": None, "next_run": None}
+_state = {"running": False, "started": 0.0, "last_run": None, "last_summary": None, "next_run": None}
 _lock = threading.Lock()
+
+#: A run past this many seconds is treated as dead. The worker runs in a daemon thread,
+#: so a process kill or a hung network/LLM call can leave "running" pinned True forever
+#: otherwise — which shows a run-in-progress loader that never clears.
+RUN_TIMEOUT_SECONDS = 45 * 60
 
 
 def get_state() -> dict:
-    return dict(_state)
+    with _lock:
+        if (_state["running"] and _state["started"]
+                and (time.time() - _state["started"]) > RUN_TIMEOUT_SECONDS):
+            _state["running"] = False   # hung or the worker died mid-run; let it recover
+        return dict(_state)
 
 
 def _settings():
@@ -50,6 +59,7 @@ def _run_once(only=None):
         if _state["running"]:
             return False
         _state["running"] = True
+        _state["started"] = time.time()
 
     try:
         run_pipeline(only=only)

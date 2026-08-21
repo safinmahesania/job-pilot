@@ -7,6 +7,7 @@ function jobpilot() {
     // Off by default so the everyday view stays clean; remembered across reloads.
     adminMode: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_admin_mode') === '1'),
     isAdmin: false,   // real admin flag from /api/me; gates all admin controls
+    runDismissed: false,   // admin hid the run-in-progress toast
     adminSubtab: 'system',   // Admin page sub-tab: 'system' | 'operations' | 'maintenance'
     maintPreview: null,      // live counts for the Maintenance tab: {total, snippets, expired, low, cache_mb}
     adminFocus: null,        // System sub-tab: which focus-tile panel is open (null = none)
@@ -1424,7 +1425,7 @@ function jobpilot() {
         body: JSON.stringify(body),
       });
       if (r.status === 409) { this.showSnack('Already running', 'error'); return; }
-      this.running = true;
+      this.running = true; this.runDismissed = false;
       this.blocking = {
         label: only && only.length
           ? `Fetching ${only.length} selected source${only.length > 1 ? 's' : ''}…`

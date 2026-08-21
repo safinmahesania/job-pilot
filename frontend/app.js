@@ -84,6 +84,7 @@ function jobpilot() {
     detectUrl: '', detecting: false,
 
     profile: null, profileRaw: '', rawMode: false, profileDirty: false,
+    showOnboard: false, onboardDismissed: false, _firstRun: false,
     profileEdit: false,   // false = read-only view, true = editable form
     seniorityOpts: ['intern','junior','entry','mid','senior'],
 
@@ -224,7 +225,7 @@ function jobpilot() {
       const jobsP = this.isJobView()
         ? fetch(`/api/jobs?tab=${this.tab}&sort=${this.sort}&source=${this.source}`).then(r=>r.json()).catch(()=>[])
         : Promise.resolve(this.jobs);
-      const [jobs, counts, followups, health, runs, settings, stats, sources, sched, model, notifyState, errors] = await Promise.all([
+      const [jobs, counts, followups, health, runs, settings, stats, sources, sched, model, notifyState, errors, profileResp] = await Promise.all([
         jobsP,
         fetch('/api/counts').then(r=>r.json()).catch(()=>({})),
         fetch('/api/followups').then(r=>r.json()).catch(()=>({items:[],total:0})),
@@ -237,6 +238,7 @@ function jobpilot() {
         fetch('/api/model').then(r=>r.json()).catch(()=>null),
         fetch('/api/notify').then(r=>r.json()).catch(()=>null),
         fetch('/api/errors').then(r=>r.json()).catch(()=>[]),
+        fetch('/api/profile').then(r=>r.json()).catch(()=>({data:null})),
       ]);
       this.jobs = jobs;
       this.counts = { ...counts };
@@ -244,6 +246,12 @@ function jobpilot() {
       this.health = health.boards || [];
       this.runs = runs || [];
       this.errors = errors || [];
+      this.profile = (profileResp && profileResp.data) ? profileResp.data : this.profile;
+      // First run: an empty profile can't match anything, so guide new users to set it
+      // up. A partly-filled profile just gets the nudge banner, no redirect.
+      if (this.profile && this.profileComplete().done === 0 && this.tab !== 'profile' && !this._firstRun) {
+        this._firstRun = true; this.showOnboard = true; this.go('profile');
+      }
       this.threshold = settings.score_threshold ?? 70;
       this.stats = stats;
       this.sources = sources;

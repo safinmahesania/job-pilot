@@ -160,6 +160,30 @@
   <!-- ══ Main ══ -->
   <main class="flex-1 min-w-0 px-4 py-4 pb-24 md:px-6 md:py-6 md:pb-6">
 
+    <!-- Profile completeness nudge (home + job views, until 100%) -->
+    <div x-show="profile && (tab==='home' || isJobView()) && profileComplete().pct < 100 && !onboardDismissed" x-cloak
+         class="mb-4 rounded-xl border border-brand/30 px-4 py-3" style="background:var(--brand-tint)">
+      <div class="flex items-start gap-3">
+        <div class="w-9 h-9 rounded-lg bg-brand/15 text-brand flex items-center justify-center shrink-0"><i class="ti ti-user-check text-lg"></i></div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-[13px] font-semibold text-gray-800">
+              <span x-show="profileComplete().pct === 0">Your profile is empty — no jobs are matched to you yet.</span>
+              <span x-show="profileComplete().pct > 0" x-text="`Your profile is ${profileComplete().pct}% complete.`"></span>
+            </p>
+            <button @click="onboardDismissed = true" class="text-gray-400 hover:text-gray-600 shrink-0" title="Dismiss"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="mt-2 h-1.5 rounded-full bg-brand/15 overflow-hidden">
+            <div class="h-full bg-brand rounded-full transition-all" :style="`width:${Math.max(profileComplete().pct,4)}%`"></div>
+          </div>
+          <div class="flex items-center justify-between gap-3 mt-2">
+            <p class="text-[12px] text-gray-500">Complete it so JobPilot can match jobs to what you’re looking for.</p>
+            <button @click="go('profile')" class="text-[12px] font-semibold text-brand hover:underline shrink-0 whitespace-nowrap">Complete profile →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══════════════════ HOME — USER DASHBOARD ═══════════════════ -->
     <div x-show="tab==='home' && !adminMode" x-cloak>
       <template x-if="userDash">
@@ -938,6 +962,15 @@
 
     <!-- ─── Profile (form) ─── -->
     <div x-show="tab==='profile'">
+      <!-- First-run welcome -->
+      <div x-show="showOnboard" x-cloak class="mb-4 rounded-xl border border-brand/30 px-4 py-3.5 flex items-start gap-3" style="background:var(--brand-tint)">
+        <div class="w-9 h-9 rounded-lg bg-brand/15 text-brand flex items-center justify-center shrink-0"><i class="ti ti-sparkles text-lg"></i></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[14px] font-semibold text-gray-800">Welcome to JobPilot</p>
+          <p class="text-[13px] text-gray-500 mt-0.5">Add a few basics below — your locations, the level you’re after, and your skills — so we can start matching jobs to you. Until then, your feed stays empty.</p>
+        </div>
+        <button @click="showOnboard = false" class="text-gray-400 hover:text-gray-600 shrink-0" title="Dismiss"><i class="ti ti-x"></i></button>
+      </div>
       <!-- Hero: identity summary + completion, with the edit / save controls -->
       <template x-if="profile">
         <div class="rounded-2xl border border-gray-200 p-5 sm:p-6 mb-4" style="background:linear-gradient(135deg, var(--brand-tint), #FBF6EC)">

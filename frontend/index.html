@@ -317,7 +317,16 @@
           </template>
         </div>
       </template>
-      <div x-show="!userDash" class="uh-loading"><i class="ti ti-loader-2 animate-spin"></i> Loading your dashboard…</div>
+      <div x-show="!userDash" class="flex flex-col items-center justify-center py-14">
+        <div class="plc-reel" style="max-width:280px">
+          <div class="plc-scene plc-active"><div class="plc-deal"><div class="plc-dcard"></div><div class="plc-dcard"></div><div class="plc-dcard"></div><div class="plc-dcard"></div></div></div>
+          <div class="plc-scene"><div class="plc-funnel"><svg viewBox="0 0 110 120"><path class="plc-fbody" d="M 12 12 L 98 12 L 62 56 L 62 108 L 48 108 L 48 56 Z"/></svg><div class="plc-fdrop"></div><div class="plc-fdrop"></div><div class="plc-fdrop"></div></div></div>
+          <div class="plc-scene"><div class="plc-sonar"><span></span><span></span><span></span><div class="plc-c"></div></div></div>
+          <div class="plc-scene"><div class="plc-radar"><div class="plc-rg"></div><div class="plc-rg"></div><div class="plc-rg"></div><div class="plc-sweep"></div><div class="plc-blip"></div><div class="plc-blip"></div><div class="plc-blip"></div><div class="plc-rdot"></div></div></div>
+          <div class="plc-scene"><div class="plc-gauge"><svg viewBox="0 0 150 96"><path class="plc-track" d="M 15 82 A 60 60 0 0 1 135 82"/><path class="plc-gfill" d="M 15 82 A 60 60 0 0 1 135 82"/><g class="plc-needle"><line x1="75" y1="82" x2="128" y2="82" stroke="#26375C" stroke-width="3.5" stroke-linecap="round"/></g><circle cx="75" cy="82" r="6" fill="#26375C"/></svg></div></div>
+        </div>
+        <div class="plc-phase">Gathering fresh roles…</div>
+      </div>
     </div>
 
     <!-- ═══════════════════ HOME — ADMIN COCKPIT ═══════════════════ -->
@@ -497,7 +506,16 @@
         </div>
       </div>
 
-      <div x-show="loading" class="text-center text-gray-400 py-20 text-sm">Loading…</div>
+      <div x-show="loading || (blocking && blocking.pipeline)" class="flex flex-col items-center justify-center py-14">
+        <div class="plc-reel" style="max-width:280px">
+          <div class="plc-scene plc-active"><div class="plc-deal"><div class="plc-dcard"></div><div class="plc-dcard"></div><div class="plc-dcard"></div><div class="plc-dcard"></div></div></div>
+          <div class="plc-scene"><div class="plc-funnel"><svg viewBox="0 0 110 120"><path class="plc-fbody" d="M 12 12 L 98 12 L 62 56 L 62 108 L 48 108 L 48 56 Z"/></svg><div class="plc-fdrop"></div><div class="plc-fdrop"></div><div class="plc-fdrop"></div></div></div>
+          <div class="plc-scene"><div class="plc-sonar"><span></span><span></span><span></span><div class="plc-c"></div></div></div>
+          <div class="plc-scene"><div class="plc-radar"><div class="plc-rg"></div><div class="plc-rg"></div><div class="plc-rg"></div><div class="plc-sweep"></div><div class="plc-blip"></div><div class="plc-blip"></div><div class="plc-blip"></div><div class="plc-rdot"></div></div></div>
+          <div class="plc-scene"><div class="plc-gauge"><svg viewBox="0 0 150 96"><path class="plc-track" d="M 15 82 A 60 60 0 0 1 135 82"/><path class="plc-gfill" d="M 15 82 A 60 60 0 0 1 135 82"/><g class="plc-needle"><line x1="75" y1="82" x2="128" y2="82" stroke="#26375C" stroke-width="3.5" stroke-linecap="round"/></g><circle cx="75" cy="82" r="6" fill="#26375C"/></svg></div></div>
+        </div>
+        <div class="plc-phase">Gathering fresh roles…</div>
+      </div>
       <div x-show="!loading && filtered().length===0" class="text-center text-gray-400 py-20 text-sm">
         <i class="ti ti-inbox text-3xl block mb-2 opacity-50"></i>
         No jobs in <span x-text="tab"></span> yet.
@@ -2666,21 +2684,6 @@
     </div>
   </div>
 
-  <div x-show="(!booted || (blocking && blocking.pipeline)) && !loadError" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background:rgba(252,248,240,.94);backdrop-filter:blur(2px)">
-    <!-- Pipeline loader: get-new / run. Indeterminate on purpose — no timer, %, or ETA. -->
-    <div class="bg-white rounded-2xl px-8 py-8 flex flex-col items-center shadow-xl w-[340px] max-w-full text-center">
-      <div class="plc-reel">
-        <div class="plc-scene plc-active"><div class="plc-deal"><div class="plc-dcard"></div><div class="plc-dcard"></div><div class="plc-dcard"></div><div class="plc-dcard"></div></div></div>
-        <div class="plc-scene"><div class="plc-funnel"><svg viewBox="0 0 110 120"><path class="plc-fbody" d="M 12 12 L 98 12 L 62 56 L 62 108 L 48 108 L 48 56 Z"/></svg><div class="plc-fdrop"></div><div class="plc-fdrop"></div><div class="plc-fdrop"></div></div></div>
-        <div class="plc-scene"><div class="plc-sonar"><span></span><span></span><span></span><div class="plc-c"></div></div></div>
-        <div class="plc-scene"><div class="plc-radar"><div class="plc-rg"></div><div class="plc-rg"></div><div class="plc-rg"></div><div class="plc-sweep"></div><div class="plc-blip"></div><div class="plc-blip"></div><div class="plc-blip"></div><div class="plc-rdot"></div></div></div>
-        <div class="plc-scene"><div class="plc-gauge"><svg viewBox="0 0 150 96"><path class="plc-track" d="M 15 82 A 60 60 0 0 1 135 82"/><path class="plc-gfill" d="M 15 82 A 60 60 0 0 1 135 82"/><g class="plc-needle"><line x1="75" y1="82" x2="128" y2="82" stroke="#26375C" stroke-width="3.5" stroke-linecap="round"/></g><circle cx="75" cy="82" r="6" fill="#26375C"/></svg></div></div>
-      </div>
-      <div class="plc-phase" id="plcPhase">Gathering fresh roles…</div>
-      <div class="text-xs text-gray-400 mt-1.5">JobPilot is working…</div>
-    </div>
-  </div>
-
   <!-- Generic loader: imports & other heavy actions (simple spinner + label) -->
   <div x-show="blocking && !blocking.pipeline" x-cloak class="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl px-8 py-7 flex flex-col items-center gap-3 shadow-xl max-w-xs text-center">
@@ -2719,18 +2722,19 @@
 <script>
 (function () {
   var PHASES = ["Gathering fresh roles\u2026","Filtering out the noise\u2026","Scanning the whole pool\u2026","Locating your matches\u2026","Scoring the best fits\u2026"];
-  var cur = 0;
   setInterval(function () {
-    var scenes = document.querySelectorAll('.plc-scene');
-    if (!scenes.length) return;
-    var phaseEl = document.getElementById('plcPhase');
-    var next = (cur + 1) % scenes.length;
-    scenes[cur].classList.remove('plc-active');
-    scenes[cur].classList.add('plc-exit');
-    (function (leaving) { setTimeout(function () { leaving.classList.remove('plc-exit'); }, 650); })(scenes[cur]);
-    scenes[next].classList.add('plc-active');
-    cur = next;
-    if (phaseEl) { phaseEl.style.opacity = 0; setTimeout(function () { phaseEl.textContent = PHASES[cur]; phaseEl.style.opacity = 1; }, 200); }
+    document.querySelectorAll('.plc-reel').forEach(function (reel) {
+      var scenes = reel.querySelectorAll('.plc-scene');
+      if (!scenes.length) return;
+      var cur = reel._plcCur || 0, next = (cur + 1) % scenes.length;
+      scenes[cur].classList.remove('plc-active');
+      scenes[cur].classList.add('plc-exit');
+      (function (lv) { setTimeout(function () { lv.classList.remove('plc-exit'); }, 650); })(scenes[cur]);
+      scenes[next].classList.add('plc-active');
+      reel._plcCur = next;
+      var ph = reel.parentElement && reel.parentElement.querySelector('.plc-phase');
+      if (ph) { ph.style.opacity = 0; setTimeout(function () { ph.textContent = PHASES[next]; ph.style.opacity = 1; }, 200); }
+    });
   }, 2600);
 })();
 </script>

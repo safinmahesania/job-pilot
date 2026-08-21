@@ -92,6 +92,16 @@ def _run_once(only=None):
     return True
 
 
+def reset_state() -> None:
+    """Force-clear a stuck run flag. The worker is a daemon thread we cannot join, so
+    this only lets the UI and the next run recover from a hung or half-dead run."""
+    from src.run import reset_progress
+    with _lock:
+        _state["running"] = False
+        _state["started"] = 0.0
+    reset_progress()
+
+
 def trigger_async(only=None) -> bool:
     """Fire a run in the background. False if one is already going.
 

@@ -465,6 +465,13 @@ def trigger_run(body: RunRequest | None = None, _: str = Depends(require_admin))
     return {"started": True, "selective": bool(only), "sources": only or []}
 
 
+@router.post("/api/run/reset")
+def run_reset(_: str = Depends(require_admin)):
+    """Force-clear a stuck run so its loader stops and a new run can start."""
+    scheduler.reset_state()
+    return {"reset": True}
+
+
 @router.get("/api/run/status")
 def run_status(_: str = Depends(require_admin)):
     """Whether a run is going, and how far along it is.

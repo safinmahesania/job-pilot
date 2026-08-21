@@ -286,7 +286,7 @@
       busy(btn, true, "Creating account\u2026");
       var out = await client.auth.signUp({ email: email, password: pass, options: { data: { name: name }, emailRedirectTo: redirectTo() } });
       if (out.error) { setMsg("jpa-up-msg", out.error.message || "Couldn\u2019t create your account."); busy(btn, false); return; }
-      if (out.data && out.data.session) { window.location.reload(); return; }
+      if (out.data && out.data.session) { window.location.href = "/app/profile"; return; }
       _lastEmail = email; _lastMode = "verify";
       showSent();
     });

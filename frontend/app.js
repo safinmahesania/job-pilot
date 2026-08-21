@@ -263,10 +263,6 @@ function jobpilot() {
       // otherwise a background load() (e.g. after a run finishes) wipes what you're typing.
       if (this.tab !== 'profile' && !this.profileEdit && !this.profileDirty) {
         this.profile = (profileResp && profileResp.data) ? profileResp.data : this.profile;
-        // First run: an empty profile can't match anything, so send new users to set it up.
-        if (this.profile && this.profileComplete().done === 0 && !this._firstRun) {
-          this._firstRun = true; this.showOnboard = true; this.go('profile');
-        }
       }
       this.threshold = settings.score_threshold ?? 70;
       this.stats = stats;
@@ -364,6 +360,8 @@ function jobpilot() {
       for (const k of ['expert','proficient','familiar']) p.skills[k] = p.skills[k] || [];
       this.profile = p;
       this.profileDirty = false;
+      // Welcome nudge for a brand-new, still-empty profile — shown in place, no redirect.
+      if (this.profileComplete().done === 0) this.showOnboard = true;
       if (this.rawMode) await this.loadRaw();
     },
 
@@ -1731,6 +1729,11 @@ function jobpilot() {
       return m.provider === 'ollama' ? `${m.active} (local)` : `${m.active} · ${m.provider}`;
     },
 
+    async resetRun() {
+      this.running = false; this.runDismissed = true;
+      if (this._pollIv) { clearInterval(this._pollIv); this._pollIv = null; }
+      try { await fetch('/api/run/reset', { method: 'POST' }); } catch (e) {}
+    },
     poll() {
       if (this._pollIv) return;
       this._pollIv = setInterval(async () => {

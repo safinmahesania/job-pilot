@@ -2549,7 +2549,7 @@
           x-text="runPercent() + '%'"></span>
         <i class="ti text-gray-300 shrink-0"
           :class="runPanelOpen ? 'ti-chevron-down' : 'ti-chevron-up'"></i>
-        <button @click.stop="runDismissed = true" title="Hide"
+        <button @click.stop="resetRun()" title="Stop this run"
           class="ti ti-x text-gray-300 hover:text-gray-500 shrink-0 leading-none"></button>
       </div>
 

@@ -361,6 +361,10 @@
   // ── sign-out control (unchanged behaviour) ────────────────────────────────────
   function mountSignOut() { whenBody(_mountSignOut); }
   function _mountSignOut() {
+    // Sign-out now lives in the app sidebar (calls window.jobpilotAuth.signOut), so no
+    // floating button is injected here anymore.
+    return;
+    // eslint-disable-next-line no-unreachable
     if (document.getElementById("jp-signout")) { return; }
     var b = document.createElement("button");
     b.id = "jp-signout";

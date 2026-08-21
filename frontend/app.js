@@ -210,6 +210,10 @@ function jobpilot() {
 
     // Flip admin mode. When turning it off while on a Manage page, fall back to Feed so
     // the user isn't stranded on a page that just disappeared from the nav.
+    async signOut() {
+      try { if (window.jobpilotAuth) await window.jobpilotAuth.signOut(); } catch (e) {}
+      window.location.href = '/';
+    },
     toggleAdminMode() {
       if (!this.isAdmin) return;   // normal users never get admin mode
       this.adminMode = !this.adminMode;

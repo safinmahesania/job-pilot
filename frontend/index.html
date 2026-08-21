@@ -150,10 +150,14 @@
         <span x-text="running ? 'Running…' : 'Run fetch'"></span>
       </button>
       <div class="text-[11px] text-gray-400 text-center mt-2 leading-relaxed">
-        <div x-show="lastRun">Last: <span x-text="lastRun"></span></div>
-        <div x-show="nextRun && sched.enabled">Next: <span x-text="nextRun"></span></div>
-        <div x-show="!sched.enabled" class="text-gray-300">Auto-fetch off</div>
+        <div x-show="lastRun && isAdmin">Last: <span x-text="lastRun"></span></div>
+        <div x-show="nextRun && sched.enabled && isAdmin">Next: <span x-text="nextRun"></span></div>
+        <div x-show="!sched.enabled && isAdmin" class="text-gray-300">Auto-fetch off</div>
       </div>
+      <button @click="signOut()"
+        class="w-full flex items-center gap-2 px-2.5 h-8 rounded-lg text-[12px] mt-3 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+        <i class="ti ti-logout"></i><span class="flex-1 text-left">Sign out</span>
+      </button>
     </div>
   </aside>
 

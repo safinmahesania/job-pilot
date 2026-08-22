@@ -24,6 +24,11 @@ _lock = threading.Lock()
 #: otherwise — which shows a run-in-progress loader that never clears.
 RUN_TIMEOUT_SECONDS = 45 * 60
 
+#: Postgres advisory-lock key that makes a run singleton across ALL web workers.
+#: Each worker keeps its own in-memory _state, so the flag alone only guards a
+#: double-run within one process; this guards it across every process.
+_RUN_LOCK_KEY = 728411
+
 
 def get_state() -> dict:
     with _lock:
@@ -61,6 +66,29 @@ def _run_once(only=None):
         _state["running"] = True
         _state["started"] = time.time()
 
+    # Cross-process guard: with more than one web worker, the in-memory flag above
+    # only stops a double-run within THIS process. A session-level advisory lock makes
+    # the run singleton across every worker — if another already holds it, skip rather
+    # than fetch the same sources twice into the shared pool.
+    lock_conn = None
+    try:
+        lock_conn = store.connect()
+        got = lock_conn.execute("SELECT pg_try_advisory_lock(?)", (_RUN_LOCK_KEY,)).fetchone()[0]
+        lock_conn.commit()   # end the txn but keep the session (and the lock)
+        if not got:
+            log.info("[scheduler] another worker holds the run lock — skipping")
+            try: lock_conn.close()
+            except Exception: pass
+            with _lock:
+                _state["running"] = False
+            return False
+    except Exception as e:
+        log.warning("[scheduler] advisory lock unavailable, using in-memory guard only: %s", e)
+        if lock_conn is not None:
+            try: lock_conn.close()
+            except Exception: pass
+            lock_conn = None
+
     try:
         run_pipeline(only=only)
         _state["last_summary"] = ("completed (selective)" if only else "completed")
@@ -87,6 +115,11 @@ def _run_once(only=None):
         reset_progress()
         now = datetime.now()
         _state["running"] = False
+        if lock_conn is not None:
+            try: lock_conn.execute("SELECT pg_advisory_unlock(?)", (_RUN_LOCK_KEY,)); lock_conn.commit()
+            except Exception: pass
+            try: lock_conn.close()
+            except Exception: pass
         _state["last_run"] = now.strftime("%Y-%m-%d %H:%M")
         _stamp_last_run(now)
     return True

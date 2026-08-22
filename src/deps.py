@@ -8,6 +8,7 @@ each one reaching back into api.py — which would just move the tangle, not und
 Nothing here has behaviour of its own; it is the connection helpers, the column list,
 the tab-to-SQL map, and the settings accessor that the route modules import.
 """
+import os
 from contextlib import contextmanager
 
 from fastapi import Depends, HTTPException
@@ -23,7 +24,19 @@ from src.paths import RATE_LIMIT_DEFAULT
 # handler) and the route modules (which decorate the expensive endpoints with
 # @limiter.limit) can share the one instance. Keyed by client address; the per-route
 # limits are applied where the routes are defined.
-limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT_DEFAULT])
+def _rate_key(request):
+    """Rate-limit key. Behind a reverse proxy the socket address is the proxy's, so
+    every client would share one bucket. When TRUST_PROXY is set (you ARE behind a
+    known proxy), key on the original client from X-Forwarded-For instead. Off by
+    default: trusting that header from a direct client would let anyone spoof a key."""
+    if os.environ.get("TRUST_PROXY"):
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            return xff.split(",")[0].strip()
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=_rate_key, default_limits=[RATE_LIMIT_DEFAULT])
 
 
 # The columns a feed row returns to the frontend, split by where they now live.
@@ -75,11 +88,11 @@ def _db_dep():
     code after `yield` when the request finishes — success OR exception — so the
     connection is always closed. This replaces the `conn = _conn() ... conn.close()`
     pattern that leaked on any exception between the two."""
-    conn = _conn()
+    conn = db.acquire()
     try:
         yield conn
     finally:
-        conn.close()
+        db.release(conn)
 
 
 @contextmanager

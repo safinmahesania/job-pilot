@@ -179,3 +179,64 @@ def connect(dsn: str | None = None) -> CompatConnection:
         autocommit=False,
         row_factory=_hybrid_row_factory,
     )
+
+
+# ── Optional connection pool for request handlers ─────────────────────────────
+# Opening a fresh connection per request is fine at low traffic, but Supabase's
+# direct connection caps around 60 and each open pays a TLS handshake. When
+# DB_POOL_MAX is set, request handlers borrow from a shared pool of already-open
+# connections instead. Off by default so tests, the CLI and background work keep
+# the plain connect/close model. Background work (a run holds a connection for
+# many minutes) deliberately stays on connect() so it never starves the pool.
+import threading as _threading
+
+_pool = None
+_pool_lock = _threading.Lock()
+
+
+def _pool_enabled() -> bool:
+    return bool(os.environ.get("DB_POOL_MAX"))
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                from psycopg_pool import ConnectionPool
+                dsn = os.environ.get("DATABASE_URL")
+                if not dsn:
+                    raise RuntimeError("DATABASE_URL is not set — cannot open the pool.")
+                _pool = ConnectionPool(
+                    dsn,
+                    min_size=int(os.environ.get("DB_POOL_MIN", "1")),
+                    max_size=int(os.environ.get("DB_POOL_MAX", "10")),
+                    connection_class=CompatConnection,
+                    kwargs={"autocommit": False, "row_factory": _hybrid_row_factory},
+                    timeout=float(os.environ.get("DB_POOL_TIMEOUT", "10")),
+                    max_idle=float(os.environ.get("DB_POOL_MAX_IDLE", "300")),
+                    open=True,
+                )
+    return _pool
+
+
+def acquire() -> CompatConnection:
+    """A connection for a request handler: from the pool when DB_POOL_MAX is set,
+    otherwise a fresh direct connection (the previous behaviour)."""
+    if _pool_enabled():
+        return _get_pool().getconn()
+    return connect()
+
+
+def release(conn) -> None:
+    """Return a request handler's connection: to the pool if pooling is on, else
+    close it. Rolls back first so an aborted or half-open transaction never leaks to
+    the next borrower."""
+    if _pool_enabled():
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        _get_pool().putconn(conn)
+    else:
+        conn.close()

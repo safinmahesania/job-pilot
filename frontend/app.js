@@ -8,7 +8,6 @@ function jobpilot() {
     adminMode: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_admin_mode') === '1'),
     isAdmin: false,   // real admin flag from /api/me; gates all admin controls
     loadError: null,  // set when the server/DB can't be reached, so we show an error screen
-    booted: false,    // true after the first successful load; gates the full-screen loader
     runDismissed: false,   // admin hid the run-in-progress toast
     adminSubtab: 'system',   // Admin page sub-tab: 'system' | 'operations' | 'maintenance'
     maintPreview: null,      // live counts for the Maintenance tab: {total, snippets, expired, low, cache_mb}
@@ -298,7 +297,6 @@ function jobpilot() {
         if (sched.running && this.isAdmin) this.poll();
       }
       this.loading = false;
-      this.booted = true;
       this.loadNotifications();     // fill the bell badge
     },
 

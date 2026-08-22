@@ -16,6 +16,7 @@ Three related surfaces the fetch pipeline doesn't cover:
     local heuristics first and an AI pass only for the fields those couldn't place.
 """
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+import re
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -219,10 +220,13 @@ def material_file(job_id: int, kind: str, format: str = "pdf",
         ext = "md" if kind == "resume" else "txt"
 
     name = materials.filename(job, kind, ext)
+    # Header-safe: never let a stray quote/newline/control char reach the header
+    # (defence-in-depth — filename() already slugs its parts).
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", name) or "download"
     return Response(
         content=data,
         media_type=media,
-        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+        headers={"Content-Disposition": f'attachment; filename="{safe}"'},
     )
 
 

@@ -1,4 +1,5 @@
 """FastAPI backend for JobPilot — serves jobs, status updates, and the frontend."""
+from contextlib import asynccontextmanager
 from pathlib import Path
 import os
 from fastapi import FastAPI, Depends
@@ -13,7 +14,15 @@ load_env()
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from src.deps import limiter
-app = FastAPI(title="JobPilot", version=__version__)
+@asynccontextmanager
+async def _lifespan(app):
+    # Schema lives in Supabase (Postgres) now — nothing to migrate on boot. Just start
+    # the background scheduler. Replaces the deprecated @app.on_event("startup") hook.
+    scheduler.start()
+    yield
+
+
+app = FastAPI(title="JobPilot", version=__version__, lifespan=_lifespan)
 
 # Rate limiting. The limiter itself lives in deps.py so the route modules can share it;
 # here we wire it to the app and its 429 handler. A single real user never approaches
@@ -95,15 +104,6 @@ def source_health(conn=Depends(_db_dep)):
     ).fetchall()
     return [dict(r) for r in rows]
 
-
-
-@app.on_event("startup")
-def _startup():
-    # Schema is managed in Supabase (Postgres) now, not by a local SQLite migration.
-    # The old startup step ran data/init_db.py to bring a SQLite file up to date;
-    # under Postgres the schema is applied once in the Supabase SQL editor, so there
-    # is nothing to migrate here on boot.
-    scheduler.start()
 
 
 # ───────────────────────── pipeline runs ─────────────────────────

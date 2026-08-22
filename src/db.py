@@ -107,12 +107,36 @@ def _translate(sql: str, params=None) -> str:
     become ``%(name)s`` either way.
     """
     sql = sql.replace("datetime('now')", "now()")
-    if _has_params(params):
-        sql = sql.replace("%", "%%").replace("?", "%s")
-    else:
-        sql = sql.replace("?", "%s")
-    sql = _NAMED_PARAM.sub(r"%(\1)s", sql)
-    return sql
+    double_pct = _has_params(params)
+    # Single pass so that ``?`` and ``:name`` inside a '...' string literal are left
+    # alone (a literal question mark or a time like '12:30' is not a placeholder), while
+    # every literal ``%`` is doubled for psycopg when params are present.
+    out = []
+    in_str = False
+    i, n = 0, len(sql)
+    while i < n:
+        c = sql[i]
+        if c == "'":
+            if in_str and i + 1 < n and sql[i + 1] == "'":   # '' = escaped quote
+                out.append("''"); i += 2; continue
+            in_str = not in_str
+            out.append(c); i += 1; continue
+        if in_str:
+            out.append("%%" if (c == "%" and double_pct) else c)
+            i += 1; continue
+        if c == "%" and double_pct:
+            out.append("%%"); i += 1; continue
+        if c == "?":
+            out.append("%s"); i += 1; continue
+        if c == ":" and i + 1 < n and sql[i + 1] == ":":
+            out.append("::"); i += 2; continue   # Postgres cast (::jsonb, ::date) — not a param
+        if c == ":" and i + 1 < n and (sql[i + 1].isalpha() or sql[i + 1] == "_"):
+            j = i + 1
+            while j < n and (sql[j].isalnum() or sql[j] == "_"):
+                j += 1
+            out.append("%(" + sql[i + 1:j] + ")s"); i = j; continue
+        out.append(c); i += 1
+    return "".join(out)
 
 
 class CompatConnection(Connection):

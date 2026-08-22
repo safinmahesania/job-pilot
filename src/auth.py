@@ -31,6 +31,14 @@ def _jwt_secret() -> str | None:
     return os.environ.get("SUPABASE_JWT_SECRET")
 
 
+def _aud() -> str | None:
+    """Expected audience. Supabase signs user access tokens with aud="authenticated",
+    so verifying it rejects tokens minted for a different audience. Override with
+    SUPABASE_JWT_AUD for a non-standard project, or set it to "" to disable the check
+    entirely (an escape hatch if a project's tokens ever carry a different aud)."""
+    return os.environ.get("SUPABASE_JWT_AUD", "authenticated") or None
+
+
 def _jwks() -> PyJWKClient:
     """Lazily build (and cache) the JWKS client for the current SUPABASE_URL. Keys
     are cached in memory, so the Auth server isn't in the hot path of every request."""
@@ -56,12 +64,14 @@ def verify_token(token: str) -> dict:
         secret = _jwt_secret()
         if not secret:
             raise RuntimeError("SUPABASE_JWT_SECRET is not set — cannot verify HS256 JWTs.")
+        aud = _aud()
         return jwt.decode(token, secret, algorithms=["HS256"],
-                          options={"verify_aud": False})
+                          audience=aud, options={} if aud else {"verify_aud": False})
     # Asymmetric: fetch the matching public key from the project's JWKS.
     signing_key = _jwks().get_signing_key_from_jwt(token)
+    aud = _aud()
     return jwt.decode(token, signing_key.key, algorithms=["ES256", "RS256"],
-                      options={"verify_aud": False})
+                      audience=aud, options={} if aud else {"verify_aud": False})
 
 
 def user_id_from_token(token: str) -> str:

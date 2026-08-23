@@ -31,17 +31,14 @@ app = FastAPI(title="JobPilot", version=__version__, lifespan=_lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# The browser extension runs on ATS pages and calls this API from a
-# chrome-extension:// origin, so those requests must be allowed through.
 # CORS for the browser extension only.
 #
 # The extension runs on ATS pages and calls this API from a chrome-extension:// (or
-# moz-extension://) origin, so those origins are allowed. Two deliberate narrowings
-# from the audit:
+# moz-extension://) origin, so those origins are allowed. Two deliberate narrowings:
 #
-#   allow_credentials stays False, so this policy never lets another origin send the
-#   jp_auth cookie — cross-origin requests can only authenticate with the explicit
-#   x-jobpilot-key header, which the extension sets and a random page does not.
+#   allow_credentials stays False: auth is a Bearer access token in the Authorization
+#   header (no cookies), so there is nothing for another origin to ride on, and a
+#   random page cannot silently attach the user's credentials to a cross-origin call.
 #
 #   the methods and headers are named, not "*". A wildcard invites any extension to
 #   send anything; the app only needs these. The real defence is still the auth gate

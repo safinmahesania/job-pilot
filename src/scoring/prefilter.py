@@ -33,30 +33,52 @@ def _check_locations(job, allowed):
     if not allowed:
         return True
 
-    # allowed Canadian place ka seedha match -> pass
+    # A listed place matched directly -> pass. (Country-agnostic: works for any user's
+    # own locations, not just Canadian ones.)
     if any(a in loc for a in allowed if a != "remote"):
         return True
 
-    # A Canadian posting written in code form — "Mississauga, ON, CA" — is in Canada
-    # just as much as one spelled "Mississauga, Ontario". Accept it before the stricter
-    # checks below, which only understand the spelled-out words.
-    if _is_canadian(loc):
+    # The country-specific acceptors below used to fire for EVERY user, which quietly
+    # surfaced Canadian jobs to someone who never asked for Canada. Gate them on the
+    # user actually targeting Canada (their locations name Canada or a Canadian place),
+    # so a non-Canada user is filtered against THEIR places, not against Canada.
+    wants_canada = any(("canada" in a or "canadian" in a or _is_canadian(a)) for a in allowed)
+
+    # A Canadian posting in code form — "Mississauga, ON, CA" — is in Canada just as
+    # much as one spelled out. Accept it only if this user actually wants Canada.
+    if wants_canada and _is_canadian(loc):
         return True
 
     canada_words = ("canada", "canadian", "north america", "americas")
     remote_ish = job.get("remote") == 1 or "remote" in loc or loc.strip() in ("", "anywhere", "worldwide", "flexible")
 
     if is_global:
-        # GLOBAL boards: Canada explicitly mention hona chahiye — warna drop
-        return any(w in loc for w in canada_words)
+        # GLOBAL boards: for a Canada-targeting user, require Canada be named; for any
+        # other user, require one of THEIR listed places be named — otherwise drop.
+        if wants_canada:
+            return any(w in loc for w in canada_words)
+        return any(a in loc for a in allowed if a != "remote")
 
     # regional/ATS boards: remote pass jab tak koi foreign place na ho
     if remote_ish:
+        # A remote posting can still pin a region the user didn't ask for. For a
+        # Canada-targeting user, the well-known non-Canada markers below are "foreign".
+        # This list is Canada-specific, so only apply it when the user wants Canada —
+        # otherwise a US user's "remote US" role would be wrongly dropped as foreign.
         foreign = (" us", "usa", "united states", "u.s", ", ny", ", tx", ", wa",
                    "uk", "united kingdom", "europe", "emea", "brazil", "india",
                    "germany", "london", "california", "new york")
-        if any(f in loc for f in foreign):
+        if wants_canada and any(f in loc for f in foreign):
             return False
+        if not wants_canada:
+            # For non-Canada users we can't reliably tell a foreign remote posting from
+            # a local one without a geo/synonym map ("US" vs "united states", "Toronto"
+            # vs "Canada"). Rather than risk dropping the user's OWN valid remote jobs —
+            # the worse error — remote postings pass the prefilter and the scorer
+            # decides relevance (an off-region remote role just scores low, never surfaces).
+            return True
+        # Canada-targeting user: keep the strict check — strip the remote/Canada words
+        # and the user's places; if a specific place is left over, it's off-region.
         cleaned = loc.replace("flexible","").replace("/"," ").replace(","," ")
         for w in ("remote","anywhere","worldwide","global","canada","north america","americas"):
             cleaned = cleaned.replace(w, "")

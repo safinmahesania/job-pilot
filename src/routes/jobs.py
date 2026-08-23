@@ -473,6 +473,21 @@ def get_new_jobs(user_id: str = Depends(current_user_id), conn=Depends(_db_dep))
         (user_id, window)
     ).fetchall()
 
+    # Fallback: nothing fetched inside the recent window, but the shared pool may
+    # still hold older postings this user has never been offered — a new user, or a
+    # quiet fetch week. Show the whole unseen pool (capped) so "get new" isn't empty
+    # when there genuinely are jobs to surface.
+    if not rows:
+        rows = conn.execute(
+            "SELECT j.id, j.title, j.company, j.location, j.description, j.job_type, "
+            "j.remote, j.salary_min, j.salary_max, j.posted_date "
+            "FROM jobs j LEFT JOIN user_jobs uj "
+            "ON uj.job_id = j.id AND uj.user_id = ? "
+            "WHERE uj.job_id IS NULL "
+            "ORDER BY j.fetched_at DESC LIMIT 500",
+            (user_id,)
+        ).fetchall()
+
     calibration = build_calibration(conn, user_id) if scoring_on else ""
     scored = filtered = remaining = 0
     surfaced: list[dict] = []

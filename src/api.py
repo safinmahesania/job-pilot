@@ -166,6 +166,16 @@ def landing():
     return FileResponse(_FRONTEND_DIR / "landing.html")
 
 
+@app.get("/privacy")
+def privacy_page():
+    return FileResponse(_FRONTEND_DIR / "privacy.html")
+
+
+@app.get("/terms")
+def terms_page():
+    return FileResponse(_FRONTEND_DIR / "terms.html")
+
+
 @app.get("/app")
 @app.get("/app/{page}")
 def app_shell(page: str = ""):

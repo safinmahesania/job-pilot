@@ -211,6 +211,18 @@ function jobpilot() {
 
     // Flip admin mode. When turning it off while on a Manage page, fall back to Feed so
     // the user isn't stranded on a page that just disappeared from the nav.
+    async deleteAccount() {
+      if (!confirm('Permanently delete your account and ALL your data? This cannot be undone.')) return;
+      if (!confirm('Last chance — really delete everything?')) return;
+      try {
+        const r = await fetch('/api/account', { method: 'DELETE' });
+        if (!r.ok) throw new Error('status ' + r.status);
+        try { if (window.jobpilotAuth) await window.jobpilotAuth.signOut(); } catch (e) {}
+        window.location.href = '/';
+      } catch (e) {
+        this.showSnack('Could not delete account. Please try again.', 'error');
+      }
+    },
     async signOut() {
       try { if (window.jobpilotAuth) await window.jobpilotAuth.signOut(); } catch (e) {}
       window.location.href = '/';

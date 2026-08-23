@@ -140,6 +140,9 @@
         class="w-full flex items-center gap-2 px-2.5 h-9 rounded-lg text-[13px] mt-3 text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors">
         <i class="ti ti-logout"></i><span class="flex-1 text-left">Sign out</span>
       </button>
+      <div class="flex items-center gap-2 mt-2 px-2.5 text-[11px] text-gray-400">
+        <a href="/privacy" class="hover:text-gray-600">Privacy</a><span>·</span><a href="/terms" class="hover:text-gray-600">Terms</a>
+      </div>
     </div>
   </aside>
 
@@ -209,6 +212,9 @@
         class="w-full flex items-center gap-2 px-2.5 h-8 rounded-lg text-[12px] mt-3 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
         <i class="ti ti-logout"></i><span class="flex-1 text-left">Sign out</span>
       </button>
+      <div class="flex items-center gap-2 mt-2 px-2.5 text-[11px] text-gray-400">
+        <a href="/privacy" class="hover:text-gray-600">Privacy</a><span>·</span><a href="/terms" class="hover:text-gray-600">Terms</a>
+      </div>
     </div>
   </aside>
 
@@ -1373,6 +1379,15 @@
         <button @click="rawMode ? loadRaw() : loadProfile()" class="btn btn-ghost" style="height:38px; font-size:13px">Revert</button>
         <span x-show="profileDirty" class="flex items-center gap-1.5 text-xs text-amber-600"><i class="ti ti-point-filled"></i> Unsaved changes</span>
         <span x-show="!profileDirty" class="text-xs text-gray-400 hidden sm:inline">A backup copy is saved automatically.</span>
+      </div>
+
+      <!-- Danger zone -->
+      <div class="mt-8 pt-5 border-t" style="border-color:#F3D9D4">
+        <div class="text-[13px] font-semibold mb-1" style="color:#C4472F">Danger zone</div>
+        <p class="text-xs text-gray-500 mb-3 max-w-md">Permanently delete your account and all your data — profile, saved &amp; applied jobs, generated résumés and cover letters, and settings. This can't be undone.</p>
+        <button @click="deleteAccount()" class="btn" style="height:36px;font-size:13px;background:#fff;border:1px solid #F0CFC9;color:#C4472F">
+          <i class="ti ti-trash"></i> Delete my account
+        </button>
       </div>
     </div>
 

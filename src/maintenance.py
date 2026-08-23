@@ -36,6 +36,28 @@ def clear_old_jobs(days: int):
     return {"deleted": n}
 
 
+def prune_stale_jobs(days: int):
+    """Auto-retention: delete pool jobs older than N days that NO user has engaged
+    with. Unlike clear_old_jobs (a manual full purge), this preserves anything a user
+    saved or applied to, or generated materials / saved answers for — so cleanup never
+    silently erases a user's history, however old the posting is.
+    """
+    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    conn = store.connect()
+    cur = conn.execute(
+        "DELETE FROM jobs j WHERE j.fetched_at < ? "
+        "AND NOT EXISTS (SELECT 1 FROM user_jobs uj "
+        "                WHERE uj.job_id = j.id AND uj.status IN ('saved','applied')) "
+        "AND NOT EXISTS (SELECT 1 FROM materials m WHERE m.job_id = j.id) "
+        "AND NOT EXISTS (SELECT 1 FROM application_answers a WHERE a.job_id = j.id)",
+        (cutoff,)
+    )
+    conn.commit()
+    n = cur.rowcount
+    conn.close()
+    return {"deleted": n}
+
+
 def export_csv() -> str:
     """Return all jobs as a CSV string. PENDING: score/status are per-user now,
     so a meaningful export is per-user (whose feed?) — rebuilt in Stage 5."""

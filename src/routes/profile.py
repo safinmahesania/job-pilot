@@ -77,3 +77,23 @@ def save_profile_raw(body: ProfileText, user_id: str = Depends(current_user_id),
         raise HTTPException(400, f"invalid YAML: {e}")
     _save_profile(conn, user_id, parsed)
     return {"saved": True}
+
+
+@router.delete("/api/account")
+def delete_account(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
+    """Permanently delete the caller's account and ALL their personal data.
+
+    Every per-user table (profile, user_jobs, application_answers, materials,
+    notifications, settings) has ON DELETE CASCADE from public.users, and
+    public.users itself cascades from auth.users — so removing the auth row erases
+    everything, including the login. If deleting the auth row isn't permitted, we
+    still delete the app-side data (public.users cascade) so no personal data is left.
+    """
+    try:
+        conn.execute("DELETE FROM auth.users WHERE id = ?", (user_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+    return {"deleted": True}

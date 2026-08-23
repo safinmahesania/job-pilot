@@ -91,6 +91,19 @@ def _run_once(only=None):
 
     try:
         run_pipeline(only=only)
+        # Auto-retention: after each fetch, drop stale pool jobs nobody has engaged
+        # with, so the shared pool and the database don't grow without bound. The
+        # window is configurable (app setting job_retention_days), default 90 days.
+        try:
+            _rc = store.connect()
+            _days = int(store.get_setting(_rc, "job_retention_days", 90) or 90)
+            _rc.close()
+            from src.maintenance import prune_stale_jobs
+            pruned = prune_stale_jobs(_days)
+            if pruned.get("deleted"):
+                log.info("[scheduler] retention: pruned %s stale jobs (> %sd)", pruned["deleted"], _days)
+        except Exception as e:
+            log.warning("[scheduler] retention prune failed: %s", e)
         _state["last_summary"] = ("completed (selective)" if only else "completed")
     except Exception as e:
         # A pipeline crash used to live in a print() and this dict, and the next

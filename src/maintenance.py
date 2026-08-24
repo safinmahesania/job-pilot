@@ -27,9 +27,10 @@ def cleanup_below_threshold():
 
 def clear_old_jobs(days: int):
     """Permanently delete jobs older than N days (by fetched_at)."""
-    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
     conn = store.connect()
-    cur = conn.execute("DELETE FROM jobs WHERE fetched_at < ?", (cutoff,))
+    # DB-side interval so the cutoff is computed in the same (UTC) clock as the
+    # fetched_at timestamptz — a python datetime.now() would be the server's local time.
+    cur = conn.execute("DELETE FROM jobs WHERE fetched_at < now() - (? || ' days')::interval", (days,))
     conn.commit()
     n = cur.rowcount
     conn.close()
@@ -42,15 +43,14 @@ def prune_stale_jobs(days: int):
     saved or applied to, or generated materials / saved answers for — so cleanup never
     silently erases a user's history, however old the posting is.
     """
-    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
     conn = store.connect()
     cur = conn.execute(
-        "DELETE FROM jobs j WHERE j.fetched_at < ? "
+        "DELETE FROM jobs j WHERE j.fetched_at < now() - (? || ' days')::interval "
         "AND NOT EXISTS (SELECT 1 FROM user_jobs uj "
         "                WHERE uj.job_id = j.id AND uj.status IN ('saved','applied')) "
         "AND NOT EXISTS (SELECT 1 FROM materials m WHERE m.job_id = j.id) "
         "AND NOT EXISTS (SELECT 1 FROM application_answers a WHERE a.job_id = j.id)",
-        (cutoff,)
+        (days,)
     )
     conn.commit()
     n = cur.rowcount

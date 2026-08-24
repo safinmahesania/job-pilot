@@ -124,6 +124,7 @@ create table if not exists public.user_jobs (
     primary key (user_id, job_id)
 );
 create index if not exists idx_user_jobs_user   on public.user_jobs (user_id);
+create index if not exists idx_jobs_fetched_at   on public.jobs (fetched_at);   -- get-new range/sort + retention
 create index if not exists idx_user_jobs_status on public.user_jobs (user_id, status);
 
 -- ── seen: the global fetch-dedup log (which hashes we've already decided on) ──

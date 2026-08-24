@@ -182,10 +182,12 @@ def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all",
     if sort == "score" and (tab == "unscored" or (tab == "feed" and not scoring_on)):
         order = "j.id DESC"          # nothing to rank by; show the newest first
 
+    # Safety cap so a heavy account can't load an unbounded feed into memory / the
+    # browser. ORDER BY puts the best (or newest) first, so the cap keeps what matters.
     rows = conn.execute(
         f"SELECT {FEED_COLS} FROM jobs j "
         f"JOIN user_jobs uj ON uj.job_id = j.id "
-        f"WHERE uj.user_id = ? AND {where} ORDER BY {order}",
+        f"WHERE uj.user_id = ? AND {where} ORDER BY {order} LIMIT 1000",
         params).fetchall()
     return [dict(r) for r in rows]
 
@@ -499,11 +501,12 @@ def get_new_jobs(user_id: str = Depends(current_user_id), conn=Depends(_db_dep))
         # isn't re-evaluated on every future call.
         reason = why_not(job, profile)
         if reason is not None:
-            conn.execute(
-                "INSERT INTO user_jobs (user_id, job_id, status, rationale, served_at) "
-                "VALUES (?,?, 'dismissed', ?, now()) "
-                "ON CONFLICT (user_id, job_id) DO NOTHING",
-                (user_id, job["id"], f"filtered: {reason}"[:500]))
+            with conn:
+                conn.execute(
+                    "INSERT INTO user_jobs (user_id, job_id, status, rationale, served_at) "
+                    "VALUES (?,?, 'dismissed', ?, now()) "
+                    "ON CONFLICT (user_id, job_id) DO NOTHING",
+                    (user_id, job["id"], f"filtered: {reason}"[:500]))
             filtered += 1
             continue
 
@@ -512,31 +515,36 @@ def get_new_jobs(user_id: str = Depends(current_user_id), conn=Depends(_db_dep))
             remaining += 1
             continue
 
+        # score_job() is a per-job LLM call taking seconds. It runs with NO open
+        # transaction (the previous job already committed via `with conn:`), so the
+        # DB session never sits idle-in-transaction across the model call — the same
+        # failure ("connection is lost") that a single end-of-loop commit caused.
         result = score_job(job, profile, calibration) if scoring_on else None
         if result is not None:
-            conn.execute(
-                "INSERT INTO user_jobs (user_id, job_id, status, score, skills_score, "
-                "seniority_score, domain_score, rationale, served_at) "
-                "VALUES (?,?, 'surfaced', ?,?,?,?,?, now()) "
-                "ON CONFLICT (user_id, job_id) DO NOTHING",
-                (user_id, job["id"], result.overall, result.skills_score,
-                 result.seniority_score, result.domain_score, result.rationale))
+            with conn:
+                conn.execute(
+                    "INSERT INTO user_jobs (user_id, job_id, status, score, skills_score, "
+                    "seniority_score, domain_score, rationale, served_at) "
+                    "VALUES (?,?, 'surfaced', ?,?,?,?,?, now()) "
+                    "ON CONFLICT (user_id, job_id) DO NOTHING",
+                    (user_id, job["id"], result.overall, result.skills_score,
+                     result.seniority_score, result.domain_score, result.rationale))
             surfaced.append({"id": job["id"], "title": job["title"],
                              "company": job["company"], "score": result.overall})
             scored += 1
         else:
             # Scoring off, or no usable description: surface unscored (NULL score),
             # the same honest "not judged yet" the import path uses.
-            conn.execute(
-                "INSERT INTO user_jobs (user_id, job_id, status, served_at) "
-                "VALUES (?,?, 'surfaced', now()) "
-                "ON CONFLICT (user_id, job_id) DO NOTHING",
-                (user_id, job["id"]))
+            with conn:
+                conn.execute(
+                    "INSERT INTO user_jobs (user_id, job_id, status, served_at) "
+                    "VALUES (?,?, 'surfaced', now()) "
+                    "ON CONFLICT (user_id, job_id) DO NOTHING",
+                    (user_id, job["id"]))
             surfaced.append({"id": job["id"], "title": job["title"],
                              "company": job["company"], "score": None})
             scored += 1
 
-    conn.commit()
     return {"scored": scored, "filtered": filtered, "remaining": remaining,
             "surfaced": surfaced}
 

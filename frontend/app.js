@@ -1473,13 +1473,11 @@ function jobpilot() {
         body: JSON.stringify(body),
       });
       if (r.status === 409) { this.showSnack('Already running', 'error'); return; }
+      // The run is a background job (a server thread) — do NOT block the UI. Show the
+      // dismissible run toast and keep polling; the admin can switch to user mode and
+      // use the app normally while it finishes in the backend.
       this.running = true; this.runDismissed = false;
-      this.blocking = {
-        pipeline: true,
-        label: only && only.length
-          ? `Fetching ${only.length} selected source${only.length > 1 ? 's' : ''}…`
-          : 'Fetching and scoring jobs…',
-      };
+      this.showSnack('Run started — it continues in the background');
       this.poll();
     },
 
@@ -1799,7 +1797,7 @@ function jobpilot() {
           clearInterval(this._pollIv); this._pollIv = null;
           this.blocking = null;
           fetch('/api/model').then(r=>r.json()).then(m => { if (m) this.modelState = m; }).catch(()=>{});
-          if (this.isAdmin) this.showSnack('Run complete');
+          if (this.adminMode) this.showSnack('Run complete');
           this.load();
         }
       }, 3000);

@@ -236,7 +236,13 @@ function jobpilot() {
       try { localStorage.setItem('jp_admin_mode', this.adminMode ? '1' : '0'); } catch (e) {}
       const manageKeys = this.manageNav.map(n => n.k);
       if (!this.adminMode && manageKeys.includes(this.tab)) {
-        this.go('feed');
+        // Leaving a manage page → show the feed. Switch the view directly instead of a
+        // full reload: the feed data is already loaded, so toggling admin off shouldn't
+        // flash the loader. Only fetch if the feed genuinely has nothing yet.
+        this.tab = 'feed';
+        const path = this.tabToPath['feed'] || '/';
+        if (window.location.pathname !== path) history.pushState({ tab: 'feed' }, '', path);
+        if (!this.jobs || !this.jobs.length) this.load();
       }
     },
 

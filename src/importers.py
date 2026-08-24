@@ -454,8 +454,8 @@ def follow_links_enabled() -> bool:
         conn.close()
         if val is not None:
             return val == "1"
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("[import] follow_job_links read failed, using default: %s", e)
     return FOLLOW_JOB_LINKS
 
 

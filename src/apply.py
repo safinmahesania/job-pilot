@@ -20,6 +20,7 @@ import json
 import re
 
 from src import llm
+from src.logs import log
 from src.config import load_profile, skill_groups
 from src import (resume_limits, resume_guard, resume_fit, resume_schema,
                  resume_select)
@@ -266,8 +267,10 @@ def extract_requirements(job: dict, limit: int = 8) -> list[str]:
         if match:
             items = json.loads(match.group(0))
             return [str(i).strip() for i in items if str(i).strip()][:limit]
-    except Exception:
-        pass
+    except Exception as e:
+        # Degrades to no extracted requirements (the letter still generates), but log it
+        # — silently returning [] hid LLM/parse failures that quietly lower quality.
+        log.warning("[apply] requirement extraction failed: %s", e)
     return []
 
 

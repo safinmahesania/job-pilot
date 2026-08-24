@@ -24,6 +24,7 @@ import re
 from pydantic import BaseModel, ValidationError
 
 from src import llm, store
+from src.logs import log
 from src.scoring import feedback
 from src.paths import (
     MODEL_PRIMARY as PRIMARY,
@@ -77,8 +78,8 @@ def scoring_via_chain() -> bool:
         conn.close()
         if val is not None:
             return val == "1"
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("[rerank] scoring_via_chain read failed, using default: %s", e)
     return SCORING_VIA_PROVIDER_CHAIN
 
 

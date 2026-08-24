@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 import httpx
 
 from src import store
+from src.logs import log
 from src.paths import (
     LLM_PROVIDER_ORDER, LLM_PROVIDERS,
     LLM_TEMPERATURE, LLM_TIMEOUT_SECONDS,
@@ -187,8 +188,10 @@ def privacy_mode() -> str:
         conn.close()
         if val in ("redacted", "local", "full"):
             return val
-    except Exception:
-        pass
+    except Exception as e:
+        # Fail SAFE: fall back to the redacted default, and log so a DB problem masking
+        # the user's privacy setting is visible rather than silent.
+        log.warning("[privacy] could not read privacy_mode, using default (%s): %s", PRIVACY_MODE, e)
     return PRIVACY_MODE
 
 

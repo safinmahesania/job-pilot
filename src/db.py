@@ -202,6 +202,13 @@ def connect(dsn: str | None = None) -> CompatConnection:
         dsn,
         autocommit=False,
         row_factory=_hybrid_row_factory,
+        # TCP keepalives so a connection that idles through a long operation (a run's
+        # write phase, the run advisory lock) isn't silently dropped by the network,
+        # a NAT, or a pooler. Ignored on local unix sockets.
+        keepalives=1,
+        keepalives_idle=30,
+        keepalives_interval=10,
+        keepalives_count=5,
     )
 
 
@@ -236,7 +243,9 @@ def _get_pool():
                     min_size=int(os.environ.get("DB_POOL_MIN", "1")),
                     max_size=int(os.environ.get("DB_POOL_MAX", "10")),
                     connection_class=CompatConnection,
-                    kwargs={"autocommit": False, "row_factory": _hybrid_row_factory},
+                    kwargs={"autocommit": False, "row_factory": _hybrid_row_factory,
+                            "keepalives": 1, "keepalives_idle": 30,
+                            "keepalives_interval": 10, "keepalives_count": 5},
                     timeout=float(os.environ.get("DB_POOL_TIMEOUT", "10")),
                     max_idle=float(os.environ.get("DB_POOL_MAX_IDLE", "300")),
                     open=True,

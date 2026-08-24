@@ -106,6 +106,11 @@ def run(only: list[str] | None = None):
     # Extraction runs inline unless an admin turns it off (then a backfill fills the
     # structured fields later). It's independent of any per-user scoring.
     extract_on = store.get_setting(conn, "extraction_enabled", "1") == "1"
+    # Don't hold this connection across the long network fetch below. get_setting opens
+    # a transaction (autocommit is off), and an idle-in-transaction session sitting
+    # through a multi-minute fetch_all gets killed by Supabase — which surfaced as
+    # "OperationalError: the connection is lost". Reopen a fresh one for the writes.
+    conn.close()
 
     stats = {"fetched": 0, "seen": 0, "dropped": 0, "trashed": 0, "kept": 0,
              "errors": 0, "enriched": 0, "enrich_missed": 0, "french_only": 0,
@@ -123,6 +128,7 @@ def run(only: list[str] | None = None):
     # ── Then process serially ───────────────────────────────────────────────
     _progress(phase="Processing", total=sum(len(r) for _, r, _ in fetched))
 
+    conn = store.connect()   # fresh connection for the write phase (see close() above)
     for company, raw_jobs, src_stat in fetched:
         _progress(source=company.get("name", ""))
         if src_stat["status"] == "error":

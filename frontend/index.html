@@ -673,6 +673,15 @@
             </div>
           </div>
         </template>
+
+        <!-- Load more: fetch the next 25-row page and append. -->
+        <div x-show="hasMore && !loading && filtered().length" class="flex justify-center py-5">
+          <button @click="loadMore()" :disabled="loadingMore"
+            class="h-9 px-5 rounded-lg border border-brand text-brand text-[13px] flex items-center gap-2 disabled:opacity-50">
+            <i class="ti" :class="loadingMore ? 'ti-loader-2 animate-spin' : 'ti-chevron-down'"></i>
+            <span x-text="loadingMore ? 'Loading…' : 'Load more'"></span>
+          </button>
+        </div>
       </div>
 
       <!-- Floating rescore button: appears bottom-right in select mode once at least one

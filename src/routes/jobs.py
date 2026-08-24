@@ -154,6 +154,7 @@ def stats(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
 
 @router.get("/api/jobs")
 def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all",
+              page: int = 1,
               user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     threshold = _user_threshold(conn, user_id)
     scoring_on = _get_setting(conn, "scoring_enabled", "1") == "1"
@@ -182,12 +183,16 @@ def list_jobs(tab: str = "feed", sort: str = "score", source: str = "all",
     if sort == "score" and (tab == "unscored" or (tab == "feed" and not scoring_on)):
         order = "j.id DESC"          # nothing to rank by; show the newest first
 
-    # Safety cap so a heavy account can't load an unbounded feed into memory / the
-    # browser. ORDER BY puts the best (or newest) first, so the cap keeps what matters.
+    # Paginated: 25 rows per page (?page=1,2,…). ORDER BY puts the best/newest first,
+    # so page 1 is the most relevant slice; the client fetches more on demand. page and
+    # the derived offset are ints, so they interpolate safely.
+    page = max(1, int(page))
+    offset = (page - 1) * _FEED_PAGE_SIZE
     rows = conn.execute(
         f"SELECT {FEED_COLS} FROM jobs j "
         f"JOIN user_jobs uj ON uj.job_id = j.id "
-        f"WHERE uj.user_id = ? AND {where} ORDER BY {order} LIMIT 1000",
+        f"WHERE uj.user_id = ? AND {where} "
+        f"ORDER BY {order} LIMIT {_FEED_PAGE_SIZE} OFFSET {offset}",
         params).fetchall()
     return [dict(r) for r in rows]
 
@@ -447,6 +452,7 @@ def _rescore_one(conn, user_id, job_id: int, calibration: str | None = None):
 # every time; jobs past the score cap are left unseen for the next "get more".
 
 _GET_NEW_CAP = 50               # max model scores per call
+_FEED_PAGE_SIZE = 25            # feed rows per page (client paginates with ?page=)
 
 
 @router.post("/api/jobs/get-new")

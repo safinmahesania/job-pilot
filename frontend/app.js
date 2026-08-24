@@ -8,6 +8,9 @@ function jobpilot() {
     adminMode: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_admin_mode') === '1'),
     isAdmin: false,   // real admin flag from /api/me; gates all admin controls
     loadError: null,  // set when the server/DB can't be reached, so we show an error screen
+    page: 1,          // feed pagination (25/page)
+    hasMore: false,   // whether a 'Load more' page exists
+    loadingMore: false,
     runDismissed: false,   // admin hid the run-in-progress toast
     adminSubtab: 'system',   // Admin page sub-tab: 'system' | 'operations' | 'maintenance'
     maintPreview: null,      // live counts for the Maintenance tab: {total, snippets, expired, low, cache_mb}
@@ -258,7 +261,7 @@ function jobpilot() {
       // go() never ran), make sure that page's own data is fetched.
       await this.loadTabData();
       const jobsP = this.isJobView()
-        ? fetch(`/api/jobs?tab=${this.tab}&sort=${this.sort}&source=${this.source}`).then(r=>r.json()).catch(()=>[])
+        ? fetch(`/api/jobs?tab=${this.tab}&sort=${this.sort}&source=${this.source}&page=1`).then(r=>r.json()).catch(()=>[])
         : Promise.resolve(this.jobs);
       const [jobs, counts, followups, health, runs, settings, stats, sources, sched, model, notifyState, errors, profileResp, meResp] = await Promise.all([
         jobsP,
@@ -277,6 +280,8 @@ function jobpilot() {
         fetch('/api/me').then(r=>r.json()).catch(()=>({is_admin:false})),
       ]);
       this.jobs = jobs;
+      this.page = 1;
+      this.hasMore = Array.isArray(jobs) && jobs.length >= 25;   // a full page ⇒ maybe more
       this.counts = { ...counts };
       this.fu = followups;
       this.health = health.boards || [];
@@ -1167,7 +1172,7 @@ function jobpilot() {
     async importText() {
       if (!this.imp.text.trim()) return;
       this.imp.busy = true; this.imp.result = null;
-      this.blocking = { label: 'Reading the posting…' };
+      this.busy = { label: 'Reading the posting…' };
       try {
         const r = await fetch('/api/import/text', {
           method: 'POST', headers: {'Content-Type':'application/json'},
@@ -1182,7 +1187,7 @@ function jobpilot() {
       } catch (e) {
         this.showSnack('Could not read that posting: ' + e.message, 'error');
       } finally {
-        this.imp.busy = false; this.blocking = null;
+        this.imp.busy = false; this.busy = null;
       }
     },
 
@@ -1239,7 +1244,7 @@ function jobpilot() {
 
     async importMailDrop() {
       this.imp.busy = true; this.imp.result = null;
-      this.blocking = { label: 'Reading data/mail_drop/…' };
+      this.busy = { label: 'Reading mail drop…' };
       try {
         const r = await fetch('/api/import/mail-drop', { method: 'POST' });
         const data = await r.json();
@@ -1252,7 +1257,7 @@ function jobpilot() {
       } catch (e) {
         this.showSnack('Mail drop failed: ' + e.message, 'error');
       } finally {
-        this.imp.busy = false; this.blocking = null;
+        this.imp.busy = false; this.busy = null;
       }
     },
 
@@ -1485,11 +1490,27 @@ function jobpilot() {
     // Distinct from Run (which is the admin fetch that fills the pool). This is the
     // everyday action: it pulls the recent pool jobs you haven't seen, filters them
     // against your profile, scores the survivors, and drops them into your feed.
+    async loadMore() {
+      if (!this.hasMore || this.loadingMore) return;
+      this.loadingMore = true;
+      try {
+        this.page += 1;
+        const more = await fetch(
+          `/api/jobs?tab=${this.tab}&sort=${this.sort}&source=${this.source}&page=${this.page}`
+        ).then(r => r.json()).catch(() => []);
+        const rows = Array.isArray(more) ? more : [];
+        this.jobs = [...this.jobs, ...rows];
+        this.hasMore = rows.length >= 25;
+      } finally {
+        this.loadingMore = false;
+      }
+    },
     async getNewJobs() {
       if (this.gettingNew) return;
       this.gettingNew = true;
-      const _t0 = Date.now();
-      this.blocking = { label: 'Finding and scoring new jobs for you…', pipeline: true };
+      // Non-blocking: a corner toast + the button spinner, no full-screen freeze. The
+      // user can keep browsing their current feed while new matches are scored.
+      this.busy = { label: 'Finding new matches…' };
       try {
         const r = await fetch('/api/jobs/get-new', { method: 'POST' });
         const d = await r.json().catch(() => ({}));
@@ -1512,10 +1533,8 @@ function jobpilot() {
       } catch (e) {
         this.showSnack('Could not get new jobs', 'error');
       } finally {
-        const _el = Date.now() - _t0;   // keep the loader up long enough to be seen
-        if (_el < 800) await new Promise(r => setTimeout(r, 800 - _el));
         this.gettingNew = false;
-        this.blocking = null;
+        this.busy = null;
       }
     },
     toggleSelected(name) {
@@ -1872,8 +1891,9 @@ function jobpilot() {
 
     async maint(action, opts = {}) {
       if (opts.confirm && !(await this.ask(opts.confirm))) return;
-      if (opts.heavy) this.blocking = { label: opts.busyLabel || (opts.label + '…') };
-      else this.busy = { label: opts.busyLabel || (opts.label + '…') };
+      // Even "heavy" actions (rescore-all is a per-job LLM loop) use the non-blocking
+      // corner toast, not a full-screen freeze — the admin can keep using the app.
+      this.busy = { label: opts.busyLabel || (opts.label + '…') };
       try {
         const r = await fetch(opts.url, {
           method: opts.method || 'POST',
@@ -1883,7 +1903,7 @@ function jobpilot() {
         this.showSnack(opts.label + ' — ' + this.summarize(await r.json()));
       } catch (e) {
         this.showSnack('Failed: ' + e, 'error');
-      } finally { this.busy = null; this.blocking = null; }
+      } finally { this.busy = null; }
       await this.load();
     },
     exportCsv() { window.location.href = '/api/maint/export'; },

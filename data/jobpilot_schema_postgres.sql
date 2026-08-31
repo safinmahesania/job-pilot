@@ -23,6 +23,9 @@ create table if not exists public.users (
     id         uuid primary key references auth.users (id) on delete cascade,
     email      text,
     is_admin   boolean not null default false,
+    -- Per-user extension key: unique, generated on account creation. The user enters
+    -- this in the browser extension to authenticate (no Supabase session needed there).
+    ext_key    text unique not null default ('jp_' || replace(gen_random_uuid()::text, '-', '')),
     created_at timestamptz not null default now()
 );
 

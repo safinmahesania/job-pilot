@@ -81,12 +81,36 @@ def user_id_from_token(token: str) -> str:
     return sub
 
 
-def current_user_id(authorization: str = Header(None)) -> str:
-    """FastAPI dependency: verify the Bearer token, return the user's uuid (sub).
+def _user_id_from_ext_key(key: str):
+    """Resolve a per-user extension key to its user id, or None if it doesn't match."""
+    key = (key or "").strip()
+    if not key:
+        return None
+    from src import db
+    conn = db.connect()
+    try:
+        row = conn.execute("SELECT id FROM users WHERE ext_key = ?", (key,)).fetchone()
+        return str(row[0]) if row else None
+    finally:
+        conn.close()
 
-    Routes declare ``user_id: str = Depends(current_user_id)`` to get the caller's
-    id, already authenticated. Anything unverifiable is a 401.
+
+def current_user_id(authorization: str = Header(None),
+                    x_jobpilot_key: str = Header(None)) -> str:
+    """FastAPI dependency: return the caller's uuid, authenticated one of two ways.
+
+    - Browser extension: a per-user ``X-JobPilot-Key`` header (the key shown in the
+      web app). Checked first so the extension needs no Supabase session.
+    - Web app: a Supabase ``Authorization: Bearer <jwt>`` header.
+
+    Routes declare ``user_id: str = Depends(current_user_id)``. Anything unverifiable
+    is a 401.
     """
+    if x_jobpilot_key:
+        uid = _user_id_from_ext_key(x_jobpilot_key)
+        if uid:
+            return uid
+        raise HTTPException(401, "Invalid extension key")
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401, "Missing bearer token")
     token = authorization.split(" ", 1)[1].strip()

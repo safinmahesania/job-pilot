@@ -80,8 +80,9 @@ async function supabaseConfig() {
 }
 
 async function authHeaders(extra = {}) {
-  const { sbAccessToken } = await chrome.storage.local.get("sbAccessToken");
-  return sbAccessToken ? { ...extra, Authorization: `Bearer ${sbAccessToken}` } : extra;
+  // Per-user extension key (entered in the popup, shown in the web app profile).
+  const { extKey } = await chrome.storage.local.get("extKey");
+  return extKey ? { ...extra, "X-JobPilot-Key": extKey } : extra;
 }
 
 async function refreshAccessToken() {
@@ -109,15 +110,11 @@ async function refreshAccessToken() {
   }
 }
 
-// Central fetch: attach the Bearer token, and on a 401 refresh once and retry.
+// Central fetch: attach the per-user extension key. A key doesn't expire, so there's
+// no token-refresh dance — a 401 just means the key is missing or wrong.
 async function apiFetch(path, opts = {}) {
   const url = `${await apiBase()}${path}`;
-  const send = async () => fetch(url, { ...opts, headers: await authHeaders(opts.headers || {}) });
-  let r = await send();
-  if (r.status === 401 && await refreshAccessToken()) {
-    r = await send();
-  }
-  return r;
+  return fetch(url, { ...opts, headers: await authHeaders(opts.headers || {}) });
 }
 
 async function getJSON(path) {

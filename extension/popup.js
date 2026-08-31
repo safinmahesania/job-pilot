@@ -302,46 +302,45 @@ if (askCopy) {
     });
   }
 
-  // Account sign-in. The popup collects email + password and hands them to
-  // background.js, which exchanges them with Supabase and stores the tokens it then
-  // sends as a Bearer header on every call.
-  const emailInput = document.getElementById("email");
-  const passInput = document.getElementById("password");
-  const signInBtn = document.getElementById("signInBtn");
+  // Account connection via a per-user extension key. The key is stored locally and
+  // sent as X-JobPilot-Key on every call (see background.js). No Supabase session.
+  const extKeyInput = document.getElementById("extKey");
+  const connectBtn = document.getElementById("connectBtn");
   const signOutBtn = document.getElementById("signOutBtn");
 
   async function reflectAuthUI() {
-    const { sbAccessToken } = await chrome.storage.local.get("sbAccessToken");
-    const signedIn = !!sbAccessToken;
-    if (emailInput) emailInput.style.display = signedIn ? "none" : "";
-    if (passInput) passInput.style.display = signedIn ? "none" : "";
-    if (signInBtn) signInBtn.style.display = signedIn ? "none" : "";
-    if (signOutBtn) signOutBtn.style.display = signedIn ? "" : "none";
-    const gh = document.getElementById("googleHint");
-    if (gh) gh.style.display = signedIn ? "none" : "";
+    const { extKey } = await chrome.storage.local.get("extKey");
+    const connected = !!extKey;
+    if (extKeyInput) extKeyInput.style.display = connected ? "none" : "";
+    if (connectBtn) connectBtn.style.display = connected ? "none" : "";
+    if (signOutBtn) signOutBtn.style.display = connected ? "" : "none";
   }
   reflectAuthUI();
 
-  if (signInBtn) {
-    signInBtn.addEventListener("click", async () => {
-      const email = (emailInput.value || "").trim();
-      const password = passInput.value || "";
-      if (!email || !password) { emailInput.focus(); return; }
-      signInBtn.disabled = true;
-      signInBtn.textContent = "Signing in…";
-      const res = await send({ type: "signIn", email, password });
-      signInBtn.disabled = false;
-      signInBtn.textContent = "Sign in";
-      if (res?.ok) {
-        location.reload();                 // re-run the health check, now signed in
+  if (connectBtn) {
+    connectBtn.addEventListener("click", async () => {
+      const key = (extKeyInput.value || "").trim();
+      if (!key) { extKeyInput.focus(); return; }
+      connectBtn.disabled = true;
+      connectBtn.textContent = "Connecting…";
+      await chrome.storage.local.set({ extKey: key });
+      // Verify by hitting the server with the key; keep it only if it works.
+      const health = await send({ type: "health" });
+      connectBtn.disabled = false;
+      connectBtn.textContent = "Connect";
+      if (health?.ok) {
+        location.reload();
       } else {
-        foot.textContent = res?.error || "Sign-in failed.";
+        await chrome.storage.local.remove("extKey");
+        foot.textContent = health?.reason === "auth"
+          ? "That key didn't work — copy it again from the web app (Profile → Browser extension key)."
+          : (health?.error || "Couldn't connect. Check the Server URL below.");
       }
     });
   }
   if (signOutBtn) {
     signOutBtn.addEventListener("click", async () => {
-      await chrome.storage.local.remove(["sbAccessToken", "sbRefreshToken"]);
+      await chrome.storage.local.remove("extKey");
       location.reload();
     });
   }
@@ -350,10 +349,10 @@ if (askCopy) {
   if (!health?.ok) {
     dot.classList.add("bad");
     if (health?.reason === "auth") {
-      statusText.textContent = "Sign in needed";
-      foot.textContent = "Sign in with your JobPilot account below.";
+      statusText.textContent = "Connect needed";
+      foot.textContent = "Enter your extension key below (from the web app: Profile → Browser extension key).";
       jobTitle.textContent = "—";
-      jobWhy.textContent = "Sign in with your account below to connect.";
+      jobWhy.textContent = "Enter your extension key below to connect.";
     } else {
       const url = urlInput?.value || "http://localhost:8000";
       statusText.textContent = "Can't reach JobPilot";

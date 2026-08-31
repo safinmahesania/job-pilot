@@ -1396,6 +1396,20 @@
         <span x-show="!profileDirty" class="text-xs text-gray-400 hidden sm:inline">A backup copy is saved automatically.</span>
       </div>
 
+      <!-- Browser extension key -->
+      <div class="mt-8 pt-5 border-t border-gray-100">
+        <div class="text-[13px] font-semibold text-gray-800 mb-1 flex items-center gap-1.5"><i class="ti ti-puzzle text-brand"></i> Browser extension key</div>
+        <p class="text-xs text-gray-500 mb-3 max-w-md">Enter this key in the JobPilot browser extension to connect it to your account. It's unique to you — keep it private, like a password.</p>
+        <div class="flex items-center gap-2 max-w-md">
+          <input :type="extKeyShown ? 'text' : 'password'" :value="extKey || 'unavailable'" readonly
+            class="flex-1 h-9 px-3 rounded-lg border border-gray-200 bg-gray-50 text-[13px] font-mono text-gray-700" />
+          <button @click="extKeyShown = !extKeyShown" class="h-9 w-9 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 flex items-center justify-center shrink-0" :title="extKeyShown ? 'Hide' : 'Show'">
+            <i class="ti" :class="extKeyShown ? 'ti-eye-off' : 'ti-eye'"></i>
+          </button>
+          <button @click="copyExtKey()" class="h-9 px-3 rounded-lg bg-brand text-white text-[13px] flex items-center gap-1.5 shrink-0"><i class="ti ti-copy"></i> Copy</button>
+        </div>
+      </div>
+
       <!-- Danger zone -->
       <div class="mt-8 pt-5 border-t" style="border-color:#F3D9D4">
         <div class="text-[13px] font-semibold mb-1" style="color:#C4472F">Danger zone</div>

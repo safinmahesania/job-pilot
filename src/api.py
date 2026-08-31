@@ -49,7 +49,7 @@ app.add_middleware(
     allow_origin_regex=r"chrome-extension://[a-p]{32}|moz-extension://[0-9a-f-]{36}",
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-JobPilot-Key"],
 )
 
 
@@ -65,10 +65,11 @@ def me(user_id: str = Depends(current_user_id), conn=Depends(_db_dep)):
     """Who the caller is, so the frontend can gate admin-only controls. The backend
     still enforces admin on the actual endpoints; this only decides what UI to show."""
     row = conn.execute(
-        "SELECT email, is_admin FROM users WHERE id=?", (user_id,)).fetchone()
+        "SELECT email, is_admin, ext_key FROM users WHERE id=?", (user_id,)).fetchone()
     return {
         "id": user_id,
         "email": row[0] if row else None,
+        "ext_key": row[2] if row else None,
         "is_admin": bool(row[1]) if row else False,
     }
 

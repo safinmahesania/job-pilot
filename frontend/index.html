@@ -1396,6 +1396,83 @@
         <span x-show="!profileDirty" class="text-xs text-gray-400 hidden sm:inline">A backup copy is saved automatically.</span>
       </div>
 
+      <!-- Contact -->
+      <div class="card p-4">
+        <div class="flex items-center gap-2 text-sm font-semibold mb-3"><i class="ti ti-address-book text-brand"></i> Contact</div>
+        <div x-show="!profileEdit" class="text-[13px] text-gray-600 space-y-0.5">
+          <div x-show="profile.contact && profile.contact.email" x-text="'Email: ' + (profile.contact?.email||'')"></div>
+          <div x-show="profile.contact && profile.contact.phone" x-text="'Phone: ' + (profile.contact?.phone||'')"></div>
+          <div x-show="profile.contact && (profile.contact.city || profile.contact.country)" x-text="'Location: ' + [profile.contact?.city, profile.contact?.country].filter(Boolean).join(', ')"></div>
+          <div x-show="profile.contact && profile.contact.linkedin" x-text="'LinkedIn: ' + (profile.contact?.linkedin||'')"></div>
+          <div x-show="profile.contact && profile.contact.github" x-text="'GitHub: ' + (profile.contact?.github||'')"></div>
+          <div x-show="!profile.contact || !(profile.contact.email||profile.contact.phone||profile.contact.city||profile.contact.linkedin)" class="text-xs text-gray-400">No contact details yet.</div>
+        </div>
+        <div x-show="profileEdit" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div><label class="lbl">Email</label><input x-model="profile.contact.email" @input="profileDirty=true" class="fld"></div>
+          <div><label class="lbl">Phone</label><input x-model="profile.contact.phone" @input="profileDirty=true" class="fld"></div>
+          <div><label class="lbl">City</label><input x-model="profile.contact.city" @input="profileDirty=true" class="fld"></div>
+          <div><label class="lbl">Country</label><input x-model="profile.contact.country" @input="profileDirty=true" class="fld"></div>
+          <div><label class="lbl">LinkedIn</label><input x-model="profile.contact.linkedin" @input="profileDirty=true" class="fld"></div>
+          <div><label class="lbl">GitHub</label><input x-model="profile.contact.github" @input="profileDirty=true" class="fld"></div>
+          <div class="sm:col-span-2"><label class="lbl">Website</label><input x-model="profile.contact.website" @input="profileDirty=true" class="fld"></div>
+        </div>
+      </div>
+
+      <!-- Skill categories & languages -->
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <span class="flex items-center gap-2 text-sm font-semibold"><i class="ti ti-language text-brand"></i> Skill categories &amp; languages</span>
+          <button x-show="profileEdit" @click="addSkillCategory()" class="btn btn-ghost" style="height:32px; font-size:13px; padding:0 12px"><i class="ti ti-plus"></i> Add</button>
+        </div>
+        <div x-show="!profileEdit" class="space-y-1.5">
+          <template x-for="(c, i) in (profile.skill_categories || [])" :key="i">
+            <div class="text-[13px]"><span class="font-medium text-gray-800" x-text="c.label"></span><span class="text-gray-500">: </span><span class="text-gray-600" x-text="(c.skills||[]).join(', ')"></span></div>
+          </template>
+          <div x-show="!(profile.skill_categories||[]).length" class="text-xs text-gray-400">No categories yet — add one like <b>Languages</b> (English, Urdu, French) or Tools.</div>
+        </div>
+        <div x-show="profileEdit" class="space-y-3">
+          <template x-for="(c, i) in (profile.skill_categories || [])" :key="i">
+            <div class="border border-gray-200 rounded-lg p-3">
+              <div class="flex items-center gap-2 mb-2">
+                <input x-model="c.label" @input="profileDirty=true" placeholder="Category (e.g. Languages)" class="fld flex-1">
+                <button @click="profile.skill_categories.splice(i,1); profileDirty=true" title="Remove category" class="ti ti-trash text-gray-400 hover:text-red-500 shrink-0"></button>
+              </div>
+              <div class="flex flex-wrap gap-1.5 items-center">
+                <template x-for="v in (c.skills||[])" :key="v">
+                  <span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5" style="background:var(--brand-tint); color:var(--brand-strong)"><span x-text="v"></span><i class="ti ti-x text-[11px] opacity-50 cursor-pointer hover:opacity-100" @click="chipRemove(c, 'skills', v)"></i></span>
+                </template>
+                <input @keydown="chipKey($event, c, 'skills')" placeholder="Add item, Enter" class="text-[12.5px] px-2.5 h-7 border border-dashed border-gray-300 rounded-full outline-none focus:border-brand w-40">
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Application details -->
+      <div class="card p-4">
+        <div class="flex items-center gap-2 text-sm font-semibold mb-3"><i class="ti ti-file-check text-brand"></i> Application details</div>
+        <div x-show="!profileEdit" class="text-[13px] text-gray-600 space-y-0.5">
+          <div>Work authorized: <span x-text="profile.application?.work_authorized ? 'Yes' : 'No'"></span></div>
+          <div>Needs sponsorship: <span x-text="profile.application?.needs_sponsorship ? 'Yes' : 'No'"></span></div>
+          <div>Willing to relocate: <span x-text="profile.application?.willing_to_relocate ? 'Yes' : 'No'"></span></div>
+          <div x-show="profile.application?.notice_period" x-text="'Notice period: ' + (profile.application?.notice_period||'')"></div>
+          <div x-show="profile.application?.salary_expectation" x-text="'Salary expectation: ' + (profile.application?.salary_expectation||'')"></div>
+          <div x-show="profile.application?.years_of_experience" x-text="'Years of experience: ' + (profile.application?.years_of_experience||'')"></div>
+        </div>
+        <div x-show="profileEdit" class="space-y-2.5">
+          <div class="flex flex-wrap gap-4">
+            <label class="flex items-center gap-2 text-[13px] text-gray-700"><input type="checkbox" x-model="profile.application.work_authorized" @change="profileDirty=true"> Work authorized</label>
+            <label class="flex items-center gap-2 text-[13px] text-gray-700"><input type="checkbox" x-model="profile.application.needs_sponsorship" @change="profileDirty=true"> Needs sponsorship</label>
+            <label class="flex items-center gap-2 text-[13px] text-gray-700"><input type="checkbox" x-model="profile.application.willing_to_relocate" @change="profileDirty=true"> Willing to relocate</label>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div><label class="lbl">Notice period</label><input x-model="profile.application.notice_period" @input="profileDirty=true" class="fld"></div>
+            <div><label class="lbl">Salary expectation</label><input x-model="profile.application.salary_expectation" @input="profileDirty=true" class="fld"></div>
+            <div><label class="lbl">Years of experience</label><input x-model="profile.application.years_of_experience" @input="profileDirty=true" class="fld" type="number"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Browser extension key -->
       <div class="mt-8 pt-5 border-t border-gray-100">
         <div class="text-[13px] font-semibold text-gray-800 mb-1 flex items-center gap-1.5"><i class="ti ti-puzzle text-brand"></i> Browser extension key</div>

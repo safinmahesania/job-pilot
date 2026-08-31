@@ -387,6 +387,11 @@ function jobpilot() {
     },
 
     // ───────── profile ─────────
+    addSkillCategory() {
+      if (!this.profile.skill_categories) this.profile.skill_categories = [];
+      this.profile.skill_categories.push({ label: '', skills: [] });
+      this.profileDirty = true;
+    },
     async loadProfile() {
       const d = await fetch('/api/profile').then(r=>r.json()).catch(()=>({data:{}}));
       const p = d.data || {};
@@ -397,6 +402,11 @@ function jobpilot() {
       p.experience = p.experience || [];
       p.projects   = p.projects   || [];
       p.education  = p.education  || [];
+      p.contact    = p.contact    || {};
+      p.application = p.application || {};
+      p.skill_categories = p.skill_categories || [];
+      p.certificates = p.certificates || [];
+      p.volunteer  = p.volunteer  || [];
       for (const k of ['locations']) p.constraints[k] = p.constraints[k] || [];
       for (const k of ['role_levels','exclude_levels','domains','exclude_keywords','job_types'])
         p.search[k] = p.search[k] || [];

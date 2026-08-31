@@ -7,6 +7,8 @@ function jobpilot() {
     // Off by default so the everyday view stays clean; remembered across reloads.
     adminMode: (typeof localStorage !== 'undefined' && localStorage.getItem('jp_admin_mode') === '1'),
     isAdmin: false,   // real admin flag from /api/me; gates all admin controls
+    extKey: null,     // this user's browser-extension key (from /api/me)
+    extKeyShown: false,
     loadError: null,  // set when the server/DB can't be reached, so we show an error screen
     page: 1,          // feed pagination (25/page)
     hasMore: false,   // whether a 'Load more' page exists
@@ -226,6 +228,11 @@ function jobpilot() {
         this.showSnack('Could not delete account. Please try again.', 'error');
       }
     },
+    copyExtKey() {
+      if (!this.extKey) { this.showSnack('Key not loaded yet — reload the page', 'error'); return; }
+      try { navigator.clipboard.writeText(this.extKey); this.showSnack('Extension key copied'); }
+      catch (e) { this.showSnack('Copy failed — reveal it and copy manually', 'error'); }
+    },
     async signOut() {
       try { if (window.jobpilotAuth) await window.jobpilotAuth.signOut(); } catch (e) {}
       window.location.href = '/';
@@ -294,6 +301,7 @@ function jobpilot() {
       this.runs = runs || [];
       this.errors = errors || [];
       this.isAdmin = !!(meResp && meResp.is_admin);
+      this.extKey = (meResp && meResp.ext_key) || null;
       if (!this.isAdmin) {
         // Non-admins never have admin mode, and can't sit on a Manage page even via a
         // direct URL like /app/admin — bounce them to the feed.
@@ -387,11 +395,6 @@ function jobpilot() {
     },
 
     // ───────── profile ─────────
-    addSkillCategory() {
-      if (!this.profile.skill_categories) this.profile.skill_categories = [];
-      this.profile.skill_categories.push({ label: '', skills: [] });
-      this.profileDirty = true;
-    },
     async loadProfile() {
       const d = await fetch('/api/profile').then(r=>r.json()).catch(()=>({data:{}}));
       const p = d.data || {};
@@ -402,11 +405,6 @@ function jobpilot() {
       p.experience = p.experience || [];
       p.projects   = p.projects   || [];
       p.education  = p.education  || [];
-      p.contact    = p.contact    || {};
-      p.application = p.application || {};
-      p.skill_categories = p.skill_categories || [];
-      p.certificates = p.certificates || [];
-      p.volunteer  = p.volunteer  || [];
       for (const k of ['locations']) p.constraints[k] = p.constraints[k] || [];
       for (const k of ['role_levels','exclude_levels','domains','exclude_keywords','job_types'])
         p.search[k] = p.search[k] || [];

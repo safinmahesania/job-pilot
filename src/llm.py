@@ -10,6 +10,7 @@ the UI); defaults come from src/paths.py. Both hosted providers expose an
 OpenAI-compatible chat-completions endpoint, so they share one code path over
 httpx — no extra SDK dependency.
 """
+import json
 import os
 from datetime import datetime, timezone
 
@@ -158,7 +159,10 @@ def _call_openai_compatible(provider: str, system: str, user: str) -> tuple[str,
         timeout=LLM_TIMEOUT_SECONDS,
     )
     r.raise_for_status()
-    data = r.json()
+    # JSON is UTF-8 by spec (RFC 8259). Decode the raw bytes as UTF-8 explicitly rather
+    # than trusting httpx's charset guess — a missing charset header was making it read
+    # UTF-8 en/em-dashes as Latin-1, producing "â€"" mojibake in generated resumes.
+    data = json.loads(r.content.decode("utf-8"))
     text = data["choices"][0]["message"]["content"].strip()
     tokens = (data.get("usage") or {}).get("total_tokens", 0)
     return text, tokens

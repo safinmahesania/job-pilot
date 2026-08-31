@@ -11,6 +11,7 @@ function jobpilot() {
     page: 1,          // feed pagination (25/page)
     hasMore: false,   // whether a 'Load more' page exists
     loadingMore: false,
+    showAllFollowups: false,   // applied tab: show 5 follow-ups, expand for the rest
     runDismissed: false,   // admin hid the run-in-progress toast
     adminSubtab: 'system',   // Admin page sub-tab: 'system' | 'operations' | 'maintenance'
     maintPreview: null,      // live counts for the Maintenance tab: {total, snippets, expired, low, cache_mb}

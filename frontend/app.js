@@ -11,7 +11,6 @@ function jobpilot() {
     page: 1,          // feed pagination (25/page)
     hasMore: false,   // whether a 'Load more' page exists
     loadingMore: false,
-    showAllFollowups: false,   // applied tab: show 5 follow-ups, expand for the rest
     runDismissed: false,   // admin hid the run-in-progress toast
     adminSubtab: 'system',   // Admin page sub-tab: 'system' | 'operations' | 'maintenance'
     maintPreview: null,      // live counts for the Maintenance tab: {total, snippets, expired, low, cache_mb}
@@ -1080,10 +1079,29 @@ function jobpilot() {
       // the version you are looking at — not the one the model first produced.
       await this.saveMaterial();
       const url = `/api/jobs/${this.cover.jobId}/materials/${this.cover.kind}/file?format=${format}`;
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = '';                 // the server sets the real filename
-      a.click();
+      try {
+        // Fetch (not a plain <a href>) so the auth wrapper attaches the Bearer token.
+        // A bare anchor navigation carries no token → the endpoint returned a 401 JSON
+        // error, which the browser then saved as a ".json" file instead of the PDF/DOCX.
+        const r = await fetch(url);
+        if (!r.ok) { this.showSnack('Download failed — please try again', 'error'); return; }
+        const blob = await r.blob();
+        // Real filename (with the correct extension) comes from Content-Disposition.
+        const cd = r.headers.get('Content-Disposition') || '';
+        const m = cd.match(/filename="?([^"]+)"?/);
+        const ext = format === 'docx' ? 'docx' : format === 'pdf' ? 'pdf' : 'txt';
+        const filename = (m && m[1]) || `${this.cover.kind}.${ext}`;
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objUrl);
+      } catch (e) {
+        this.showSnack('Download failed — please try again', 'error');
+      }
     },
 
     // ── AI providers ──

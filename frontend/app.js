@@ -233,6 +233,20 @@ function jobpilot() {
       try { navigator.clipboard.writeText(this.extKey); this.showSnack('Extension key copied'); }
       catch (e) { this.showSnack('Copy failed — reveal it and copy manually', 'error'); }
     },
+    skillTier(skill) {   // proficiency level for a skill name, from the tiers
+      const sk = this.profile.skills || {};
+      const low = (skill || '').toLowerCase().trim();
+      if ((sk.expert || []).some(x => (x||'').toLowerCase().trim() === low)) return 'Expert';
+      if ((sk.proficient || []).some(x => (x||'').toLowerCase().trim() === low)) return 'Proficient';
+      if ((sk.familiar || []).some(x => (x||'').toLowerCase().trim() === low)) return 'Familiar';
+      return '';
+    },
+    catSkillsText(c) {   // "Java — Expert, Dart — Proficient, PyTorch — Familiar"
+      return (c.skills || []).map(v => {
+        const t = this.skillTier(v);
+        return t ? (v + ' — ' + t) : v;
+      }).join(', ');
+    },
     otherCats() {   // skill categories except Languages (shown above the divider)
       return (this.profile.skill_categories || []).filter(c => (c.label||'').toLowerCase() !== 'languages');
     },

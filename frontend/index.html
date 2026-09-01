@@ -1241,8 +1241,15 @@
               <div class="space-y-3">
                 <template x-for="(c, i) in otherCats()" :key="'v'+i">
                   <div x-show="(c.skills||[]).length">
-                    <div class="text-[12.5px] font-semibold text-gray-800 mb-0.5" x-text="c.label"></div>
-                    <div class="text-[13px] text-gray-600 leading-relaxed" x-text="catSkillsText(c)"></div>
+                    <div class="text-[12.5px] font-semibold text-gray-800 mb-1.5" x-text="c.label"></div>
+                    <div class="flex flex-wrap gap-1.5">
+                      <template x-for="v in (c.skills||[])" :key="v">
+                        <span class="skill-pill">
+                          <span class="n" x-text="v"></span>
+                          <span x-show="skillTier(v)" class="lv" :class="skillTier(v).toLowerCase()" x-text="skillTier(v).toUpperCase()"></span>
+                        </span>
+                      </template>
+                    </div>
                   </div>
                 </template>
                 <div x-show="!otherCats().some(c => (c.skills||[]).length)" class="text-xs text-gray-400">No skills yet — add a category (e.g. Programming) and set each skill's proficiency.</div>

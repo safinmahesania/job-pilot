@@ -233,6 +233,16 @@ function jobpilot() {
       try { navigator.clipboard.writeText(this.extKey); this.showSnack('Extension key copied'); }
       catch (e) { this.showSnack('Copy failed — reveal it and copy manually', 'error'); }
     },
+    langParts(s) {   // "English – Fluent" -> {name, level}
+      const m = String(s || '').split(/\s*[\u2013\u2014-]\s*/);
+      return { name: (m[0] || '').trim(), level: (m.slice(1).join(' – ') || '').trim() };
+    },
+    langLevelClass(level) {   // reuse the gold skill-pill level colours
+      const l = (level || '').toLowerCase();
+      if (l.includes('fluent') || l.includes('native')) return 'expert';
+      if (l.includes('inter') || l.includes('prof') || l.includes('advanced')) return 'proficient';
+      return 'familiar';
+    },
     skillTier(skill) {   // proficiency level for a skill name, from the tiers
       const sk = this.profile.skills || {};
       const low = (skill || '').toLowerCase().trim();

@@ -1230,10 +1230,15 @@
             </div>
           </div>
           <div class="card p-4">
-            <div class="flex items-center gap-2 mb-1"><i class="ti ti-code text-brand"></i><span class="text-sm font-semibold">Skills</span></div>
-            <p class="text-xs text-gray-400 mb-3">Your strengths — jobs matching these score higher.</p>
-            <!-- VIEW: segmented pills, one flow, tier badge on each -->
+            <div class="flex items-center justify-between mb-1">
+              <div class="flex items-center gap-2"><i class="ti ti-code text-brand"></i><span class="text-sm font-semibold">Skills &amp; languages</span></div>
+              <button x-show="profileEdit" @click="addSkillCategory()" class="btn btn-ghost" style="height:30px; font-size:12.5px; padding:0 11px"><i class="ti ti-plus"></i> Category</button>
+            </div>
+            <p class="text-xs text-gray-400 mb-3">Proficiency drives job matching; categories shape how skills group on your résumé.</p>
+
+            <!-- ─── VIEW ─── -->
             <div x-show="!profileEdit">
+              <div class="lbl">Proficiency</div>
               <div class="flex flex-wrap gap-2">
                 <template x-for="f in [{k:'expert',c:'expert',l:'Expert'},{k:'proficient',c:'proficient',l:'Proficient'},{k:'familiar',c:'familiar',l:'Familiar'}]" :key="f.k">
                   <template x-for="v in (profile.skills[f.k]||[])" :key="f.k+v">
@@ -1241,21 +1246,67 @@
                   </template>
                 </template>
               </div>
-              <div class="text-sm text-gray-400" x-show="!profile.skills.expert?.length && !profile.skills.proficient?.length && !profile.skills.familiar?.length">No skills yet.</div>
+              <div class="text-xs text-gray-400" x-show="!profile.skills.expert?.length && !profile.skills.proficient?.length && !profile.skills.familiar?.length">No skills yet.</div>
+
+              <div class="lbl mt-4">Categories</div>
+              <div class="space-y-1.5">
+                <template x-for="(c, i) in otherCats()" :key="'v'+i">
+                  <div class="text-[13px]"><span class="font-medium text-gray-800" x-text="c.label"></span><span class="text-gray-500">: </span><span class="text-gray-600" x-text="(c.skills||[]).join(', ')"></span></div>
+                </template>
+                <div x-show="!otherCats().length" class="text-xs text-gray-400">No categories yet — e.g. Programming, Frameworks, Tools.</div>
+              </div>
+
+              <hr class="my-4 border-t border-gray-100">
+
+              <div class="lbl">Languages</div>
+              <div class="text-[13px] text-gray-600" x-text="(langCat().skills||[]).join(', ') || 'None yet.'"></div>
             </div>
-            <!-- EDIT -->
-            <div x-show="profileEdit" class="space-y-3">
-              <template x-for="f in [{k:'expert',l:'Expert'},{k:'proficient',l:'Proficient'},{k:'familiar',l:'Familiar'}]" :key="f.k">
-                <div>
-                  <label class="lbl" x-text="f.l"></label>
-                  <div class="flex flex-wrap gap-1.5 items-center">
-                    <template x-for="v in (profile.skills[f.k]||[])" :key="v">
-                      <span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5" style="background:var(--brand-tint); color:var(--brand-strong)"><span x-text="v"></span><i class="ti ti-x text-[11px] opacity-50 cursor-pointer hover:opacity-100" @click="chipRemove(profile.skills, f.k, v)"></i></span>
-                    </template>
-                    <input @keydown="chipKey($event, profile.skills, f.k)" placeholder="Add skill, Enter" class="text-[12.5px] px-2.5 h-7 border border-dashed border-gray-300 rounded-full outline-none focus:border-brand w-36">
+
+            <!-- ─── EDIT ─── -->
+            <div x-show="profileEdit">
+              <div class="lbl">Proficiency</div>
+              <div class="space-y-2.5">
+                <template x-for="f in [{k:'expert',l:'Expert'},{k:'proficient',l:'Proficient'},{k:'familiar',l:'Familiar'}]" :key="f.k">
+                  <div>
+                    <div class="text-[11px] font-medium text-gray-400 mb-1" x-text="f.l"></div>
+                    <div class="flex flex-wrap gap-1.5 items-center">
+                      <template x-for="v in (profile.skills[f.k]||[])" :key="v">
+                        <span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5" style="background:var(--brand-tint); color:var(--brand-strong)"><span x-text="v"></span><i class="ti ti-x text-[11px] opacity-50 cursor-pointer hover:opacity-100" @click="chipRemove(profile.skills, f.k, v)"></i></span>
+                      </template>
+                      <input @keydown="chipKey($event, profile.skills, f.k)" placeholder="Add skill, Enter" class="text-[12.5px] px-2.5 h-7 border border-dashed border-gray-300 rounded-full outline-none focus:border-brand w-36">
+                    </div>
                   </div>
-                </div>
-              </template>
+                </template>
+              </div>
+
+              <div class="lbl mt-4">Categories</div>
+              <div class="space-y-3">
+                <template x-for="c in otherCats()" :key="c.label + (c.skills||[]).length">
+                  <div class="border border-gray-200 rounded-lg p-3">
+                    <div class="flex items-center gap-2 mb-2">
+                      <input x-model="c.label" @input="profileDirty=true" placeholder="Category (e.g. Frameworks)" class="fld flex-1">
+                      <button @click="removeCat(c)" title="Remove category" class="ti ti-trash text-gray-400 hover:text-red-500 shrink-0"></button>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 items-center">
+                      <template x-for="v in (c.skills||[])" :key="v">
+                        <span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5" style="background:var(--brand-tint); color:var(--brand-strong)"><span x-text="v"></span><i class="ti ti-x text-[11px] opacity-50 cursor-pointer hover:opacity-100" @click="chipRemove(c, 'skills', v)"></i></span>
+                      </template>
+                      <input @keydown="chipKey($event, c, 'skills')" placeholder="Add item, Enter" class="text-[12.5px] px-2.5 h-7 border border-dashed border-gray-300 rounded-full outline-none focus:border-brand w-40">
+                    </div>
+                  </div>
+                </template>
+                <div x-show="!otherCats().length" class="text-xs text-gray-400">No categories — use "Category" above to add one.</div>
+              </div>
+
+              <hr class="my-4 border-t border-gray-100">
+
+              <div class="lbl">Languages</div>
+              <div class="flex flex-wrap gap-1.5 items-center">
+                <template x-for="v in (langCat().skills||[])" :key="v">
+                  <span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5" style="background:#E9EDF3; color:#26375C"><span x-text="v"></span><i class="ti ti-x text-[11px] opacity-50 cursor-pointer hover:opacity-100" @click="chipRemove(langCat(), 'skills', v)"></i></span>
+                </template>
+                <input @keydown="chipKey($event, langCat(), 'skills')" placeholder="e.g. English – Fluent, Enter" class="text-[12.5px] px-2.5 h-7 border border-dashed border-gray-300 rounded-full outline-none focus:border-brand w-56">
+              </div>
             </div>
           </div>
           <div class="card p-4">
@@ -1399,13 +1450,14 @@
       <!-- Contact -->
       <div class="card p-4 mt-4">
         <div class="flex items-center gap-2 text-sm font-semibold mb-3"><i class="ti ti-address-book text-brand"></i> Contact</div>
-        <div x-show="!profileEdit" class="text-[13px] text-gray-600 space-y-0.5">
-          <div x-show="profile.contact && profile.contact.email" x-text="'Email: ' + (profile.contact?.email||'')"></div>
-          <div x-show="profile.contact && profile.contact.phone" x-text="'Phone: ' + (profile.contact?.phone||'')"></div>
-          <div x-show="profile.contact && (profile.contact.city || profile.contact.country)" x-text="'Location: ' + [profile.contact?.city, profile.contact?.country].filter(Boolean).join(', ')"></div>
-          <div x-show="profile.contact && profile.contact.linkedin" x-text="'LinkedIn: ' + (profile.contact?.linkedin||'')"></div>
-          <div x-show="profile.contact && profile.contact.github" x-text="'GitHub: ' + (profile.contact?.github||'')"></div>
-          <div x-show="!profile.contact || !(profile.contact.email||profile.contact.phone||profile.contact.city||profile.contact.linkedin)" class="text-xs text-gray-400">No contact details yet.</div>
+        <div x-show="!profileEdit" class="space-y-2">
+          <div class="flex items-center gap-2.5 text-[13px] text-gray-700" x-show="profile.contact?.email"><i class="ti ti-mail text-gray-400 w-4 text-center"></i><span x-text="profile.contact?.email"></span></div>
+          <div class="flex items-center gap-2.5 text-[13px] text-gray-700" x-show="profile.contact?.phone"><i class="ti ti-phone text-gray-400 w-4 text-center"></i><span x-text="profile.contact?.phone"></span></div>
+          <div class="flex items-center gap-2.5 text-[13px] text-gray-700" x-show="profile.contact?.city || profile.contact?.country"><i class="ti ti-map-pin text-gray-400 w-4 text-center"></i><span x-text="[profile.contact?.city, profile.contact?.country].filter(Boolean).join(', ')"></span></div>
+          <div class="flex items-center gap-2.5 text-[13px] text-gray-700" x-show="profile.contact?.linkedin"><i class="ti ti-brand-linkedin text-gray-400 w-4 text-center"></i><span x-text="profile.contact?.linkedin"></span></div>
+          <div class="flex items-center gap-2.5 text-[13px] text-gray-700" x-show="profile.contact?.github"><i class="ti ti-brand-github text-gray-400 w-4 text-center"></i><span x-text="profile.contact?.github"></span></div>
+          <div class="flex items-center gap-2.5 text-[13px] text-gray-700" x-show="profile.contact?.website"><i class="ti ti-world text-gray-400 w-4 text-center"></i><span x-text="profile.contact?.website"></span></div>
+          <div x-show="!profile.contact || !(profile.contact.email||profile.contact.phone||profile.contact.city||profile.contact.country||profile.contact.linkedin||profile.contact.github||profile.contact.website)" class="text-xs text-gray-400">No contact details yet.</div>
         </div>
         <div x-show="profileEdit" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           <div><label class="lbl">Email</label><input x-model="profile.contact.email" @input="profileDirty=true" class="fld"></div>
@@ -1418,54 +1470,38 @@
         </div>
       </div>
 
-      <!-- Skill categories & languages -->
-      <div class="card p-4 mt-4">
-        <div class="flex items-center justify-between mb-3">
-          <span class="flex items-center gap-2 text-sm font-semibold"><i class="ti ti-language text-brand"></i> Skill categories &amp; languages</span>
-          <button x-show="profileEdit" @click="addSkillCategory()" class="btn btn-ghost" style="height:32px; font-size:13px; padding:0 12px"><i class="ti ti-plus"></i> Add</button>
-        </div>
-        <div x-show="!profileEdit" class="space-y-1.5">
-          <template x-for="(c, i) in (profile.skill_categories || [])" :key="i">
-            <div class="text-[13px]"><span class="font-medium text-gray-800" x-text="c.label"></span><span class="text-gray-500">: </span><span class="text-gray-600" x-text="(c.skills||[]).join(', ')"></span></div>
-          </template>
-          <div x-show="!(profile.skill_categories||[]).length" class="text-xs text-gray-400">No categories yet — add one like <b>Languages</b> (English, Urdu, French) or Tools.</div>
-        </div>
-        <div x-show="profileEdit" class="space-y-3">
-          <template x-for="(c, i) in (profile.skill_categories || [])" :key="i">
-            <div class="border border-gray-200 rounded-lg p-3">
-              <div class="flex items-center gap-2 mb-2">
-                <input x-model="c.label" @input="profileDirty=true" placeholder="Category (e.g. Languages)" class="fld flex-1">
-                <button @click="profile.skill_categories.splice(i,1); profileDirty=true" title="Remove category" class="ti ti-trash text-gray-400 hover:text-red-500 shrink-0"></button>
-              </div>
-              <div class="flex flex-wrap gap-1.5 items-center">
-                <template x-for="v in (c.skills||[])" :key="v">
-                  <span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5" style="background:var(--brand-tint); color:var(--brand-strong)"><span x-text="v"></span><i class="ti ti-x text-[11px] opacity-50 cursor-pointer hover:opacity-100" @click="chipRemove(c, 'skills', v)"></i></span>
-                </template>
-                <input @keydown="chipKey($event, c, 'skills')" placeholder="Add item, Enter" class="text-[12.5px] px-2.5 h-7 border border-dashed border-gray-300 rounded-full outline-none focus:border-brand w-40">
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
-
       <!-- Application details -->
       <div class="card p-4 mt-4">
         <div class="flex items-center gap-2 text-sm font-semibold mb-3"><i class="ti ti-file-check text-brand"></i> Application details</div>
-        <div x-show="!profileEdit" class="text-[13px] text-gray-600 space-y-0.5">
-          <div>Work authorized: <span x-text="profile.application?.work_authorized ? 'Yes' : 'No'"></span></div>
-          <div>Needs sponsorship: <span x-text="profile.application?.needs_sponsorship ? 'Yes' : 'No'"></span></div>
-          <div>Willing to relocate: <span x-text="profile.application?.willing_to_relocate ? 'Yes' : 'No'"></span></div>
-          <div x-show="profile.application?.notice_period" x-text="'Notice period: ' + (profile.application?.notice_period||'')"></div>
-          <div x-show="profile.application?.salary_expectation" x-text="'Salary expectation: ' + (profile.application?.salary_expectation||'')"></div>
-          <div x-show="profile.application?.years_of_experience" x-text="'Years of experience: ' + (profile.application?.years_of_experience||'')"></div>
-        </div>
-        <div x-show="profileEdit" class="space-y-2.5">
-          <div class="flex flex-wrap gap-4">
-            <label class="flex items-center gap-2 text-[13px] text-gray-700"><input type="checkbox" x-model="profile.application.work_authorized" @change="profileDirty=true"> Work authorized</label>
-            <label class="flex items-center gap-2 text-[13px] text-gray-700"><input type="checkbox" x-model="profile.application.needs_sponsorship" @change="profileDirty=true"> Needs sponsorship</label>
-            <label class="flex items-center gap-2 text-[13px] text-gray-700"><input type="checkbox" x-model="profile.application.willing_to_relocate" @change="profileDirty=true"> Willing to relocate</label>
+        <div x-show="!profileEdit">
+          <div class="flex flex-wrap gap-2 mb-3">
+            <template x-for="a in [{k:'work_authorized',l:'Work authorized'},{k:'needs_sponsorship',l:'Needs sponsorship'},{k:'willing_to_relocate',l:'Willing to relocate'}]" :key="a.k">
+              <span class="inline-flex items-center gap-1.5 text-[12px] font-medium px-2.5 py-1 rounded-full"
+                :style="(profile.application&&profile.application[a.k]) ? 'background:var(--green-bg);color:var(--green)' : 'background:#F1F0EC;color:#8A8985'">
+                <i class="ti text-[13px]" :class="(profile.application&&profile.application[a.k]) ? 'ti-check' : 'ti-minus'"></i><span x-text="a.l"></span>
+              </span>
+            </template>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div class="space-y-1 text-[13px] text-gray-600">
+            <div x-show="profile.application?.notice_period"><span class="text-gray-400">Notice period · </span><span x-text="profile.application?.notice_period"></span></div>
+            <div x-show="profile.application?.salary_expectation"><span class="text-gray-400">Salary expectation · </span><span x-text="profile.application?.salary_expectation"></span></div>
+            <div x-show="profile.application?.years_of_experience"><span class="text-gray-400">Years of experience · </span><span x-text="profile.application?.years_of_experience"></span></div>
+          </div>
+        </div>
+        <div x-show="profileEdit" class="space-y-3">
+          <div class="space-y-1">
+            <template x-for="a in [{k:'work_authorized',l:'Work authorized'},{k:'needs_sponsorship',l:'Needs sponsorship'},{k:'willing_to_relocate',l:'Willing to relocate'}]" :key="a.k">
+              <div class="flex items-center justify-between text-[13px] text-gray-700 py-1">
+                <span x-text="a.l"></span>
+                <button type="button" @click="profile.application[a.k]=!profile.application[a.k]; profileDirty=true"
+                  class="w-9 h-5 rounded-full relative shrink-0 transition-colors"
+                  :style="(profile.application&&profile.application[a.k]) ? 'background:var(--brand)' : 'background:#D6D3CC'">
+                  <span class="absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all" :style="(profile.application&&profile.application[a.k]) ? 'left:18px' : 'left:2px'"></span>
+                </button>
+              </div>
+            </template>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
             <div><label class="lbl">Notice period</label><input x-model="profile.application.notice_period" @input="profileDirty=true" class="fld"></div>
             <div><label class="lbl">Salary expectation</label><input x-model="profile.application.salary_expectation" @input="profileDirty=true" class="fld"></div>
             <div><label class="lbl">Years of experience</label><input x-model="profile.application.years_of_experience" @input="profileDirty=true" class="fld" type="number"></div>

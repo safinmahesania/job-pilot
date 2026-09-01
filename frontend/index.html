@@ -1397,7 +1397,7 @@
       </div>
 
       <!-- Contact -->
-      <div class="card p-4">
+      <div class="card p-4 mt-4">
         <div class="flex items-center gap-2 text-sm font-semibold mb-3"><i class="ti ti-address-book text-brand"></i> Contact</div>
         <div x-show="!profileEdit" class="text-[13px] text-gray-600 space-y-0.5">
           <div x-show="profile.contact && profile.contact.email" x-text="'Email: ' + (profile.contact?.email||'')"></div>
@@ -1419,7 +1419,7 @@
       </div>
 
       <!-- Skill categories & languages -->
-      <div class="card p-4">
+      <div class="card p-4 mt-4">
         <div class="flex items-center justify-between mb-3">
           <span class="flex items-center gap-2 text-sm font-semibold"><i class="ti ti-language text-brand"></i> Skill categories &amp; languages</span>
           <button x-show="profileEdit" @click="addSkillCategory()" class="btn btn-ghost" style="height:32px; font-size:13px; padding:0 12px"><i class="ti ti-plus"></i> Add</button>
@@ -1449,7 +1449,7 @@
       </div>
 
       <!-- Application details -->
-      <div class="card p-4">
+      <div class="card p-4 mt-4">
         <div class="flex items-center gap-2 text-sm font-semibold mb-3"><i class="ti ti-file-check text-brand"></i> Application details</div>
         <div x-show="!profileEdit" class="text-[13px] text-gray-600 space-y-0.5">
           <div>Work authorized: <span x-text="profile.application?.work_authorized ? 'Yes' : 'No'"></span></div>

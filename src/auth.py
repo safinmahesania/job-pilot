@@ -87,12 +87,26 @@ def _user_id_from_ext_key(key: str):
     if not key:
         return None
     from src import db
-    conn = db.connect()
+    from src.logs import log
+    conn = None
     try:
+        conn = db.connect()
         row = conn.execute("SELECT id FROM users WHERE ext_key = ?", (key,)).fetchone()
         return str(row[0]) if row else None
+    except Exception as e:
+        # Don't 500 the whole request — the most likely causes are the DB being
+        # unreachable or the ext_key column not having been added to this database yet.
+        # Log the real reason (so it's diagnosable in the server console) and treat the
+        # key as unrecognised.
+        log.warning("[ext-key] could not validate extension key — is the DB reachable and "
+                    "does public.users have an ext_key column? %s", e)
+        return None
     finally:
-        conn.close()
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def current_user_id(authorization: str = Header(None),

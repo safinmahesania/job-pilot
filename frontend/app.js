@@ -233,6 +233,24 @@ function jobpilot() {
       try { navigator.clipboard.writeText(this.extKey); this.showSnack('Extension key copied'); }
       catch (e) { this.showSnack('Copy failed — reveal it and copy manually', 'error'); }
     },
+    otherCats() {   // skill categories except Languages (shown above the divider)
+      return (this.profile.skill_categories || []).filter(c => (c.label||'').toLowerCase() !== 'languages');
+    },
+    langCat() {     // the Languages category object (ensured in loadProfile)
+      const cats = this.profile.skill_categories || (this.profile.skill_categories = []);
+      let l = cats.find(c => (c.label||'').toLowerCase() === 'languages');
+      if (!l) { l = { label: 'Languages', skills: [] }; cats.push(l); }
+      return l;
+    },
+    removeCat(c) {
+      const a = this.profile.skill_categories || [];
+      const i = a.indexOf(c); if (i > -1) { a.splice(i, 1); this.profileDirty = true; }
+    },
+    addSkillCategory() {
+      if (!this.profile.skill_categories) this.profile.skill_categories = [];
+      this.profile.skill_categories.push({ label: '', skills: [] });
+      this.profileDirty = true;
+    },
     async signOut() {
       try { if (window.jobpilotAuth) await window.jobpilotAuth.signOut(); } catch (e) {}
       window.location.href = '/';
@@ -405,6 +423,14 @@ function jobpilot() {
       p.experience = p.experience || [];
       p.projects   = p.projects   || [];
       p.education  = p.education  || [];
+      p.contact    = p.contact    || {};
+      p.application = p.application || {};
+      p.skill_categories = p.skill_categories || [];
+      p.certificates = p.certificates || [];
+      p.volunteer  = p.volunteer  || [];
+      // Keep a dedicated "Languages" category so it can be shown/edited below the divider.
+      if (!p.skill_categories.some(c => (c.label||'').toLowerCase() === 'languages'))
+        p.skill_categories.push({ label: 'Languages', skills: [] });
       for (const k of ['locations']) p.constraints[k] = p.constraints[k] || [];
       for (const k of ['role_levels','exclude_levels','domains','exclude_keywords','job_types'])
         p.search[k] = p.search[k] || [];

@@ -1239,27 +1239,38 @@
             <!-- ─── VIEW ─── -->
             <div x-show="!profileEdit">
               <div class="lbl">Proficiency</div>
-              <div class="flex flex-wrap gap-2">
-                <template x-for="f in [{k:'expert',c:'expert',l:'Expert'},{k:'proficient',c:'proficient',l:'Proficient'},{k:'familiar',c:'familiar',l:'Familiar'}]" :key="f.k">
-                  <template x-for="v in (profile.skills[f.k]||[])" :key="f.k+v">
-                    <span class="skill-pill"><span class="n" x-text="v"></span><span class="lv" :class="f.c" x-text="f.l.toUpperCase()"></span></span>
-                  </template>
+              <div class="space-y-2">
+                <template x-for="f in [{k:'expert',l:'Expert'},{k:'proficient',l:'Proficient'},{k:'familiar',l:'Familiar'}]" :key="f.k">
+                  <div class="flex gap-3 items-start" x-show="(profile.skills[f.k]||[]).length">
+                    <span class="text-[10.5px] font-semibold uppercase tracking-wide text-gray-400 w-[68px] shrink-0 pt-1.5" x-text="f.l"></span>
+                    <div class="flex flex-wrap gap-1.5">
+                      <template x-for="v in (profile.skills[f.k]||[])" :key="v"><span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full" style="background:var(--brand-tint); color:var(--brand-strong)" x-text="v"></span></template>
+                    </div>
+                  </div>
                 </template>
+                <div class="text-xs text-gray-400" x-show="!profile.skills.expert?.length && !profile.skills.proficient?.length && !profile.skills.familiar?.length">No skills yet.</div>
               </div>
-              <div class="text-xs text-gray-400" x-show="!profile.skills.expert?.length && !profile.skills.proficient?.length && !profile.skills.familiar?.length">No skills yet.</div>
 
               <div class="lbl mt-4">Categories</div>
-              <div class="space-y-1.5">
+              <div class="space-y-3">
                 <template x-for="(c, i) in otherCats()" :key="'v'+i">
-                  <div class="text-[13px]"><span class="font-medium text-gray-800" x-text="c.label"></span><span class="text-gray-500">: </span><span class="text-gray-600" x-text="(c.skills||[]).join(', ')"></span></div>
+                  <div>
+                    <div class="text-[12px] font-semibold text-gray-700 mb-1.5" x-text="c.label"></div>
+                    <div class="flex flex-wrap gap-1.5">
+                      <template x-for="v in (c.skills||[])" :key="v"><span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full" style="background:#F1F0EC; color:#52514E" x-text="v"></span></template>
+                    </div>
+                  </div>
                 </template>
                 <div x-show="!otherCats().length" class="text-xs text-gray-400">No categories yet — e.g. Programming, Frameworks, Tools.</div>
               </div>
 
               <hr class="my-4 border-t border-gray-100">
 
-              <div class="lbl">Languages</div>
-              <div class="text-[13px] text-gray-600" x-text="(langCat().skills||[]).join(', ') || 'None yet.'"></div>
+              <div class="lbl flex items-center gap-1.5"><i class="ti ti-language text-gray-400"></i> Languages</div>
+              <div class="flex flex-wrap gap-1.5">
+                <template x-for="v in (langCat().skills||[])" :key="v"><span class="text-[11.5px] font-medium px-2.5 py-1 rounded-full" style="background:#E9EDF3; color:#26375C" x-text="v"></span></template>
+                <span x-show="!(langCat().skills||[]).length" class="text-xs text-gray-400">None yet.</span>
+              </div>
             </div>
 
             <!-- ─── EDIT ─── -->
